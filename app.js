@@ -336,6 +336,7 @@ function loadState() {
     sidebarCollapsed: false,
     pendingApproval: null,
     siteSettings: {
+      id: "",
       title: "",
       description: "",
       faviconDataUrl: "",
@@ -388,6 +389,7 @@ function normalizeState(source) {
     sidebarCollapsed: Boolean(source.sidebarCollapsed),
     changeHistory: Array.isArray(source.changeHistory) ? source.changeHistory.slice(0, CHANGE_HISTORY_LIMIT) : [],
     siteSettings: {
+      id: "",
       title: "",
       description: "",
       faviconDataUrl: "",
@@ -706,12 +708,82 @@ function deserializeArchiveCodeFromSupabase(row) {
   };
 }
 
+function serializeSiteSettingsForSupabase(settings = {}) {
+  return {
+    id: settings.id || undefined,
+    title: settings.title || "",
+    description: settings.description || "",
+    favicon_path: settings.faviconDataUrl || "",
+    thumbnail_path: settings.thumbnailDataUrl || "",
+    meta_tags: settings.metaTags || "",
+    block_crawling: Boolean(settings.blockCrawling),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeSiteSettingsFromSupabase(row = {}) {
+  return {
+    id: row.id || "",
+    title: row.title || "",
+    description: row.description || "",
+    faviconDataUrl: row.favicon_path || "",
+    thumbnailDataUrl: row.thumbnail_path || "",
+    metaTags: row.meta_tags || "",
+    blockCrawling: Boolean(row.block_crawling),
+  };
+}
+
 function updateSupabaseStatusSummary(prefix = "") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return;
   const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건을 Supabase에서 확인했어요.`;
   bridge.statusDetail = prefix ? `${prefix} ${summary}` : summary;
   renderSiteSettings();
+}
+
+async function syncSiteSettingsFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  const result = await bridge.fetchSiteSettings();
+  if (result.error) return { ok: false, error: result.error };
+
+  const remoteSettings = Array.isArray(result.data) ? result.data[0] : result.data;
+  const hasRemoteData = Boolean(
+    remoteSettings && (
+      remoteSettings.title ||
+      remoteSettings.description ||
+      remoteSettings.favicon_path ||
+      remoteSettings.thumbnail_path ||
+      remoteSettings.meta_tags ||
+      remoteSettings.block_crawling
+    ),
+  );
+  const hasLocalData = Boolean(
+    state.siteSettings?.title ||
+    state.siteSettings?.description ||
+    state.siteSettings?.faviconDataUrl ||
+    state.siteSettings?.thumbnailDataUrl ||
+    state.siteSettings?.metaTags ||
+    state.siteSettings?.blockCrawling,
+  );
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await persistSiteSettingsToSupabase({ ...state.siteSettings }, { silent: true, successPrefix: "브라우저 사이트 설정을 Supabase로 복사했어요." });
+    return seedResult;
+  }
+
+  if (remoteSettings) {
+    state.siteSettings = {
+      ...(state.siteSettings || {}),
+      ...deserializeSiteSettingsFromSupabase(remoteSettings),
+    };
+    saveState({ history: false });
+    applySiteSettings();
+    renderSiteSettings();
+  }
+
+  return { ok: true };
 }
 
 async function syncProjectsAndSchedulesFromSupabase() {
@@ -984,17 +1056,72 @@ function renderSiteImagePreview(key) {
   target.classList.add("has-image");
 }
 
+async function persistSiteSettingsToSupabase(previousSettings = null, options = {}) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) {
+    if (!saveState()) {
+      if (previousSettings) state.siteSettings = previousSettings;
+      openNoticeModal("저장 공간이 부족해서 저장하지 못했어요.");
+      return { ok: false, error: new Error("Local storage save failed.") };
+    }
+    applySiteSettings();
+    renderSiteSettings();
+    return { ok: true };
+  }
+
+  const localSaved = saveState();
+  if (!localSaved) {
+    if (previousSettings) state.siteSettings = previousSettings;
+    openNoticeModal("저장 공간이 부족해서 저장하지 못했어요.");
+    return { ok: false, error: new Error("Local storage save failed.") };
+  }
+
+  const result = await bridge.upsertSiteSettings(serializeSiteSettingsForSupabase(state.siteSettings));
+  if (result.error) {
+    if (previousSettings) {
+      state.siteSettings = previousSettings;
+      saveState({ history: false });
+      applySiteSettings();
+      renderSiteSettings();
+    }
+    if (!options.silent) {
+      const message = `${options.errorPrefix || "사이트 설정 저장 실패"}: ${result.error.message || "Supabase 오류"}`;
+      toast(message);
+      openNoticeModal(message);
+    }
+    return { ok: false, error: result.error };
+  }
+
+  state.siteSettings = {
+    ...(state.siteSettings || {}),
+    ...deserializeSiteSettingsFromSupabase(result.data),
+  };
+  saveState({ history: false });
+  applySiteSettings();
+  renderSiteSettings();
+  if (options.successPrefix) {
+    const bridgeSummary = `${options.successPrefix}`;
+    const supabaseBridge = getSupabaseBridge();
+    if (supabaseBridge?.isReady()) {
+      supabaseBridge.statusDetail = bridgeSummary;
+      renderSiteSettings();
+    }
+  }
+  return { ok: true };
+}
+
 async function handleSiteImageUpload(event, key) {
   const [file] = event.currentTarget.files || [];
   if (!file) return;
   state.siteSettings = state.siteSettings || {};
   const previousValue = state.siteSettings[key] || "";
+  const previousSettings = { ...state.siteSettings };
   state.siteSettings[key] = await readFileAsDataUrl(file);
   event.currentTarget.value = "";
-  if (!saveState()) {
+  const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "이미지 저장 실패" });
+  if (!persistResult.ok) {
     state.siteSettings[key] = previousValue;
     renderSiteImagePreview(key);
-    openNoticeModal("저장 공간이 부족해서 이미지를 저장하지 못했어요.");
     return;
   }
   renderSiteImagePreview(key);
@@ -1008,18 +1135,21 @@ function removeSiteImage(key) {
     openNoticeModal("삭제할 이미지가 없습니다.");
     return;
   }
+  const previousSettings = { ...state.siteSettings };
   state.siteSettings[key] = "";
-  if (!saveState()) {
-    state.siteSettings[key] = previousValue;
-    openNoticeModal("저장 공간이 부족해서 삭제 상태를 저장하지 못했어요.");
-    return;
-  }
-  renderSiteImagePreview(key);
-  applySiteSettings();
-  openNoticeModal("삭제가 완료되었어요!");
+  persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "이미지 삭제 실패" }).then((result) => {
+    if (!result.ok) {
+      state.siteSettings[key] = previousValue;
+      renderSiteImagePreview(key);
+      return;
+    }
+    renderSiteImagePreview(key);
+    applySiteSettings();
+    openNoticeModal("삭제가 완료되었어요!");
+  });
 }
 
-function handleSiteSettingsSave(event) {
+async function handleSiteSettingsSave(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const previousSettings = { ...(state.siteSettings || {}) };
@@ -1030,9 +1160,8 @@ function handleSiteSettingsSave(event) {
     metaTags: String(formData.get("metaTags") || "").trim(),
     blockCrawling: Boolean(formData.get("blockCrawling")),
   };
-  if (!saveState()) {
-    state.siteSettings = previousSettings;
-    openNoticeModal("저장 공간이 부족해서 저장하지 못했어요.");
+  const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "사이트 설정 저장 실패" });
+  if (!persistResult.ok) {
     return;
   }
   applySiteSettings();
@@ -1130,6 +1259,12 @@ async function applyAuthSession(session, options = {}) {
     const message = "아직 소유자 승인이 완료되지 않았습니다.";
     if (!options.silent) toast(message);
     return { ok: false, message };
+  }
+
+  const siteSettingsSyncResult = await syncSiteSettingsFromSupabase();
+  if (!siteSettingsSyncResult.ok) {
+    const message = siteSettingsSyncResult.error?.message || "사이트 설정을 불러오지 못했습니다.";
+    if (!options.silent) toast(message);
   }
 
   const archiveSyncResult = await syncArchivesFromSupabase();

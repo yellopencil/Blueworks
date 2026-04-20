@@ -51,6 +51,12 @@
       }
       return this.client.from("profiles").select("*").order("created_at", { ascending: false });
     },
+    async fetchSiteSettings() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("site_settings").select("*").order("updated_at", { ascending: false }).limit(1);
+    },
     async fetchCurrentProfile(userId) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -62,6 +68,12 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.from("profiles").upsert(payload).select().single();
+    },
+    async upsertSiteSettings(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("site_settings").upsert(payload).select().single();
     },
     async signInWithPassword(credentials) {
       if (!this.client) {
