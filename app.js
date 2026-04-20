@@ -202,6 +202,7 @@ const els = {
   prevMonthBtn: document.querySelector("#prevMonthBtn"),
   nextMonthBtn: document.querySelector("#nextMonthBtn"),
   newProjectBtn: document.querySelector("#newProjectBtn"),
+  newCustomerProjectBtn: document.querySelector("#newCustomerProjectBtn"),
   toast: document.querySelector("#toast"),
   projectModal: document.querySelector("#projectModal"),
   projectModalTitle: document.querySelector("#projectModalTitle"),
@@ -1561,6 +1562,7 @@ function bindEvents() {
   els.mobileNavCloseBtn?.addEventListener("click", closeMobileNav);
   els.mobileNavOverlay?.addEventListener("click", closeMobileNav);
   els.newProjectBtn.addEventListener("click", () => openProjectModal());
+  els.newCustomerProjectBtn?.addEventListener("click", () => openProjectModal());
   els.newMemberBtn.addEventListener("click", () => openMemberModal());
   els.openScheduleModalBtn.addEventListener("click", () => openScheduleEditorModal());
   els.newArchiveNoteBtn?.addEventListener("click", () => openArchiveNoteModal());
