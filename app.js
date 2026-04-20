@@ -1361,6 +1361,52 @@ async function syncProfilesFromSupabase() {
   return { ok: true, data: state.users };
 }
 
+async function recoverRepresentativeProfile(profile) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !profile) return profile;
+  if (profile.isOwner) return profile;
+  if (!profile.canManageMembers) return profile;
+  if (!/대표/.test(String(profile.roleLabel || "").trim())) return profile;
+  if (state.users.some((user) => user.id !== profile.id && user.isOwner)) return profile;
+
+  const repairedProfile = {
+    ...profile,
+    isOwner: true,
+    canManageMembers: true,
+    approved: true,
+    rejected: false,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const result = await bridge.upsertProfile({
+    id: repairedProfile.id,
+    username: repairedProfile.username,
+    name: repairedProfile.name,
+    role_label: repairedProfile.roleLabel,
+    phone: repairedProfile.phone,
+    email: repairedProfile.email,
+    notes: repairedProfile.notes,
+    can_manage_members: true,
+    is_owner: true,
+    approved: true,
+    rejected: false,
+    last_login_at: repairedProfile.lastLoginAt || null,
+    last_login_ip: repairedProfile.lastLoginIp || "",
+    created_at: repairedProfile.createdAt,
+    updated_at: repairedProfile.updatedAt,
+  });
+  if (result.error) return profile;
+
+  const userIndex = state.users.findIndex((user) => user.id === repairedProfile.id);
+  if (userIndex >= 0) {
+    state.users[userIndex] = repairedProfile;
+  } else {
+    state.users.unshift(repairedProfile);
+  }
+  saveState({ history: false });
+  return repairedProfile;
+}
+
 async function applyAuthSession(session, options = {}) {
   state.sessionUserId = session?.user?.id || null;
   if (!state.sessionUserId) {
@@ -1397,6 +1443,8 @@ async function applyAuthSession(session, options = {}) {
     toast(message);
     return { ok: false, message };
   }
+
+  profile = await recoverRepresentativeProfile(profile);
 
   if (profile.rejected) {
     await bridge?.signOut();
