@@ -265,6 +265,9 @@ const els = {
   thumbnailRemoveBtn: document.querySelector("#thumbnailRemoveBtn"),
   faviconPreview: document.querySelector("#faviconPreview"),
   thumbnailPreview: document.querySelector("#thumbnailPreview"),
+  supabaseStatusCard: document.querySelector("#supabaseStatusCard"),
+  supabaseStatusText: document.querySelector("#supabaseStatusText"),
+  supabaseStatusDetail: document.querySelector("#supabaseStatusDetail"),
   openChangeHistoryBtn: document.querySelector("#openChangeHistoryBtn"),
   changeHistoryModal: document.querySelector("#changeHistoryModal"),
   changeHistoryCloseBtn: document.querySelector("#changeHistoryCloseBtn"),
@@ -581,6 +584,30 @@ function renderSiteSettings() {
   els.siteSettingsForm.elements.blockCrawling.checked = Boolean(settings.blockCrawling);
   renderSiteImagePreview("faviconDataUrl");
   renderSiteImagePreview("thumbnailDataUrl");
+  renderSupabaseStatus();
+}
+
+function renderSupabaseStatus() {
+  if (!els.supabaseStatusCard || !els.supabaseStatusText || !els.supabaseStatusDetail) return;
+  const bridge = window.BLUEWORKS_SUPABASE;
+  els.supabaseStatusCard.classList.remove("is-ready", "is-error");
+  if (!bridge) {
+    els.supabaseStatusText.textContent = "Supabase 스크립트를 찾지 못했어요.";
+    els.supabaseStatusDetail.textContent = "다음 단계로 넘어가기 전에 supabase-client.js가 정상적으로 로드되는지 확인이 필요합니다.";
+    els.supabaseStatusCard.classList.add("is-error");
+    return;
+  }
+
+  if (bridge.mode === "supabase-ready") {
+    els.supabaseStatusText.textContent = "Supabase 연결 준비가 완료됐어요.";
+    els.supabaseStatusDetail.textContent = `프로젝트 URL: ${bridge.url} · 다음 단계에서 프로젝트와 일정 데이터를 Supabase로 옮길 수 있습니다.`;
+    els.supabaseStatusCard.classList.add("is-ready");
+    return;
+  }
+
+  els.supabaseStatusText.textContent = "Supabase 연결 준비 중 문제가 있어요.";
+  els.supabaseStatusDetail.textContent = bridge.error?.message || "Supabase 설정 또는 스크립트 로드 상태를 확인해주세요.";
+  els.supabaseStatusCard.classList.add("is-error");
 }
 
 function renderSiteImagePreview(key) {

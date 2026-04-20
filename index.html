@@ -638,6 +638,17 @@
                   </div>
                 </div>
                 <form id="siteSettingsForm" class="form-stack">
+                  <section class="section-group settings-section settings-supabase-section">
+                    <div class="section-label">
+                      <p class="eyebrow">Supabase</p>
+                      <h4>Supabase 연결</h4>
+                    </div>
+                    <div id="supabaseStatusCard" class="settings-supabase-card">
+                      <strong id="supabaseStatusText">연결 준비 중</strong>
+                      <p id="supabaseStatusDetail" class="muted small">Supabase 클라이언트를 초기화하는 중입니다.</p>
+                    </div>
+                  </section>
+
                   <section class="section-group settings-section">
                     <div class="section-label">
                       <p class="eyebrow">Basic</p>
@@ -1212,8 +1223,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="./app.js?v=20260420-copyupdate1"></script>
-  <script src="./quote-generator.js?v=20260420-copyupdate1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-client.js?v=20260420-supabase1"></script>
+  <script src="./app.js?v=20260420-supabase1"></script>
+  <script src="./quote-generator.js?v=20260420-supabase1"></script>
 </body>
 </html>
 

@@ -1,27 +1,44 @@
-# 옐로펜슬 업무관리 로컬 데모
+# Blueworks
 
-브라우저만으로 실행되는 테스트용 시제품입니다.
+Blueworks는 프로젝트, 일정, 멤버, 매출, 견적/계약서, 아카이브를 한 번에 관리하는 업무용 웹앱입니다.
 
-## 포함 기능
+현재 저장소의 프론트엔드는 정적 HTML/CSS/JS 기반이며, GitHub와 Vercel에 올리기 좋은 상태로 정리되어 있습니다.
 
-- 승인형 회원가입 / 로그인
-- 소유자 계정에서 가입 요청 승인 / 거절
-- 프로젝트 단계별 보드
-- 프로젝트 상세 정보 입력
-- 계약서 업로드 / 다운로드
-- 일정 등록 및 월간 캘린더
+## 현재 상태
 
-## 실행 방법
+- 코드 저장: GitHub
+- 프론트엔드 배포: Vercel
+- 백엔드: Supabase 연결 준비 단계
+- 현재 앱 데이터 저장: 브라우저 `localStorage`
 
-1. `work-manager-demo/index.html` 파일을 브라우저에서 엽니다.
-2. 초기 소유자 계정으로 로그인합니다.
-   - ID: `owner`
-   - PW: `owner1234!`
-3. 필요하면 `데모 데이터 넣기` 버튼으로 샘플 프로젝트를 만듭니다.
+즉, 화면은 이미 배포할 수 있지만, 실제 서비스처럼 쓰려면 로그인/DB/파일 저장을 Supabase로 옮겨야 합니다.
 
-## 주의사항
+## 다음 단계
 
-- 이 버전은 실제 서버가 아니라 `브라우저 localStorage` 에 데이터를 저장합니다.
-- 따라서 같은 브라우저에서만 데이터가 유지됩니다.
-- 큰 계약서 파일은 브라우저 저장 용량 때문에 업로드가 제한될 수 있습니다.
-- 실제 운영 버전으로 가려면 다음 단계에서 백엔드 서버와 DB로 옮기는 것이 좋습니다.
+1. Supabase 테이블 생성
+2. 인증(Auth) 구조 정리
+3. 기존 `localStorage` 저장 로직을 Supabase CRUD로 전환
+4. Vercel 배포본과 Supabase 연결
+5. 관리자 권한 및 멤버 승인 흐름 정리
+
+## 폴더 안내
+
+- [index.html](./index.html): 메인 앱 진입점
+- [app.js](./app.js): 메인 앱 로직
+- [styles.css](./styles.css): 메인 스타일
+- [quote-generator.html](./quote-generator.html): 견적/계약서 관련 화면
+- [quote-generator.js](./quote-generator.js): 견적/계약서 로직
+- [quote-generator.css](./quote-generator.css): 견적/계약서 스타일
+- [docs/deployment-guide.md](./docs/deployment-guide.md): GitHub / Vercel / Supabase 순서 가이드
+- [supabase/001_initial_schema.sql](./supabase/001_initial_schema.sql): 초기 DB 스키마 초안
+
+## 대표님이 보시면 좋은 파일
+
+- 배포 순서 안내: [docs/deployment-guide.md](./docs/deployment-guide.md)
+- Supabase 테이블 초안: [supabase/001_initial_schema.sql](./supabase/001_initial_schema.sql)
+
+## 참고
+
+- `publishable key`는 프론트엔드에서 사용 가능한 키입니다.
+- `service_role key`는 절대 프론트엔드에 넣으면 안 됩니다.
+- 현재 저장소에는 Supabase 민감키를 커밋하지 않았습니다.

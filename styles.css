@@ -3254,6 +3254,34 @@ body[data-theme="dark"] .sales-metric-card-total span {
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
 }
 
+.settings-supabase-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, #f6f9ff 0%, #ffffff 100%);
+  display: grid;
+  gap: 6px;
+}
+
+.settings-supabase-card strong {
+  font-size: 0.96rem;
+}
+
+.settings-supabase-card p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.settings-supabase-card.is-ready {
+  border-color: rgba(61, 124, 255, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(61, 124, 255, 0.04);
+}
+
+.settings-supabase-card.is-error {
+  border-color: rgba(219, 102, 102, 0.28);
+  background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%);
+}
+
 .settings-upload-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
