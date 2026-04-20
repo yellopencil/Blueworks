@@ -1088,10 +1088,16 @@ function applySiteSettings() {
 function renderSiteSettings() {
   if (!els.siteSettingsForm) return;
   const settings = state.siteSettings || {};
+  const canManage = canManageSiteSettings();
   els.siteSettingsForm.elements.title.value = settings.title || "";
   els.siteSettingsForm.elements.description.value = settings.description || "";
   els.siteSettingsForm.elements.metaTags.value = settings.metaTags || "";
   els.siteSettingsForm.elements.blockCrawling.checked = Boolean(settings.blockCrawling);
+  Array.from(els.siteSettingsForm.elements).forEach((element) => {
+    if (element instanceof HTMLButtonElement || element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      element.disabled = !canManage;
+    }
+  });
   renderSiteImagePreview("faviconDataUrl");
   renderSiteImagePreview("thumbnailDataUrl");
   renderSupabaseStatus();
@@ -1190,6 +1196,11 @@ async function persistSiteSettingsToSupabase(previousSettings = null, options = 
 }
 
 async function handleSiteImageUpload(event, key) {
+  if (!canManageSiteSettings()) {
+    toast("사이트 설정은 대표만 수정할 수 있어요.");
+    event.currentTarget.value = "";
+    return;
+  }
   const [file] = event.currentTarget.files || [];
   if (!file) return;
   const bridge = getSupabaseBridge();
@@ -1228,6 +1239,10 @@ async function handleSiteImageUpload(event, key) {
 }
 
 async function removeSiteImage(key) {
+  if (!canManageSiteSettings()) {
+    toast("사이트 설정은 대표만 수정할 수 있어요.");
+    return;
+  }
   state.siteSettings = state.siteSettings || {};
   const previousValue = state.siteSettings[key] || "";
   if (!previousValue) {
@@ -1256,6 +1271,10 @@ async function removeSiteImage(key) {
 
 async function handleSiteSettingsSave(event) {
   event.preventDefault();
+  if (!canManageSiteSettings()) {
+    toast("사이트 설정은 대표만 수정할 수 있어요.");
+    return;
+  }
   const formData = new FormData(event.currentTarget);
   const previousSettings = { ...(state.siteSettings || {}) };
   state.siteSettings = {
@@ -1399,6 +1418,10 @@ async function initializeSupabaseAuth() {
 
 function canManageMembers(user = currentUser()) {
   return Boolean(user?.isOwner || user?.canManageMembers);
+}
+
+function canManageSiteSettings(user = currentUser()) {
+  return Boolean(user?.isOwner);
 }
 
 function selectedProject() {
@@ -2436,6 +2459,7 @@ function render() {
 
 function switchView(view) {
   if (view === "members" && !canManageMembers()) return;
+  if (view === "settings" && !canManageSiteSettings()) return;
   state.currentView = view;
   if (view === "archiveNotes" || view === "archiveCodes") state.archiveMenuOpen = true;
   saveState({ history: false });
@@ -2446,7 +2470,12 @@ function switchView(view) {
 function syncCurrentView() {
   const user = currentUser();
   const memberAccess = canManageMembers(user);
+  const settingsAccess = canManageSiteSettings(user);
   if (!memberAccess && state.currentView === "members") {
+    state.currentView = "dashboard";
+    saveState({ history: false });
+  }
+  if (!settingsAccess && state.currentView === "settings") {
     state.currentView = "dashboard";
     saveState({ history: false });
   }
@@ -2469,6 +2498,7 @@ function syncCurrentView() {
   els.navArchiveCodesBtn?.classList.toggle("active", activeView === "archiveCodes");
   els.navSettingsBtn?.classList.toggle("active", activeView === "settings");
   els.navMembersBtn.classList.toggle("hidden", !memberAccess);
+  els.navSettingsBtn?.classList.toggle("hidden", !settingsAccess);
   els.newMemberBtn.disabled = !memberAccess;
   const archiveOpen = Boolean(state.archiveMenuOpen && !state.sidebarCollapsed);
   els.archiveSubnav?.classList.toggle("is-open", archiveOpen);
