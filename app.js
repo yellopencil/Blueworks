@@ -80,6 +80,13 @@ function createDefaultArchiveCategories() {
   }));
 }
 
+function buildSiteAssetObjectPath(kind, filename = "") {
+  const safeName = String(filename || "asset").replace(/[^\w.\-]+/g, "-");
+  const extensionMatch = safeName.match(/(\.[a-zA-Z0-9]+)$/);
+  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  return `site-settings/${kind}-${crypto.randomUUID()}${extension}`;
+}
+
 const els = {
   body: document.body,
   authView: document.querySelector("#authView"),
@@ -340,7 +347,9 @@ function loadState() {
       title: "",
       description: "",
       faviconDataUrl: "",
+      faviconStoragePath: "",
       thumbnailDataUrl: "",
+      thumbnailStoragePath: "",
       metaTags: "",
       blockCrawling: false,
     },
@@ -393,7 +402,9 @@ function normalizeState(source) {
       title: "",
       description: "",
       faviconDataUrl: "",
+      faviconStoragePath: "",
       thumbnailDataUrl: "",
+      thumbnailStoragePath: "",
       metaTags: "",
       blockCrawling: false,
       ...(source.siteSettings || {}),
@@ -713,12 +724,23 @@ function serializeSiteSettingsForSupabase(settings = {}) {
     id: settings.id || undefined,
     title: settings.title || "",
     description: settings.description || "",
-    favicon_path: settings.faviconDataUrl || "",
-    thumbnail_path: settings.thumbnailDataUrl || "",
+    favicon_path: settings.faviconStoragePath || settings.faviconDataUrl || "",
+    thumbnail_path: settings.thumbnailStoragePath || settings.thumbnailDataUrl || "",
     meta_tags: settings.metaTags || "",
     block_crawling: Boolean(settings.blockCrawling),
     updated_at: new Date().toISOString(),
   };
+}
+
+function resolveSiteAssetUrl(path = "") {
+  if (!path) return "";
+  if (/^(data:|https?:)/i.test(path)) return path;
+  const bridge = getSupabaseBridge();
+  return bridge?.getSiteAssetPublicUrl?.(path) || "";
+}
+
+function isManagedStoragePath(path = "") {
+  return Boolean(path && !/^(data:|https?:)/i.test(path));
 }
 
 function deserializeSiteSettingsFromSupabase(row = {}) {
@@ -726,8 +748,10 @@ function deserializeSiteSettingsFromSupabase(row = {}) {
     id: row.id || "",
     title: row.title || "",
     description: row.description || "",
-    faviconDataUrl: row.favicon_path || "",
-    thumbnailDataUrl: row.thumbnail_path || "",
+    faviconDataUrl: resolveSiteAssetUrl(row.favicon_path || ""),
+    faviconStoragePath: isManagedStoragePath(row.favicon_path || "") ? row.favicon_path : "",
+    thumbnailDataUrl: resolveSiteAssetUrl(row.thumbnail_path || ""),
+    thumbnailStoragePath: isManagedStoragePath(row.thumbnail_path || "") ? row.thumbnail_path : "",
     metaTags: row.meta_tags || "",
     blockCrawling: Boolean(row.block_crawling),
   };
@@ -1113,40 +1137,66 @@ async function persistSiteSettingsToSupabase(previousSettings = null, options = 
 async function handleSiteImageUpload(event, key) {
   const [file] = event.currentTarget.files || [];
   if (!file) return;
+  const bridge = getSupabaseBridge();
   state.siteSettings = state.siteSettings || {};
-  const previousValue = state.siteSettings[key] || "";
   const previousSettings = { ...state.siteSettings };
-  state.siteSettings[key] = await readFileAsDataUrl(file);
   event.currentTarget.value = "";
+  const targetKey = key === "faviconDataUrl" ? "faviconStoragePath" : "thumbnailStoragePath";
+
+  if (bridge?.isReady() && state.sessionUserId) {
+    const objectPath = buildSiteAssetObjectPath(targetKey === "faviconStoragePath" ? "favicon" : "thumbnail", file.name);
+    const uploadResult = await bridge.uploadSiteAsset(file, objectPath);
+    if (uploadResult.error) {
+      const message = `이미지 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
+      toast(message);
+      openNoticeModal(message);
+      return;
+    }
+    state.siteSettings[key] = resolveSiteAssetUrl(objectPath);
+    state.siteSettings[targetKey] = objectPath;
+  } else {
+    state.siteSettings[key] = await readFileAsDataUrl(file);
+    state.siteSettings[targetKey] = "";
+  }
+
   const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "이미지 저장 실패" });
   if (!persistResult.ok) {
-    state.siteSettings[key] = previousValue;
     renderSiteImagePreview(key);
     return;
+  }
+  const previousPath = previousSettings[targetKey];
+  if (bridge?.isReady() && previousPath && previousPath !== state.siteSettings[targetKey] && isManagedStoragePath(previousPath)) {
+    bridge.removeSiteAsset(previousPath).catch(() => {});
   }
   renderSiteImagePreview(key);
   applySiteSettings();
 }
 
-function removeSiteImage(key) {
+async function removeSiteImage(key) {
   state.siteSettings = state.siteSettings || {};
   const previousValue = state.siteSettings[key] || "";
   if (!previousValue) {
     openNoticeModal("삭제할 이미지가 없습니다.");
     return;
   }
+  const bridge = getSupabaseBridge();
   const previousSettings = { ...state.siteSettings };
   state.siteSettings[key] = "";
-  persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "이미지 삭제 실패" }).then((result) => {
-    if (!result.ok) {
-      state.siteSettings[key] = previousValue;
-      renderSiteImagePreview(key);
-      return;
-    }
+  const targetKey = key === "faviconDataUrl" ? "faviconStoragePath" : "thumbnailStoragePath";
+  state.siteSettings[targetKey] = "";
+  const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "이미지 삭제 실패" });
+  if (!persistResult.ok) {
+    state.siteSettings[key] = previousValue;
     renderSiteImagePreview(key);
-    applySiteSettings();
-    openNoticeModal("삭제가 완료되었어요!");
-  });
+    return;
+  }
+  const previousPath = previousSettings[targetKey];
+  if (bridge?.isReady() && previousPath && isManagedStoragePath(previousPath)) {
+    bridge.removeSiteAsset(previousPath).catch(() => {});
+  }
+  renderSiteImagePreview(key);
+  applySiteSettings();
+  openNoticeModal("삭제가 완료되었어요!");
 }
 
 async function handleSiteSettingsSave(event) {

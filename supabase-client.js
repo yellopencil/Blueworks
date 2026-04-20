@@ -1,10 +1,12 @@
 (function () {
   const SUPABASE_URL = "https://uanpcrvzahjrbgjvvioz.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zJqlCjId8XiTq6W05l_JSA_8VHISJ3-";
+  const SITE_ASSET_BUCKET = "site-assets";
 
   const bridge = {
     url: SUPABASE_URL,
     publishableKey: SUPABASE_PUBLISHABLE_KEY,
+    siteAssetBucket: SITE_ASSET_BUCKET,
     client: null,
     mode: "supabase-pending",
     error: null,
@@ -74,6 +76,27 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.from("site_settings").upsert(payload).select().single();
+    },
+    getSiteAssetPublicUrl(path) {
+      if (!this.client || !path) return "";
+      const { data } = this.client.storage.from(this.siteAssetBucket).getPublicUrl(path);
+      return data?.publicUrl || "";
+    },
+    async uploadSiteAsset(file, objectPath) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.storage.from(this.siteAssetBucket).upload(objectPath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+    },
+    async removeSiteAsset(path) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!path) return { data: [], error: null };
+      return this.client.storage.from(this.siteAssetBucket).remove([path]);
     },
     async signInWithPassword(credentials) {
       if (!this.client) {
