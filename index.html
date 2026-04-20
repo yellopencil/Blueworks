@@ -44,13 +44,10 @@
             </div>
             <button type="button" id="backToLoginBtn" class="text-link auth-back-link">돌아가기</button>
           </div>
-          <div id="pendingApprovalCard" class="info-card hidden">
-            <strong>가입 요청이 접수되었어요.</strong>
-            <p>소유자의 승인 후 가입이 완료됩니다. 승인 전에는 로그인할 수 없습니다.</p>
-          </div>
           <form id="registerForm" class="form-stack" novalidate>
             <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명"></label>
             <label>이메일<input name="email" type="email" required placeholder="로그인에 사용할 이메일"></label>
+            <label>연락처<input name="phone" type="text" required placeholder="예: 010-1234-5678"></label>
             <label>비밀번호<input name="password" type="password" required placeholder="비밀번호"></label>
             <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너"></label>
             <button type="submit" class="secondary auth-submit">가입 요청 보내기</button>

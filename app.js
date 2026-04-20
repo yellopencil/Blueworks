@@ -114,7 +114,6 @@ const els = {
   registerPanel: document.querySelector("#registerPanel"),
   openRegisterPanelBtn: document.querySelector("#openRegisterPanelBtn"),
   backToLoginBtn: document.querySelector("#backToLoginBtn"),
-  pendingApprovalCard: document.querySelector("#pendingApprovalCard"),
   welcomeText: document.querySelector("#welcomeText"),
   membersHeroText: document.querySelector("#membersHeroText"),
   projectsHeroText: document.querySelector("#projectsHeroText"),
@@ -1960,7 +1959,6 @@ function render() {
 
   els.authView.classList.toggle("hidden", Boolean(user));
   els.appView.classList.toggle("hidden", !user);
-  els.pendingApprovalCard.classList.toggle("hidden", !state.pendingApproval || Boolean(user));
   if (!user) {
     closeRegisterPanel();
     hydrateRememberedLogin();
@@ -2171,6 +2169,7 @@ async function handleRegister(event) {
   const formData = new FormData(form);
   const name = String(formData.get("name")).trim();
   const email = String(formData.get("email")).trim();
+  const phone = String(formData.get("phone")).trim();
   const password = String(formData.get("password")).trim();
   const roleLabel = String(formData.get("roleLabel")).trim();
   const username = email.split("@")[0] || "user";
@@ -2178,8 +2177,8 @@ async function handleRegister(event) {
   const bridge = getSupabaseBridge();
   setAuthStatus(els.registerStatusMessage, "");
 
-  if (!name || !email || !password || !roleLabel) {
-    const message = "이름, 이메일, 비밀번호, 직책을 모두 입력해주세요.";
+  if (!name || !email || !phone || !password || !roleLabel) {
+    const message = "이름, 이메일, 연락처, 비밀번호, 직책을 모두 입력해주세요.";
     setAuthStatus(els.registerStatusMessage, message);
     toast(message);
     return;
@@ -2221,6 +2220,7 @@ async function handleRegister(event) {
         data: {
           username,
           name,
+          phone,
           role_label: roleLabel,
         },
         emailRedirectTo: window.location.href,
