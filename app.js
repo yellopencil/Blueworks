@@ -2878,18 +2878,6 @@ function buildArchiveCategoryGhost(card) {
   return ghost;
 }
 
-function getArchiveCategoryAfterElement(y) {
-  const cards = [...els.archiveCodeCategoriesList.querySelectorAll(".archive-category-card:not(.is-dragging)")];
-  for (const card of cards) {
-    const box = card.getBoundingClientRect();
-    const middleY = box.top + box.height / 2;
-    if (y < middleY) {
-      return card;
-    }
-  }
-  return null;
-}
-
 function startArchiveCategoryDrag(event, card) {
   event.preventDefault();
   draggedArchiveCategoryId = card.dataset.archiveCategoryId;
@@ -2906,7 +2894,12 @@ function startArchiveCategoryDrag(event, card) {
     if (!archiveCategoryDragGhost) return;
     archiveCategoryDragGhost.style.left = `${moveEvent.clientX - archiveCategoryPointerOffsetX}px`;
     archiveCategoryDragGhost.style.top = `${moveEvent.clientY - archiveCategoryPointerOffsetY}px`;
-    const after = getArchiveCategoryAfterElement(moveEvent.clientY);
+    const after = getArchiveCardAfterElement(
+      els.archiveCodeCategoriesList,
+      moveEvent.clientX,
+      moveEvent.clientY,
+      ".archive-category-card",
+    );
     if (after) els.archiveCodeCategoriesList.insertBefore(card, after);
     else els.archiveCodeCategoriesList.appendChild(card);
   };
