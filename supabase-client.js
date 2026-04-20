@@ -27,6 +27,24 @@
       }
       return this.client.from("schedules").select("*").order("date", { ascending: true });
     },
+    async fetchArchiveNotes() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_notes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+    },
+    async fetchArchiveCodeCategories() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_code_categories").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+    },
+    async fetchArchiveCodes() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_codes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+    },
     async fetchProfiles() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -96,6 +114,45 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.from("schedules").delete().eq("id", scheduleId);
+    },
+    async upsertArchiveNotes(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_notes").upsert(payload).select();
+    },
+    async deleteArchiveNotesByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("archive_notes").delete().in("id", ids);
+    },
+    async upsertArchiveCodeCategories(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_code_categories").upsert(payload).select();
+    },
+    async deleteArchiveCodeCategoriesByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("archive_code_categories").delete().in("id", ids);
+    },
+    async upsertArchiveCodes(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("archive_codes").upsert(payload).select();
+    },
+    async deleteArchiveCodesByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("archive_codes").delete().in("id", ids);
     },
   };
 

@@ -637,6 +637,83 @@ function deserializeScheduleFromSupabase(row) {
   };
 }
 
+function serializeArchiveNoteForSupabase(note, index = 0) {
+  return {
+    id: note.id,
+    title: note.title || "",
+    content: note.content || "",
+    color: note.color || "gray",
+    sort_order: index,
+    created_at: note.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeArchiveNoteFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    title: row.title || "",
+    content: row.content || "",
+    color: row.color || "gray",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function serializeArchiveCategoryForSupabase(category, index = 0) {
+  return {
+    id: category.id,
+    name: category.name || "기본",
+    color: category.color || "gray",
+    sort_order: index,
+    created_at: category.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeArchiveCategoryFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    name: row.name || "기본",
+    color: row.color || "gray",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function serializeArchiveCodeForSupabase(code, index = 0) {
+  return {
+    id: code.id,
+    title: code.title || "",
+    code: code.content || "",
+    description: code.description || "",
+    category_id: code.categoryId || null,
+    sort_order: index,
+    created_at: code.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeArchiveCodeFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    title: row.title || "",
+    description: row.description || "",
+    categoryId: row.category_id || "",
+    content: row.code || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function updateSupabaseStatusSummary(prefix = "") {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return;
+  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건을 Supabase에서 확인했어요.`;
+  bridge.statusDetail = prefix ? `${prefix} ${summary}` : summary;
+  renderSiteSettings();
+}
+
 async function syncProjectsAndSchedulesFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) {
@@ -682,7 +759,7 @@ async function syncProjectsAndSchedulesFromSupabase() {
   state.projects = remoteProjects;
   state.schedules = remoteSchedules;
   saveState({ history: false });
-  bridge.statusDetail = `프로젝트 ${remoteProjects.length}개, 일정 ${remoteSchedules.length}개를 Supabase에서 불러왔어요.`;
+  updateSupabaseStatusSummary();
   render();
 }
 
@@ -700,6 +777,107 @@ async function seedSupabaseFromLocalState() {
     if (result.error) return { ok: false, error: result.error };
   }
 
+  return { ok: true };
+}
+
+async function syncArchiveStateToSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  const [remoteNotesResult, remoteCategoryResult, remoteCodesResult] = await Promise.all([
+    bridge.fetchArchiveNotes(),
+    bridge.fetchArchiveCodeCategories(),
+    bridge.fetchArchiveCodes(),
+  ]);
+
+  if (remoteNotesResult.error || remoteCategoryResult.error || remoteCodesResult.error) {
+    return { ok: false, error: remoteNotesResult.error || remoteCategoryResult.error || remoteCodesResult.error };
+  }
+
+  const notePayloads = state.archiveNotes.map((item, index) => serializeArchiveNoteForSupabase(item, index));
+  const categoryPayloads = state.archiveCodeCategories.map((item, index) => serializeArchiveCategoryForSupabase(item, index));
+  const codePayloads = state.archiveCodes.map((item, index) => serializeArchiveCodeForSupabase(item, index));
+
+  if (categoryPayloads.length) {
+    const upsertCategoryResult = await bridge.upsertArchiveCodeCategories(categoryPayloads);
+    if (upsertCategoryResult.error) return { ok: false, error: upsertCategoryResult.error };
+  }
+
+  if (notePayloads.length) {
+    const upsertNoteResult = await bridge.upsertArchiveNotes(notePayloads);
+    if (upsertNoteResult.error) return { ok: false, error: upsertNoteResult.error };
+  }
+
+  if (codePayloads.length) {
+    const upsertCodeResult = await bridge.upsertArchiveCodes(codePayloads);
+    if (upsertCodeResult.error) return { ok: false, error: upsertCodeResult.error };
+  }
+
+  const localNoteIds = new Set(state.archiveNotes.map((item) => item.id));
+  const localCategoryIds = new Set(state.archiveCodeCategories.map((item) => item.id));
+  const localCodeIds = new Set(state.archiveCodes.map((item) => item.id));
+
+  const staleNoteIds = (remoteNotesResult.data || []).map((item) => item.id).filter((id) => !localNoteIds.has(id));
+  const staleCodeIds = (remoteCodesResult.data || []).map((item) => item.id).filter((id) => !localCodeIds.has(id));
+  const staleCategoryIds = (remoteCategoryResult.data || []).map((item) => item.id).filter((id) => !localCategoryIds.has(id));
+
+  if (staleNoteIds.length) {
+    const deleteNotesResult = await bridge.deleteArchiveNotesByIds(staleNoteIds);
+    if (deleteNotesResult.error) return { ok: false, error: deleteNotesResult.error };
+  }
+
+  if (staleCodeIds.length) {
+    const deleteCodesResult = await bridge.deleteArchiveCodesByIds(staleCodeIds);
+    if (deleteCodesResult.error) return { ok: false, error: deleteCodesResult.error };
+  }
+
+  if (staleCategoryIds.length) {
+    const deleteCategoriesResult = await bridge.deleteArchiveCodeCategoriesByIds(staleCategoryIds);
+    if (deleteCategoriesResult.error) return { ok: false, error: deleteCategoriesResult.error };
+  }
+
+  return { ok: true };
+}
+
+async function syncArchivesFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  const [noteResult, categoryResult, codeResult] = await Promise.all([
+    bridge.fetchArchiveNotes(),
+    bridge.fetchArchiveCodeCategories(),
+    bridge.fetchArchiveCodes(),
+  ]);
+
+  if (noteResult.error || categoryResult.error || codeResult.error) {
+    return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error };
+  }
+
+  const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
+  const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
+  const remoteCodes = (codeResult.data || []).map(deserializeArchiveCodeFromSupabase);
+  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0;
+  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncArchiveStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    updateSupabaseStatusSummary("브라우저 아카이브 데이터를 Supabase로 복사했어요.");
+    return { ok: true };
+  }
+
+  state.archiveNotes = remoteNotes;
+  state.archiveCodeCategories = remoteCategories.length ? remoteCategories : createDefaultArchiveCategories();
+  const fallbackCategoryId = state.archiveCodeCategories[0]?.id || "";
+  state.archiveCodes = remoteCodes.map((item) => ({
+    ...item,
+    categoryId: state.archiveCodeCategories.some((category) => category.id === item.categoryId) ? item.categoryId : fallbackCategoryId,
+  }));
+  saveState({ history: false });
+  updateSupabaseStatusSummary();
+  renderArchiveNotes();
+  renderArchiveCodeCategories();
+  renderArchiveCodes();
   return { ok: true };
 }
 
@@ -952,6 +1130,12 @@ async function applyAuthSession(session, options = {}) {
     const message = "아직 소유자 승인이 완료되지 않았습니다.";
     if (!options.silent) toast(message);
     return { ok: false, message };
+  }
+
+  const archiveSyncResult = await syncArchivesFromSupabase();
+  if (!archiveSyncResult.ok) {
+    const message = archiveSyncResult.error?.message || "아카이브 정보를 불러오지 못했습니다.";
+    if (!options.silent) toast(message);
   }
 
   syncProfilesFromSupabase().catch(() => {});
@@ -2725,14 +2909,18 @@ function startArchiveCategoryDrag(event, card) {
     else els.archiveCodeCategoriesList.appendChild(card);
   };
 
-  const onUp = () => {
+  const onUp = async () => {
+    const previousCategories = structuredClone(state.archiveCodeCategories);
     card.classList.remove("is-dragging");
     archiveCategoryDragGhost?.remove();
     archiveCategoryDragGhost = null;
     const orderedIds = [...els.archiveCodeCategoriesList.querySelectorAll(".archive-category-card")].map((item) => item.dataset.archiveCategoryId);
     state.archiveCodeCategories = orderedIds.map((id) => state.archiveCodeCategories.find((item) => item.id === id)).filter(Boolean);
     draggedArchiveCategoryId = null;
-    saveState();
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 순서 저장 실패" });
+    if (!persistResult.ok) {
+      state.archiveCodeCategories = previousCategories;
+    }
     renderArchiveCodeCategories();
     renderArchiveCodes();
     window.removeEventListener("pointermove", onMove);
@@ -2857,14 +3045,20 @@ function startArchiveCardDrag(event, card, type) {
     else container.appendChild(card);
   };
 
-  const onUp = () => {
+  const onUp = async () => {
+    const previousNotes = type === "note" ? structuredClone(state.archiveNotes) : null;
+    const previousCodes = type === "code" ? structuredClone(state.archiveCodes) : null;
     card.classList.remove("is-dragging");
     archiveCardDragGhost?.remove();
     archiveCardDragGhost = null;
     persistArchiveCardOrder(type, container);
     draggedArchiveNoteId = null;
     draggedArchiveCodeId = null;
-    saveState();
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: type === "note" ? "메모 순서 저장 실패" : "코드 순서 저장 실패" });
+    if (!persistResult.ok) {
+      if (previousNotes) state.archiveNotes = previousNotes;
+      if (previousCodes) state.archiveCodes = previousCodes;
+    }
     render();
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
@@ -3618,7 +3812,22 @@ function closeArchiveNoteModal() {
   els.archiveNoteModal.classList.add("hidden");
 }
 
-function handleArchiveNoteSave(event) {
+async function persistArchiveChanges(options = {}) {
+  const result = await syncArchiveStateToSupabase();
+  if (!result.ok) {
+    const message = options.errorMessagePrefix
+      ? `${options.errorMessagePrefix}: ${result.error?.message || "Supabase 오류"}`
+      : (result.error?.message || "Supabase 오류");
+    toast(message);
+    openNoticeModal(message);
+    return { ok: false, message };
+  }
+  saveState();
+  updateSupabaseStatusSummary();
+  return { ok: true };
+}
+
+async function handleArchiveNoteSave(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const now = new Date().toISOString();
@@ -3630,6 +3839,7 @@ function handleArchiveNoteSave(event) {
     createdAt: now,
     updatedAt: now,
   };
+  const previousNotes = structuredClone(state.archiveNotes);
   const existing = state.archiveNotes.find((item) => item.id === payload.id);
   if (existing) {
     payload.createdAt = existing.createdAt || now;
@@ -3637,7 +3847,12 @@ function handleArchiveNoteSave(event) {
   } else {
     state.archiveNotes.unshift(payload);
   }
-  saveState();
+  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패" });
+  if (!persistResult.ok) {
+    state.archiveNotes = previousNotes;
+    renderArchiveNotes();
+    return;
+  }
   renderArchiveNotes();
   closeArchiveNoteModal();
   openNoticeModal("저장이 완료되었어요!");
@@ -3646,9 +3861,15 @@ function handleArchiveNoteSave(event) {
 function deleteCurrentArchiveNote() {
   if (!currentArchiveNoteId) return;
   const note = state.archiveNotes.find((item) => item.id === currentArchiveNoteId);
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const previousNotes = structuredClone(state.archiveNotes);
     state.archiveNotes = state.archiveNotes.filter((item) => item.id !== currentArchiveNoteId);
-    saveState();
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 삭제 실패" });
+    if (!persistResult.ok) {
+      state.archiveNotes = previousNotes;
+      renderArchiveNotes();
+      return;
+    }
     renderArchiveNotes();
     closeArchiveNoteModal();
   }, note ? `[${note.title}] 메모를 삭제할까요?` : "메모를 삭제할까요?");
@@ -3677,7 +3898,7 @@ function closeArchiveCodeModal() {
   els.archiveCodeModal.classList.add("hidden");
 }
 
-function handleArchiveCodeSave(event) {
+async function handleArchiveCodeSave(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const now = new Date().toISOString();
@@ -3690,6 +3911,7 @@ function handleArchiveCodeSave(event) {
     createdAt: now,
     updatedAt: now,
   };
+  const previousCodes = structuredClone(state.archiveCodes);
   const existing = state.archiveCodes.find((item) => item.id === payload.id);
   if (existing) {
     payload.createdAt = existing.createdAt || now;
@@ -3697,7 +3919,12 @@ function handleArchiveCodeSave(event) {
   } else {
     state.archiveCodes.unshift(payload);
   }
-  saveState();
+  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 저장 실패" });
+  if (!persistResult.ok) {
+    state.archiveCodes = previousCodes;
+    renderArchiveCodes();
+    return;
+  }
   renderArchiveCodes();
   closeArchiveCodeModal();
   openNoticeModal("저장이 완료되었어요!");
@@ -3706,29 +3933,43 @@ function handleArchiveCodeSave(event) {
 function deleteCurrentArchiveCode() {
   if (!currentArchiveCodeId) return;
   const code = state.archiveCodes.find((item) => item.id === currentArchiveCodeId);
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const previousCodes = structuredClone(state.archiveCodes);
     state.archiveCodes = state.archiveCodes.filter((item) => item.id !== currentArchiveCodeId);
-    saveState();
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 삭제 실패" });
+    if (!persistResult.ok) {
+      state.archiveCodes = previousCodes;
+      renderArchiveCodes();
+      return;
+    }
     renderArchiveCodes();
     closeArchiveCodeModal();
   }, code ? `[${code.title}] 코드를 삭제할까요?` : "코드를 삭제할까요?");
 }
 
-function handleArchiveCategorySave(event) {
+async function handleArchiveCategorySave(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const id = String(formData.get("id") || crypto.randomUUID());
   const name = String(formData.get("name") || "").trim();
   const color = String(formData.get("color") || "gray");
   if (!name) return;
+  const previousCategories = structuredClone(state.archiveCodeCategories);
   const existing = state.archiveCodeCategories.find((item) => item.id === id);
   if (existing) {
     existing.name = name;
     existing.color = color;
+    existing.updatedAt = new Date().toISOString();
   } else {
-    state.archiveCodeCategories.push({ id, name, color });
+    state.archiveCodeCategories.push({ id, name, color, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   }
-  saveState();
+  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 저장 실패" });
+  if (!persistResult.ok) {
+    state.archiveCodeCategories = previousCategories;
+    renderArchiveCodeCategories();
+    renderArchiveCodes();
+    return;
+  }
   renderArchiveCodeCategories();
   renderArchiveCodes();
   closeArchiveCategoryModal();
@@ -3743,11 +3984,20 @@ function deleteCurrentArchiveCategory() {
     openNoticeModal("카테고리는 최소 1개 이상 필요해요.");
     return;
   }
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const previousCategories = structuredClone(state.archiveCodeCategories);
+    const previousCodes = structuredClone(state.archiveCodes);
     const fallbackCategoryId = state.archiveCodeCategories.find((item) => item.id !== currentArchiveCategoryId)?.id || state.archiveCodeCategories[0].id;
     state.archiveCodes = state.archiveCodes.map((item) => item.categoryId === currentArchiveCategoryId ? { ...item, categoryId: fallbackCategoryId } : item);
     state.archiveCodeCategories = state.archiveCodeCategories.filter((item) => item.id !== currentArchiveCategoryId);
-    saveState();
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 삭제 실패" });
+    if (!persistResult.ok) {
+      state.archiveCodeCategories = previousCategories;
+      state.archiveCodes = previousCodes;
+      renderArchiveCodeCategories();
+      renderArchiveCodes();
+      return;
+    }
     renderArchiveCodeCategories();
     renderArchiveCodes();
     closeArchiveCategoryModal();
