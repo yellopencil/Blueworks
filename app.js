@@ -87,6 +87,13 @@ function buildSiteAssetObjectPath(kind, filename = "") {
   return `site-settings/${kind}-${crypto.randomUUID()}${extension}`;
 }
 
+function buildProjectDocumentObjectPath(projectId, filename = "") {
+  const safeName = String(filename || "document").replace(/[^\w.\-]+/g, "-");
+  const extensionMatch = safeName.match(/(\.[a-zA-Z0-9]+)$/);
+  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+  return `projects/${projectId}/${crypto.randomUUID()}${extension}`;
+}
+
 const els = {
   body: document.body,
   authView: document.querySelector("#authView"),
@@ -626,6 +633,32 @@ function deserializeProjectFromSupabase(row) {
   return project;
 }
 
+function serializeProjectDocumentForSupabase(projectId, document) {
+  return {
+    id: document.id,
+    project_id: projectId,
+    document_type: document.type || "contract",
+    file_name: document.name || "",
+    storage_path: document.storagePath || "",
+    mime_type: document.mimeType || "",
+    size_bytes: Number(document.size || 0),
+    created_at: document.uploadedAt || new Date().toISOString(),
+  };
+}
+
+function deserializeProjectDocumentFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    type: row.document_type || "contract",
+    name: row.file_name || "",
+    mimeType: row.mime_type || "application/octet-stream",
+    size: Number(row.size_bytes || 0),
+    uploadedAt: row.created_at || new Date().toISOString(),
+    storagePath: row.storage_path || "",
+    persisted: true,
+  };
+}
+
 function serializeScheduleForSupabase(schedule) {
   return {
     id: schedule.id,
@@ -820,20 +853,33 @@ async function syncProjectsAndSchedulesFromSupabase() {
   bridge.statusDetail = "Supabase에서 프로젝트와 일정을 확인하는 중입니다.";
   renderSiteSettings();
 
-  const [projectResult, scheduleResult] = await Promise.all([
+  const [projectResult, scheduleResult, documentResult] = await Promise.all([
     bridge.fetchProjects(),
     bridge.fetchSchedules(),
+    bridge.fetchProjectDocuments(),
   ]);
 
-  if (projectResult.error || scheduleResult.error) {
+  if (projectResult.error || scheduleResult.error || documentResult.error) {
     bridge.mode = "supabase-error";
-    bridge.error = projectResult.error || scheduleResult.error;
+    bridge.error = projectResult.error || scheduleResult.error || documentResult.error;
     bridge.statusDetail = bridge.error?.message || "Supabase 데이터를 가져오지 못했습니다.";
     renderSiteSettings();
     return;
   }
 
-  const remoteProjects = (projectResult.data || []).map(deserializeProjectFromSupabase);
+  const documentMap = new Map();
+  (documentResult.data || []).forEach((row) => {
+    const list = documentMap.get(row.project_id) || [];
+    list.push(deserializeProjectDocumentFromSupabase(row));
+    documentMap.set(row.project_id, list);
+  });
+
+  const remoteProjects = (projectResult.data || []).map((row) => {
+    const project = deserializeProjectFromSupabase(row);
+    project.contracts = documentMap.get(project.id) || [];
+    project.searchIndex = buildProjectSearchIndex(project);
+    return project;
+  });
   const remoteSchedules = (scheduleResult.data || []).map(deserializeScheduleFromSupabase);
   const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0;
   const hasLocalData = state.projects.length > 0 || state.schedules.length > 0;
@@ -866,6 +912,15 @@ async function seedSupabaseFromLocalState() {
   for (const [index, project] of state.projects.entries()) {
     const result = await bridge.upsertProject(serializeProjectForSupabase(project, index));
     if (result.error) return { ok: false, error: result.error };
+    if (Array.isArray(project.contracts) && project.contracts.length) {
+      const documentPayloads = project.contracts
+        .filter((document) => document.storagePath)
+        .map((document) => serializeProjectDocumentForSupabase(project.id, document));
+      if (documentPayloads.length) {
+        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
+        if (documentResult.error) return { ok: false, error: documentResult.error };
+      }
+    }
   }
 
   for (const schedule of state.schedules) {
@@ -3858,6 +3913,7 @@ async function handleProjectSave(event) {
 
   const existing = state.projects.find((project) => project.id === payload.id);
   const previousProject = existing ? structuredClone(existing) : null;
+  const previousDocuments = existing ? structuredClone(existing.contracts || []) : [];
   if (existing) {
     Object.assign(existing, payload, { contracts: [...draftProjectDocuments] });
   } else {
@@ -3883,6 +3939,43 @@ async function handleProjectSave(event) {
       return;
     }
     const syncedProject = deserializeProjectFromSupabase(result.data);
+    const documentPayloads = draftProjectDocuments
+      .filter((document) => document.storagePath)
+      .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
+    if (documentPayloads.length) {
+      const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
+      if (documentResult.error) {
+        if (existing && previousProject) {
+          Object.assign(existing, previousProject);
+          existing.contracts = previousDocuments;
+        } else {
+          state.projects = state.projects.filter((project) => project.id !== payload.id);
+        }
+        const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}`;
+        openNoticeModal(message);
+        toast(message);
+        return;
+      }
+    }
+    const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
+    if (removedDocuments.length) {
+      const removedIds = removedDocuments.map((document) => document.id);
+      const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
+      if (deleteResult.error) {
+        const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
+        openNoticeModal(message);
+        toast(message);
+        return;
+      }
+      removedDocuments
+        .filter((document) => document.storagePath)
+        .forEach((document) => bridge.removeProjectDocumentAsset(document.storagePath).catch(() => {}));
+    }
+    syncedProject.contracts = draftProjectDocuments.map((document) => ({
+      ...document,
+      persisted: true,
+    }));
+    syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
     const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
     if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
     else state.projects.unshift(syncedProject);
@@ -4301,6 +4394,7 @@ function deleteCurrentProject() {
   const project = selectedProject();
   if (!project) return;
   openConfirmModal(async () => {
+    const removedDocumentPaths = (project.contracts || []).map((document) => document.storagePath).filter(Boolean);
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
       const result = await bridge.deleteProject(project.id);
@@ -4308,6 +4402,7 @@ function deleteCurrentProject() {
         toast("Supabase에서 프로젝트를 삭제하지 못했습니다.");
         return;
       }
+      removedDocumentPaths.forEach((storagePath) => bridge.removeProjectDocumentAsset(storagePath).catch(() => {}));
     }
     state.projects = state.projects.filter((item) => item.id !== project.id);
     state.schedules = state.schedules.filter((item) => item.projectId !== project.id);
@@ -4323,8 +4418,29 @@ async function handleDocumentUpload() {
   const [file] = els.contractFile.files;
   if (!file) return toast("업로드할 문서를 선택해주세요.");
 
-  const dataUrl = await readFileAsDataUrl(file);
+  const bridge = getSupabaseBridge();
+  const existingProjectId = String(els.projectForm?.elements?.id?.value || "");
+  const projectId = existingProjectId || crypto.randomUUID();
+  if (!existingProjectId && els.projectForm?.elements?.id) {
+    els.projectForm.elements.id.value = projectId;
+  }
   const documentType = els.documentTypeSelect.value || "contract";
+  let dataUrl = "";
+  let storagePath = "";
+
+  if (bridge?.isReady() && state.sessionUserId) {
+    storagePath = buildProjectDocumentObjectPath(projectId, file.name);
+    const uploadResult = await bridge.uploadProjectDocument(file, storagePath);
+    if (uploadResult.error) {
+      const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
+      toast(message);
+      openNoticeModal(message);
+      return;
+    }
+  } else {
+    dataUrl = await readFileAsDataUrl(file);
+  }
+
   draftProjectDocuments.unshift({
     id: crypto.randomUUID(),
     type: documentType,
@@ -4332,7 +4448,9 @@ async function handleDocumentUpload() {
     mimeType: file.type || guessMimeType(file.name),
     size: file.size,
     uploadedAt: new Date().toISOString(),
+    storagePath,
     dataUrl,
+    persisted: false,
   });
 
   els.contractFile.value = "";
@@ -4378,17 +4496,38 @@ function renderDocuments() {
   });
 }
 function downloadDocument(documentId) {
-  const file = draftProjectDocuments.find((item) => item.id === documentId);
-  if (!file) return;
-  const link = document.createElement("a");
-  link.href = file.dataUrl;
-  link.download = file.name;
-  link.click();
+  previewOrDownloadDocument(documentId, { mode: "download" });
 }
 
-function previewDocument(documentId) {
+async function previewOrDownloadDocument(documentId, options = {}) {
   const file = draftProjectDocuments.find((item) => item.id === documentId);
   if (!file) return;
+  const bridge = getSupabaseBridge();
+  let accessibleUrl = file.dataUrl || "";
+
+  if (!accessibleUrl && file.storagePath && bridge?.isReady()) {
+    const signedResult = await bridge.createProjectDocumentSignedUrl(file.storagePath, 3600);
+    if (signedResult.error || !signedResult.data?.signedUrl) {
+      const message = `문서 열기 실패: ${signedResult.error?.message || "Storage 오류"}`;
+      toast(message);
+      openNoticeModal(message);
+      return;
+    }
+    accessibleUrl = signedResult.data.signedUrl;
+  }
+
+  if (!accessibleUrl) {
+    openNoticeModal("문서 URL을 찾지 못했습니다.");
+    return;
+  }
+
+  if (options.mode === "download") {
+    const link = document.createElement("a");
+    link.href = accessibleUrl;
+    link.download = file.name;
+    link.click();
+    return;
+  }
 
   currentPreviewDocumentId = documentId;
   els.documentPreviewTitle.textContent = file.name;
@@ -4396,17 +4535,25 @@ function previewDocument(documentId) {
   revokePreviewObjectUrl();
 
   if (file.mimeType.startsWith("image/")) {
-    els.documentPreviewBody.innerHTML = `<img class="document-preview-image" src="${file.dataUrl}" alt="${escapeHtml(file.name)}">`;
+    els.documentPreviewBody.innerHTML = `<img class="document-preview-image" src="${accessibleUrl}" alt="${escapeHtml(file.name)}">`;
   } else if (file.mimeType === "application/pdf") {
-    currentPreviewObjectUrl = createObjectUrlFromDataUrl(file.dataUrl);
-    const previewSrc = currentPreviewObjectUrl || file.dataUrl;
     els.documentPreviewBody.innerHTML = `
-      <object class="document-preview-frame" data="${previewSrc}" type="application/pdf">
-        <iframe class="document-preview-frame" src="${previewSrc}" title="${escapeHtml(file.name)}"></iframe>
+      <object class="document-preview-frame" data="${accessibleUrl}" type="application/pdf">
+        <iframe class="document-preview-frame" src="${accessibleUrl}" title="${escapeHtml(file.name)}"></iframe>
       </object>
     `;
   } else if (file.mimeType.startsWith("text/")) {
-    const text = decodeTextDataUrl(file.dataUrl);
+    let text = "";
+    if (file.dataUrl) {
+      text = decodeTextDataUrl(file.dataUrl);
+    } else {
+      try {
+        const response = await fetch(accessibleUrl);
+        text = await response.text();
+      } catch (error) {
+        text = "";
+      }
+    }
     els.documentPreviewBody.innerHTML = `<pre class="document-preview-text">${escapeHtml(text || "미리볼 수 있는 텍스트 내용을 찾지 못했습니다.")}</pre>`;
   } else {
     els.documentPreviewBody.innerHTML = `
@@ -4418,6 +4565,10 @@ function previewDocument(documentId) {
   }
 
   els.documentPreviewModal.classList.remove("hidden");
+}
+
+function previewDocument(documentId) {
+  previewOrDownloadDocument(documentId, { mode: "preview" });
 }
 
 function closeDocumentPreviewModal() {
@@ -4438,8 +4589,12 @@ function closeNoticeModal() {
 
 function removeDocument(documentId) {
   const file = draftProjectDocuments.find((item) => item.id === documentId);
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
     draftProjectDocuments = draftProjectDocuments.filter((item) => item.id !== documentId);
+    if (!file?.persisted && file?.storagePath) {
+      const bridge = getSupabaseBridge();
+      bridge?.removeProjectDocumentAsset?.(file.storagePath).catch(() => {});
+    }
     renderDocuments();
   }, file ? `[${file.name}] 문서를 삭제할까요?` : "문서를 삭제할까요?");
 }

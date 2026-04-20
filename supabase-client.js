@@ -2,11 +2,13 @@
   const SUPABASE_URL = "https://uanpcrvzahjrbgjvvioz.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zJqlCjId8XiTq6W05l_JSA_8VHISJ3-";
   const SITE_ASSET_BUCKET = "site-assets";
+  const PROJECT_DOCUMENT_BUCKET = "project-documents";
 
   const bridge = {
     url: SUPABASE_URL,
     publishableKey: SUPABASE_PUBLISHABLE_KEY,
     siteAssetBucket: SITE_ASSET_BUCKET,
+    projectDocumentBucket: PROJECT_DOCUMENT_BUCKET,
     client: null,
     mode: "supabase-pending",
     error: null,
@@ -77,6 +79,19 @@
       }
       return this.client.from("site_settings").upsert(payload).select().single();
     },
+    async upsertProjectDocuments(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("project_documents").upsert(payload).select();
+    },
+    async deleteProjectDocumentsByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("project_documents").delete().in("id", ids);
+    },
     getSiteAssetPublicUrl(path) {
       if (!this.client || !path) return "";
       const { data } = this.client.storage.from(this.siteAssetBucket).getPublicUrl(path);
@@ -97,6 +112,28 @@
       }
       if (!path) return { data: [], error: null };
       return this.client.storage.from(this.siteAssetBucket).remove([path]);
+    },
+    async uploadProjectDocument(file, objectPath) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.storage.from(this.projectDocumentBucket).upload(objectPath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+    },
+    async removeProjectDocumentAsset(path) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!path) return { data: [], error: null };
+      return this.client.storage.from(this.projectDocumentBucket).remove([path]);
+    },
+    async createProjectDocumentSignedUrl(path, expiresIn = 3600) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.storage.from(this.projectDocumentBucket).createSignedUrl(path, expiresIn);
     },
     async signInWithPassword(credentials) {
       if (!this.client) {
@@ -212,3 +249,9 @@
 
   window.BLUEWORKS_SUPABASE = bridge;
 })();
+    async fetchProjectDocuments() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("project_documents").select("*").order("created_at", { ascending: false });
+    },
