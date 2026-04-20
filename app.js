@@ -3469,6 +3469,7 @@ async function handleProjectSave(event) {
   payload.searchIndex = buildProjectSearchIndex({ ...payload, contracts: [...draftProjectDocuments] });
 
   const existing = state.projects.find((project) => project.id === payload.id);
+  const previousProject = existing ? structuredClone(existing) : null;
   if (existing) {
     Object.assign(existing, payload, { contracts: [...draftProjectDocuments] });
   } else {
@@ -3483,7 +3484,14 @@ async function handleProjectSave(event) {
       serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
     );
     if (result.error) {
-      openNoticeModal("Supabase에 프로젝트를 저장하지 못했어요.");
+      if (existing && previousProject) {
+        Object.assign(existing, previousProject);
+      } else {
+        state.projects = state.projects.filter((project) => project.id !== payload.id);
+      }
+      const message = `프로젝트 저장 실패: ${result.error.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast(message);
       return;
     }
     const syncedProject = deserializeProjectFromSupabase(result.data);
@@ -4809,7 +4817,14 @@ async function handleScheduleSave(event) {
   if (bridge?.isReady()) {
     const result = await bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload));
     if (result.error) {
-      openNoticeModal("Supabase에 일정을 저장하지 못했어요.");
+      if (existing && previousSchedule) {
+        Object.assign(existing, previousSchedule);
+      } else {
+        state.schedules = state.schedules.filter((schedule) => schedule.id !== payload.id);
+      }
+      const message = `일정 저장 실패: ${result.error.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast(message);
       return;
     }
     const syncedSchedule = deserializeScheduleFromSupabase(result.data);
