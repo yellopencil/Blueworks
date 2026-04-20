@@ -2478,6 +2478,12 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
   color: #9a6a17;
 }
 
+.member-pill.representative {
+  background: #eef5ff;
+  border-color: #c7dafb;
+  color: #3b6dd8;
+}
+
 .member-meta {
   display: flex;
   flex-wrap: wrap;

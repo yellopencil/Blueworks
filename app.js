@@ -3132,7 +3132,7 @@ function renderMembers() {
         <div class="member-item-main">
           <div class="member-name-row">
             <strong>${escapeHtml(user.name || user.username)}</strong>
-            <span class="member-pill">${isRepresentativeAccount(user) ? "소유자" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
+            <span class="member-pill${isRepresentativeAccount(user) ? " representative" : ""}">${isRepresentativeAccount(user) ? "대표" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
           </div>
           <div class="member-meta">
             <span>${escapeHtml(user.email || "-")}</span>
