@@ -2143,7 +2143,11 @@ async function handleLogin(event) {
     }
     form.reset();
     setAuthStatus(els.loginStatusMessage, "로그인에 성공했어요. 화면을 전환하고 있습니다...");
-    window.location.reload();
+    const authResult = await applyAuthSession(session);
+    if (!authResult?.ok) {
+      setAuthStatus(els.loginStatusMessage, "로그인은 되었지만 계정 정보를 불러오지 못했어요. 다시 시도해주세요.");
+      return;
+    }
   } catch (error) {
     const message = error?.message || "로그인 처리 중 문제가 생겼습니다.";
     setAuthStatus(els.loginStatusMessage, message);
