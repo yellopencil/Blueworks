@@ -1791,6 +1791,9 @@ button {
 
 .auth-entry-actions {
   margin-top: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .auth-submit {
@@ -1800,6 +1803,17 @@ button {
 
 .auth-entry-actions .auth-submit {
   width: 100%;
+}
+
+.auth-text-action {
+  justify-content: center;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.auth-text-action:hover,
+.auth-text-action:focus-visible {
+  color: #3467f6;
 }
 
 .auth-status-message {

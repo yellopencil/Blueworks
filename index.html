@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260420-adminfix1">
-  <link rel="stylesheet" href="./quote-generator.css?v=20260420-adminfix1">
+  <link rel="stylesheet" href="./styles.css?v=20260420-reset1">
+  <link rel="stylesheet" href="./quote-generator.css?v=20260420-reset1">
 </head>
 <body>
   <div class="shell">
@@ -32,6 +32,7 @@
           </form>
           <div id="loginStatusMessage" class="auth-status-message hidden"></div>
           <div class="button-row auth-entry-actions">
+            <button type="button" id="openPasswordResetPanelBtn" class="text-link auth-text-action">비밀번호 재설정</button>
             <button type="button" id="openRegisterPanelBtn" class="ghost auth-submit auth-register-btn">회원가입</button>
           </div>
         </div>
@@ -53,6 +54,36 @@
             <button type="submit" class="secondary auth-submit">가입 요청 보내기</button>
           </form>
           <div id="registerStatusMessage" class="auth-status-message hidden"></div>
+        </div>
+
+        <div id="passwordResetPanel" class="panel hidden">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Password Reset</p>
+              <h2>비밀번호 재설정</h2>
+            </div>
+            <button type="button" id="backToLoginFromResetBtn" class="text-link auth-back-link">돌아가기</button>
+          </div>
+          <form id="passwordResetRequestForm" class="form-stack" novalidate autocomplete="off">
+            <label>이메일<input name="email" type="email" required placeholder="가입한 이메일을 입력하세요." autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+            <button type="submit" class="secondary auth-submit">재설정 메일 보내기</button>
+          </form>
+          <div id="passwordResetStatusMessage" class="auth-status-message hidden"></div>
+        </div>
+
+        <div id="passwordUpdatePanel" class="panel hidden">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">New Password</p>
+              <h2>새 비밀번호 설정</h2>
+            </div>
+          </div>
+          <form id="passwordUpdateForm" class="form-stack" novalidate autocomplete="off">
+            <label>새 비밀번호<input name="password" type="password" required placeholder="새 비밀번호를 입력하세요." autocomplete="new-password"></label>
+            <label>새 비밀번호 확인<input name="passwordConfirm" type="password" required placeholder="한 번 더 입력하세요." autocomplete="new-password"></label>
+            <button type="submit" class="primary auth-submit">비밀번호 변경</button>
+          </form>
+          <div id="passwordUpdateStatusMessage" class="auth-status-message hidden"></div>
         </div>
       </section>
 
@@ -1247,9 +1278,9 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./supabase-client.js?v=20260420-adminfix1"></script>
-  <script src="./app.js?v=20260420-adminfix1"></script>
-  <script src="./quote-generator.js?v=20260420-adminfix1"></script>
+  <script src="./supabase-client.js?v=20260420-reset1"></script>
+  <script src="./app.js?v=20260420-reset1"></script>
+  <script src="./quote-generator.js?v=20260420-reset1"></script>
 </body>
 </html>
 

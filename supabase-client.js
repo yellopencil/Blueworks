@@ -153,6 +153,18 @@
       }
       return this.client.auth.signUp(credentials);
     },
+    async resetPasswordForEmail(email, options = {}) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.resetPasswordForEmail(email, options);
+    },
+    async updateUserPassword(password) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.updateUser({ password });
+    },
     async signOut() {
       if (!this.client) {
         return { error: new Error("Supabase client is not ready.") };

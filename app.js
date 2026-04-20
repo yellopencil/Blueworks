@@ -123,11 +123,19 @@ const els = {
   loginPanel: document.querySelector("#loginPanel"),
   loginForm: document.querySelector("#loginForm"),
   loginStatusMessage: document.querySelector("#loginStatusMessage"),
+  openPasswordResetPanelBtn: document.querySelector("#openPasswordResetPanelBtn"),
   registerForm: document.querySelector("#registerForm"),
   registerStatusMessage: document.querySelector("#registerStatusMessage"),
   registerPanel: document.querySelector("#registerPanel"),
   openRegisterPanelBtn: document.querySelector("#openRegisterPanelBtn"),
   backToLoginBtn: document.querySelector("#backToLoginBtn"),
+  passwordResetPanel: document.querySelector("#passwordResetPanel"),
+  passwordResetRequestForm: document.querySelector("#passwordResetRequestForm"),
+  passwordResetStatusMessage: document.querySelector("#passwordResetStatusMessage"),
+  backToLoginFromResetBtn: document.querySelector("#backToLoginFromResetBtn"),
+  passwordUpdatePanel: document.querySelector("#passwordUpdatePanel"),
+  passwordUpdateForm: document.querySelector("#passwordUpdateForm"),
+  passwordUpdateStatusMessage: document.querySelector("#passwordUpdateStatusMessage"),
   welcomeText: document.querySelector("#welcomeText"),
   membersHeroText: document.querySelector("#membersHeroText"),
   projectsHeroText: document.querySelector("#projectsHeroText"),
@@ -326,6 +334,8 @@ let archiveCategoryDragGhost = null;
 let archiveCategoryPointerOffsetX = 0;
 let archiveCategoryPointerOffsetY = 0;
 let authStateSubscription = null;
+let authPanelMode = "login";
+let isPasswordRecoveryFlow = false;
 const modalSnapshots = {
   project: "",
   schedule: "",
@@ -559,6 +569,26 @@ function setAuthStatus(target, message = "") {
   if (!target) return;
   target.textContent = message;
   target.classList.toggle("hidden", !message);
+}
+
+function showAuthPanel(mode = "login") {
+  authPanelMode = mode;
+  const isLogin = mode === "login";
+  const isRegister = mode === "register";
+  const isResetRequest = mode === "resetRequest";
+  const isResetUpdate = mode === "resetUpdate";
+
+  els.loginPanel?.classList.toggle("hidden", !isLogin);
+  els.registerPanel?.classList.toggle("hidden", !isRegister);
+  els.passwordResetPanel?.classList.toggle("hidden", !isResetRequest);
+  els.passwordUpdatePanel?.classList.toggle("hidden", !isResetUpdate);
+  els.authView?.classList.add("auth-grid-single");
+}
+
+function clearPasswordRecoveryUrl() {
+  if (!window.location.search.includes("resetPassword=1")) return;
+  const nextUrl = `${window.location.origin}${window.location.pathname}`;
+  window.history.replaceState({}, "", nextUrl);
 }
 
 function amountFromSupabase(value) {
@@ -1412,10 +1442,23 @@ async function initializeSupabaseAuth() {
   if (!bridge?.isReady()) return;
 
   const sessionResult = await bridge.getSession();
-  await applyAuthSession(sessionResult.data?.session || null, { silent: true });
+  const hasRecoveryFlag = new URLSearchParams(window.location.search).get("resetPassword") === "1";
+  if (hasRecoveryFlag && sessionResult.data?.session) {
+    isPasswordRecoveryFlow = true;
+    showAuthPanel("resetUpdate");
+    render();
+  } else {
+    await applyAuthSession(sessionResult.data?.session || null, { silent: true });
+  }
 
   authStateSubscription?.data?.subscription?.unsubscribe?.();
-  authStateSubscription = bridge.onAuthStateChange(async (_event, session) => {
+  authStateSubscription = bridge.onAuthStateChange(async (event, session) => {
+    if (event === "PASSWORD_RECOVERY" || (new URLSearchParams(window.location.search).get("resetPassword") === "1" && session)) {
+      isPasswordRecoveryFlow = true;
+      showAuthPanel("resetUpdate");
+      render();
+      return;
+    }
     await applyAuthSession(session, { silent: true });
   });
 }
@@ -1452,6 +1495,10 @@ function bindEvents() {
   els.registerForm.addEventListener("submit", handleRegister);
   els.openRegisterPanelBtn.addEventListener("click", openRegisterPanel);
   els.backToLoginBtn.addEventListener("click", closeRegisterPanel);
+  els.openPasswordResetPanelBtn?.addEventListener("click", openPasswordResetPanel);
+  els.backToLoginFromResetBtn?.addEventListener("click", closePasswordResetPanel);
+  els.passwordResetRequestForm?.addEventListener("submit", handlePasswordResetRequest);
+  els.passwordUpdateForm?.addEventListener("submit", handlePasswordUpdate);
   els.openMyProfileBtn?.addEventListener("click", openMyProfileModal);
   els.logoutBtn.addEventListener("click", logout);
   els.navDashboardBtn.addEventListener("click", () => switchView("dashboard"));
@@ -2418,10 +2465,17 @@ function render() {
   applySiteSettings();
   const user = currentUser();
 
+  if (isPasswordRecoveryFlow) {
+    els.authView.classList.remove("hidden");
+    els.appView.classList.add("hidden");
+    showAuthPanel("resetUpdate");
+    return;
+  }
+
   els.authView.classList.toggle("hidden", Boolean(user));
   els.appView.classList.toggle("hidden", !user);
   if (!user) {
-    closeRegisterPanel();
+    showAuthPanel(authPanelMode || "login");
     hydrateRememberedLogin();
     return;
   }
@@ -2735,6 +2789,143 @@ async function handleRegister(event) {
   }
 }
 
+async function handlePasswordResetRequest(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const email = String(formData.get("email") || "").trim();
+  const submitButton = form.querySelector('button[type="submit"]');
+  const bridge = getSupabaseBridge();
+  setAuthStatus(els.passwordResetStatusMessage, "");
+
+  if (!email) {
+    const message = "이메일을 입력해주세요.";
+    setAuthStatus(els.passwordResetStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (!/.+@.+\..+/.test(email)) {
+    const message = "올바른 이메일 주소를 입력해주세요.";
+    setAuthStatus(els.passwordResetStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (!bridge?.isReady()) {
+    const message = "Supabase 비밀번호 재설정 준비가 아직 끝나지 않았습니다.";
+    setAuthStatus(els.passwordResetStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = "메일 보내는 중...";
+  }
+
+  try {
+    const redirectTo = `${window.location.origin}${window.location.pathname}?resetPassword=1`;
+    const { error } = await bridge.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      const message = error.message || "재설정 메일을 보내지 못했습니다.";
+      setAuthStatus(els.passwordResetStatusMessage, message);
+      toast(message);
+      return;
+    }
+    setAuthStatus(els.passwordResetStatusMessage, "비밀번호 재설정 메일을 보냈어요. 메일에서 링크를 열어주세요.");
+    toast("비밀번호 재설정 메일을 보냈어요.");
+  } catch (error) {
+    const message = error?.message || "비밀번호 재설정 메일 발송 중 문제가 생겼습니다.";
+    setAuthStatus(els.passwordResetStatusMessage, message);
+    toast(message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || "재설정 메일 보내기";
+      delete submitButton.dataset.originalText;
+    }
+  }
+}
+
+async function handlePasswordUpdate(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const password = String(formData.get("password") || "").trim();
+  const passwordConfirm = String(formData.get("passwordConfirm") || "").trim();
+  const submitButton = form.querySelector('button[type="submit"]');
+  const bridge = getSupabaseBridge();
+  setAuthStatus(els.passwordUpdateStatusMessage, "");
+
+  if (!password || !passwordConfirm) {
+    const message = "새 비밀번호를 모두 입력해주세요.";
+    setAuthStatus(els.passwordUpdateStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (password.length < 8) {
+    const message = "비밀번호는 8자 이상으로 입력해주세요.";
+    setAuthStatus(els.passwordUpdateStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (password !== passwordConfirm) {
+    const message = "비밀번호가 서로 일치하지 않습니다.";
+    setAuthStatus(els.passwordUpdateStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (!bridge?.isReady()) {
+    const message = "Supabase 비밀번호 변경 준비가 아직 끝나지 않았습니다.";
+    setAuthStatus(els.passwordUpdateStatusMessage, message);
+    toast(message);
+    return;
+  }
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = "변경 중...";
+  }
+
+  try {
+    const { error } = await bridge.updateUserPassword(password);
+    if (error) {
+      const message = error.message || "비밀번호를 변경하지 못했습니다.";
+      setAuthStatus(els.passwordUpdateStatusMessage, message);
+      toast(message);
+      return;
+    }
+
+    await bridge.signOut();
+    state.sessionUserId = null;
+    state.users = [];
+    saveState({ history: false });
+    isPasswordRecoveryFlow = false;
+    clearPasswordRecoveryUrl();
+    form.reset();
+    showAuthPanel("login");
+    setAuthStatus(els.loginStatusMessage, "비밀번호를 변경했어요. 새 비밀번호로 로그인해주세요.");
+    render();
+    toast("비밀번호를 변경했어요.");
+  } catch (error) {
+    const message = error?.message || "비밀번호 변경 중 문제가 생겼습니다.";
+    setAuthStatus(els.passwordUpdateStatusMessage, message);
+    toast(message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || "비밀번호 변경";
+      delete submitButton.dataset.originalText;
+    }
+  }
+}
+
 function logout() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) {
@@ -2764,21 +2955,43 @@ function hydrateRememberedLogin() {
 function openRegisterPanel() {
   els.registerForm?.reset();
   setAuthStatus(els.registerStatusMessage, "");
+  setAuthStatus(els.passwordResetStatusMessage, "");
+  setAuthStatus(els.passwordUpdateStatusMessage, "");
+  isPasswordRecoveryFlow = false;
   const registerElements = els.registerForm?.elements;
   if (registerElements?.email) registerElements.email.value = "";
   if (registerElements?.phone) registerElements.phone.value = "";
   if (registerElements?.password) registerElements.password.value = "";
-  els.registerPanel.classList.remove("hidden");
-  els.loginPanel.classList.add("hidden");
-  els.authView.classList.add("auth-grid-single");
+  showAuthPanel("register");
 }
 
 function closeRegisterPanel() {
   els.registerForm?.reset();
   setAuthStatus(els.registerStatusMessage, "");
-  els.registerPanel.classList.add("hidden");
-  els.loginPanel.classList.remove("hidden");
-  els.authView.classList.add("auth-grid-single");
+  isPasswordRecoveryFlow = false;
+  showAuthPanel("login");
+}
+
+function openPasswordResetPanel() {
+  els.passwordResetRequestForm?.reset();
+  setAuthStatus(els.passwordResetStatusMessage, "");
+  setAuthStatus(els.loginStatusMessage, "");
+  isPasswordRecoveryFlow = false;
+  const rememberedEmail = String(state.rememberedLogin?.username || "").trim();
+  if (rememberedEmail && els.passwordResetRequestForm?.elements?.email) {
+    els.passwordResetRequestForm.elements.email.value = rememberedEmail;
+  }
+  showAuthPanel("resetRequest");
+}
+
+function closePasswordResetPanel() {
+  els.passwordResetRequestForm?.reset();
+  els.passwordUpdateForm?.reset();
+  setAuthStatus(els.passwordResetStatusMessage, "");
+  setAuthStatus(els.passwordUpdateStatusMessage, "");
+  isPasswordRecoveryFlow = false;
+  clearPasswordRecoveryUrl();
+  showAuthPanel("login");
 }
 
 function renderSummary() {
