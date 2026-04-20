@@ -111,6 +111,24 @@ Supabase 프로젝트 안에서:
 
 를 DB 컬럼으로 보강하는 단계입니다.
 
+### 4. Auth / profiles 자동 생성 준비
+
+[supabase/003_auth_profiles_bootstrap.sql](../supabase/003_auth_profiles_bootstrap.sql) 파일도 이어서 실행해주세요.
+
+이 쿼리는 다음 역할을 합니다.
+
+- Supabase Auth 회원가입 시 `profiles` 테이블 자동 생성
+- 첫 번째 가입자를 자동 owner / 승인 완료 상태로 생성
+- 이후 가입자는 기본적으로 승인 대기 상태로 생성
+- owner가 멤버 정보를 관리할 수 있도록 `profiles` 정책 보강
+
+### 5. profiles 상태 컬럼 추가
+
+[supabase/004_profile_status_column.sql](../supabase/004_profile_status_column.sql) 도 실행해주세요.
+
+이 컬럼은 가입 거절된 멤버를 pending 목록에서 분리하고,
+로그인 차단 상태를 더 명확하게 관리하기 위해 사용합니다.
+
 ---
 
 ## Vercel 관련 메모

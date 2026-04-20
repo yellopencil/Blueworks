@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260420-copyupdate1">
-  <link rel="stylesheet" href="./quote-generator.css?v=20260420-copyupdate1">
+  <link rel="stylesheet" href="./styles.css?v=20260420-auth1">
+  <link rel="stylesheet" href="./quote-generator.css?v=20260420-auth1">
 </head>
 <body>
   <div class="shell">
@@ -25,9 +25,9 @@
             <h2>로그인</h2>
           </div>
           <form id="loginForm" class="form-stack">
-            <label>아이디<input name="username" type="text" required placeholder="아이디를 입력하세요."></label>
+            <label>이메일<input name="email" type="email" required placeholder="이메일을 입력하세요."></label>
             <label>비밀번호<input name="password" type="password" required placeholder="비밀번호를 입력하세요."></label>
-            <label class="checkbox-row"><input name="rememberLogin" type="checkbox"> 아이디와 비밀번호 저장</label>
+            <label class="checkbox-row"><input name="rememberLogin" type="checkbox"> 이메일 저장</label>
             <button type="submit" class="primary auth-submit">로그인</button>
           </form>
           <div class="button-row auth-entry-actions">
@@ -49,6 +49,7 @@
           </div>
           <form id="registerForm" class="form-stack">
             <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명"></label>
+            <label>이메일<input name="email" type="email" required placeholder="로그인에 사용할 이메일"></label>
             <label>아이디<input name="username" type="text" required placeholder="로그인 아이디"></label>
             <label>비밀번호<input name="password" type="password" required placeholder="비밀번호"></label>
             <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너"></label>
@@ -1224,9 +1225,9 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./supabase-client.js?v=20260420-supabase1"></script>
-  <script src="./app.js?v=20260420-supabase1"></script>
-  <script src="./quote-generator.js?v=20260420-supabase1"></script>
+  <script src="./supabase-client.js?v=20260420-auth1"></script>
+  <script src="./app.js?v=20260420-auth1"></script>
+  <script src="./quote-generator.js?v=20260420-auth1"></script>
 </body>
 </html>
 

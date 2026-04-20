@@ -27,6 +27,46 @@
       }
       return this.client.from("schedules").select("*").order("date", { ascending: true });
     },
+    async fetchProfiles() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("profiles").select("*").order("created_at", { ascending: false });
+    },
+    async upsertProfile(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("profiles").upsert(payload).select().single();
+    },
+    async signInWithPassword(credentials) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.signInWithPassword(credentials);
+    },
+    async signUp(credentials) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.signUp(credentials);
+    },
+    async signOut() {
+      if (!this.client) {
+        return { error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.signOut();
+    },
+    async getSession() {
+      if (!this.client) {
+        return { data: { session: null }, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.auth.getSession();
+    },
+    onAuthStateChange(callback) {
+      if (!this.client) return { data: { subscription: { unsubscribe() {} } } };
+      return this.client.auth.onAuthStateChange(callback);
+    },
     async upsertProject(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };

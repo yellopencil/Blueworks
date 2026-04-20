@@ -306,6 +306,7 @@ let draggedArchiveCategoryId = null;
 let archiveCategoryDragGhost = null;
 let archiveCategoryPointerOffsetX = 0;
 let archiveCategoryPointerOffsetY = 0;
+let authStateSubscription = null;
 const modalSnapshots = {
   project: "",
   schedule: "",
@@ -320,6 +321,7 @@ bindEvents();
 normalizeAppLayout();
 render();
 syncProjectsAndSchedulesFromSupabase();
+initializeSupabaseAuth();
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -401,6 +403,7 @@ function normalizeState(source) {
       lastLoginAt: "",
       lastLoginIp: "",
       canManageMembers: false,
+      rejected: false,
       ...user,
     })),
     projects: (source.projects || []).map((project) => ({
@@ -853,6 +856,103 @@ function handleSiteSettingsSave(event) {
 
 function currentUser() {
   return state.users.find((user) => user.id === state.sessionUserId) || null;
+}
+
+function normalizeProfileRecord(profile = {}) {
+  return {
+    id: profile.id || crypto.randomUUID(),
+    username: profile.username || "",
+    password: "",
+    name: profile.name || "",
+    roleLabel: profile.role_label || profile.roleLabel || "멤버",
+    phone: profile.phone || "",
+    email: profile.email || "",
+    notes: profile.notes || "",
+    lastLoginAt: profile.last_login_at || profile.lastLoginAt || "",
+    lastLoginIp: profile.last_login_ip || profile.lastLoginIp || "",
+    canManageMembers: Boolean(profile.can_manage_members ?? profile.canManageMembers),
+    isOwner: Boolean(profile.is_owner ?? profile.isOwner),
+    approved: Boolean(profile.approved),
+    rejected: Boolean(profile.rejected),
+    createdAt: profile.created_at || profile.createdAt || new Date().toISOString(),
+    updatedAt: profile.updated_at || profile.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function syncProfilesFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
+  const result = await bridge.fetchProfiles();
+  if (result.error) return { ok: false, error: result.error };
+  state.users = (result.data || []).map(normalizeProfileRecord);
+  saveState({ history: false });
+  return { ok: true, data: state.users };
+}
+
+async function applyAuthSession(session, options = {}) {
+  state.sessionUserId = session?.user?.id || null;
+  if (!state.sessionUserId) {
+    state.users = [];
+    saveState({ history: false });
+    render();
+    return { ok: true };
+  }
+
+  const profileResult = await syncProfilesFromSupabase();
+  if (!profileResult.ok) {
+    toast("멤버 정보를 불러오지 못했습니다.");
+    return profileResult;
+  }
+
+  const profile = currentUser();
+  if (!profile) {
+    const bridge = getSupabaseBridge();
+    await bridge?.signOut();
+    state.sessionUserId = null;
+    state.users = [];
+    saveState({ history: false });
+    render();
+    toast("회원 정보를 찾지 못해 다시 로그인해주세요.");
+    return { ok: false };
+  }
+
+  if (profile.rejected) {
+    const bridge = getSupabaseBridge();
+    await bridge?.signOut();
+    state.sessionUserId = null;
+    state.users = [];
+    saveState({ history: false });
+    render();
+    if (!options.silent) toast("가입 요청이 거절되었습니다.");
+    return { ok: false };
+  }
+
+  if (!profile.approved) {
+    const bridge = getSupabaseBridge();
+    await bridge?.signOut();
+    state.sessionUserId = null;
+    saveState({ history: false });
+    render();
+    if (!options.silent) toast("아직 소유자 승인이 완료되지 않았습니다.");
+    return { ok: false };
+  }
+
+  saveState({ history: false });
+  render();
+  return { ok: true };
+}
+
+async function initializeSupabaseAuth() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return;
+
+  const sessionResult = await bridge.getSession();
+  await applyAuthSession(sessionResult.data?.session || null, { silent: true });
+
+  authStateSubscription?.data?.subscription?.unsubscribe?.();
+  authStateSubscription = bridge.onAuthStateChange(async (_event, session) => {
+    await applyAuthSession(session, { silent: true });
+  });
 }
 
 function canManageMembers(user = currentUser()) {
@@ -1970,69 +2070,95 @@ function toggleArchiveMenu() {
 function handleLogin(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
-  const username = String(formData.get("username")).trim();
+  const email = String(formData.get("email")).trim();
   const password = String(formData.get("password")).trim();
   const rememberLogin = Boolean(formData.get("rememberLogin"));
-  const user = state.users.find((item) => item.username === username);
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) {
+    toast("Supabase 로그인 준비가 아직 끝나지 않았습니다.");
+    return;
+  }
 
-  if (!user) return toast("등록되지 않은 아이디입니다.");
-  if (!user.approved) return toast("아직 소유자 승인이 완료되지 않았습니다.");
-  if (user.password !== password) return toast("비밀번호가 일치하지 않습니다.");
+  bridge.signInWithPassword({ email, password }).then(async ({ data, error }) => {
+    if (error) {
+      toast("이메일 또는 비밀번호를 확인해주세요.");
+      return;
+    }
 
-  user.lastLoginAt = new Date().toISOString();
-  user.lastLoginIp = "127.0.0.1";
-  state.sessionUserId = user.id;
-  state.rememberedLogin = rememberLogin
-    ? { enabled: true, username, password }
-    : { enabled: false, username: "", password: "" };
-  saveState({ history: false });
-  event.currentTarget.reset();
-  render();
+    state.rememberedLogin = rememberLogin
+      ? { enabled: true, username: email, password: "" }
+      : { enabled: false, username: "", password: "" };
+    saveState({ history: false });
+    event.currentTarget.reset();
+    await applyAuthSession(data?.session || null);
+  });
 }
 
 function handleRegister(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
+  const email = String(formData.get("email")).trim();
   const username = String(formData.get("username")).trim();
-  if (state.users.some((user) => user.username === username)) {
-    return toast("이미 사용 중인 아이디입니다.");
+  const password = String(formData.get("password")).trim();
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) {
+    toast("Supabase 회원가입 준비가 아직 끝나지 않았습니다.");
+    return;
   }
 
-  state.users.push({
-    id: crypto.randomUUID(),
-    username,
-    password: String(formData.get("password")).trim(),
-    name: String(formData.get("name")).trim(),
-    roleLabel: String(formData.get("roleLabel")).trim(),
-    phone: "",
-    email: "",
-    notes: "",
-    lastLoginAt: "",
-    lastLoginIp: "",
-    canManageMembers: false,
-    isOwner: false,
-    approved: false,
-    createdAt: new Date().toISOString(),
-  });
+  bridge.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        username,
+        name: String(formData.get("name")).trim(),
+        role_label: String(formData.get("roleLabel")).trim(),
+      },
+      emailRedirectTo: window.location.href,
+    },
+  }).then(async ({ data, error }) => {
+    if (error) {
+      toast(error.message || "회원가입에 실패했습니다.");
+      return;
+    }
 
-  state.pendingApproval = { username, createdAt: new Date().toISOString() };
-  saveState({ history: false });
-  event.currentTarget.reset();
-  openRegisterPanel();
-  toast("가입 요청이 등록되었습니다. 소유자 승인을 기다려주세요.");
+    state.pendingApproval = { username: email, createdAt: new Date().toISOString() };
+    saveState({ history: false });
+    event.currentTarget.reset();
+    openRegisterPanel();
+
+    if (data?.session) {
+      await applyAuthSession(data.session);
+      toast("가입이 완료되었습니다.");
+      return;
+    }
+
+    toast("가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
+  });
 }
 
 function logout() {
-  state.sessionUserId = null;
-  saveState({ history: false });
-  render();
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) {
+    state.sessionUserId = null;
+    saveState({ history: false });
+    render();
+    return;
+  }
+  bridge.signOut().then(() => {
+    state.sessionUserId = null;
+    state.users = [];
+    saveState({ history: false });
+    render();
+  });
 }
 
 function hydrateRememberedLogin() {
   const remembered = state.rememberedLogin || {};
   if (!els.loginForm) return;
-  els.loginForm.elements.username.value = remembered.enabled ? remembered.username || "" : "";
-  els.loginForm.elements.password.value = remembered.enabled ? remembered.password || "" : "";
+  els.loginForm.elements.email.value = remembered.enabled ? remembered.username || "" : "";
+  els.loginForm.elements.password.value = "";
   if (els.loginForm.elements.rememberLogin) {
     els.loginForm.elements.rememberLogin.checked = Boolean(remembered.enabled);
   }
@@ -2138,7 +2264,7 @@ function renderMembers() {
   }
 
   const pendingUsers = state.users
-    .filter((user) => !user.isOwner && !user.approved)
+    .filter((user) => !user.isOwner && !user.approved && !user.rejected)
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const ownerUsers = state.users
     .filter((user) => user.isOwner)
@@ -3550,6 +3676,12 @@ function handleMemberSave(event) {
   }
 
   const existing = state.users.find((user) => user.id === payload.id);
+  if (!existing) {
+    toast("새 멤버는 회원가입으로 추가해주세요.");
+    return;
+  }
+
+  const bridge = getSupabaseBridge();
   if (existing) {
     Object.assign(existing, payload, {
       createdAt: existing.createdAt || payload.createdAt,
@@ -3558,11 +3690,37 @@ function handleMemberSave(event) {
       canManageMembers: existing.isOwner ? true : currentUser()?.isOwner ? payload.canManageMembers : existing.canManageMembers,
     });
     if (state.pendingApproval?.username === existing.username && existing.approved) state.pendingApproval = null;
-  } else {
-    state.users.push({
-      ...payload,
-      canManageMembers: currentUser()?.isOwner ? payload.canManageMembers : false,
+    existing.rejected = Boolean(existing.rejected);
+  }
+
+  if (bridge?.isReady()) {
+    bridge.upsertProfile({
+      id: existing.id,
+      username: existing.username,
+      name: existing.name,
+      role_label: existing.roleLabel,
+      phone: existing.phone,
+      email: existing.email,
+      notes: existing.notes,
+      can_manage_members: existing.canManageMembers,
+      is_owner: existing.isOwner,
+      approved: existing.approved,
+      rejected: existing.rejected,
+      last_login_at: existing.lastLoginAt || null,
+      last_login_ip: existing.lastLoginIp || "",
+      created_at: existing.createdAt,
+      updated_at: new Date().toISOString(),
+    }).then(async ({ error }) => {
+      if (error) {
+        toast("Supabase에 멤버 정보를 저장하지 못했습니다.");
+        return;
+      }
+      await syncProfilesFromSupabase();
+      renderMembers();
+      closeMemberModal();
+      openNoticeModal("저장이 완료되었어요!");
     });
+    return;
   }
 
   saveState();
@@ -3723,7 +3881,37 @@ function updateApproval(userId) {
   const user = state.users.find((item) => item.id === userId);
   if (!user) return;
   user.approved = true;
+  user.rejected = false;
   if (state.pendingApproval?.username === user.username) state.pendingApproval = null;
+  const bridge = getSupabaseBridge();
+  if (bridge?.isReady()) {
+    bridge.upsertProfile({
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role_label: user.roleLabel,
+      phone: user.phone,
+      email: user.email,
+      notes: user.notes,
+      can_manage_members: user.canManageMembers,
+      is_owner: user.isOwner,
+      approved: true,
+      rejected: false,
+      last_login_at: user.lastLoginAt || null,
+      last_login_ip: user.lastLoginIp || "",
+      created_at: user.createdAt,
+      updated_at: new Date().toISOString(),
+    }).then(async ({ error }) => {
+      if (error) {
+        toast("Supabase에 승인 상태를 저장하지 못했습니다.");
+        return;
+      }
+      await syncProfilesFromSupabase();
+      render();
+      toast("가입 요청을 승인했습니다.");
+    });
+    return;
+  }
   saveState();
   render();
   toast("가입 요청을 승인했습니다.");
@@ -3733,8 +3921,39 @@ function rejectUser(userId) {
   if (!canManageMembers()) return;
   const user = state.users.find((item) => item.id === userId);
   openConfirmModal(() => {
-    state.users = state.users.filter((item) => item.id !== userId);
+    if (!user) return;
+    user.rejected = true;
+    user.approved = false;
     if (state.pendingApproval?.username === user?.username) state.pendingApproval = null;
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      bridge.upsertProfile({
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role_label: user.roleLabel,
+        phone: user.phone,
+        email: user.email,
+        notes: user.notes,
+        can_manage_members: user.canManageMembers,
+        is_owner: user.isOwner,
+        approved: false,
+        rejected: true,
+        last_login_at: user.lastLoginAt || null,
+        last_login_ip: user.lastLoginIp || "",
+        created_at: user.createdAt,
+        updated_at: new Date().toISOString(),
+      }).then(async ({ error }) => {
+        if (error) {
+          toast("Supabase에 거절 상태를 저장하지 못했습니다.");
+          return;
+        }
+        await syncProfilesFromSupabase();
+        render();
+        toast("가입 요청을 거절했습니다.");
+      });
+      return;
+    }
     saveState();
     render();
     toast("가입 요청을 거절했습니다.");
