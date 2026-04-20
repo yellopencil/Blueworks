@@ -2094,30 +2094,58 @@ function handleLogin(event) {
   });
 }
 
-function handleRegister(event) {
+async function handleRegister(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const name = String(formData.get("name")).trim();
   const email = String(formData.get("email")).trim();
   const username = String(formData.get("username")).trim();
   const password = String(formData.get("password")).trim();
+  const roleLabel = String(formData.get("roleLabel")).trim();
+  const submitButton = form.querySelector('button[type="submit"]');
   const bridge = getSupabaseBridge();
+
+  if (!name || !email || !username || !password || !roleLabel) {
+    toast("이름, 이메일, 아이디, 비밀번호, 직책을 모두 입력해주세요.");
+    return;
+  }
+
+  if (!/.+@.+\..+/.test(email)) {
+    toast("올바른 이메일 주소를 입력해주세요.");
+    return;
+  }
+
+  if (password.length < 8) {
+    toast("비밀번호는 8자 이상으로 입력해주세요.");
+    return;
+  }
+
   if (!bridge?.isReady()) {
     toast("Supabase 회원가입 준비가 아직 끝나지 않았습니다.");
     return;
   }
 
-  bridge.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        username,
-        name: String(formData.get("name")).trim(),
-        role_label: String(formData.get("roleLabel")).trim(),
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = "가입 요청 보내는 중...";
+  }
+
+  try {
+    const { data, error } = await bridge.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+          name,
+          role_label: roleLabel,
+        },
+        emailRedirectTo: window.location.href,
       },
-      emailRedirectTo: window.location.href,
-    },
-  }).then(async ({ data, error }) => {
+    });
+
     if (error) {
       toast(error.message || "회원가입에 실패했습니다.");
       return;
@@ -2125,7 +2153,7 @@ function handleRegister(event) {
 
     state.pendingApproval = { username: email, createdAt: new Date().toISOString() };
     saveState({ history: false });
-    event.currentTarget.reset();
+    form.reset();
     openRegisterPanel();
 
     if (data?.session) {
@@ -2135,7 +2163,15 @@ function handleRegister(event) {
     }
 
     toast("가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
-  });
+  } catch (error) {
+    toast(error?.message || "회원가입 처리 중 문제가 생겼습니다.");
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || "가입 요청 보내기";
+      delete submitButton.dataset.originalText;
+    }
+  }
 }
 
 function logout() {
