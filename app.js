@@ -2880,12 +2880,14 @@ function buildArchiveCategoryGhost(card) {
 
 function getArchiveCategoryAfterElement(y) {
   const cards = [...els.archiveCodeCategoriesList.querySelectorAll(".archive-category-card:not(.is-dragging)")];
-  return cards.reduce((closest, card) => {
+  for (const card of cards) {
     const box = card.getBoundingClientRect();
-    const offset = y - (box.top + box.height / 2);
-    if (offset < 0 && offset > closest.offset) return { offset, element: card };
-    return closest;
-  }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    const middleY = box.top + box.height / 2;
+    if (y < middleY) {
+      return card;
+    }
+  }
+  return null;
 }
 
 function startArchiveCategoryDrag(event, card) {
