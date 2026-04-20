@@ -125,6 +125,7 @@
                 <button id="reviewShortcutBtn" class="ghost small-btn utility-shortcut-btn" type="button">후기</button>
               </div>
               <div class="utility-actions">
+                <button id="openMyProfileBtn" class="ghost small-btn" type="button">내 정보</button>
                 <button id="logoutBtn" class="primary small-btn" type="button">로그아웃</button>
               </div>
             </header>
@@ -1047,6 +1048,33 @@
         <label>메모<textarea name="notes" rows="5"></textarea></label>
         <label class="checkbox-row"><input name="approved" type="checkbox"> 승인완료</label>
         <label id="memberManagerField" class="checkbox-row"><input name="canManageMembers" type="checkbox"> 운영진권한</label>
+      </form>
+    </div>
+  </div>
+
+  <div id="myProfileModal" class="modal-overlay hidden">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">My Profile</p>
+          <h3>내 정보</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="myProfileForm" class="primary">저장</button>
+          <button type="button" id="myProfileCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="myProfileForm" class="form-stack">
+        <input type="hidden" name="id">
+        <div class="two-col">
+          <label>이름<input name="name" type="text" required></label>
+          <label>직책 / 역할<input name="roleLabel" type="text" readonly></label>
+        </div>
+        <div class="two-col">
+          <label>연락처<input name="phone" type="text" placeholder="예: 010-1234-5678"></label>
+          <label>로그인 이메일<input name="email" type="email" readonly></label>
+        </div>
+        <label>메모<textarea name="notes" rows="5" placeholder="간단한 메모를 남길 수 있어요."></textarea></label>
       </form>
     </div>
   </div>

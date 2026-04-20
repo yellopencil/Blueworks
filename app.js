@@ -139,6 +139,7 @@ const els = {
   homepageShortcutBtn: document.querySelector("#homepageShortcutBtn"),
   portfolioShortcutBtn: document.querySelector("#portfolioShortcutBtn"),
   reviewShortcutBtn: document.querySelector("#reviewShortcutBtn"),
+  openMyProfileBtn: document.querySelector("#openMyProfileBtn"),
   logoutBtn: document.querySelector("#logoutBtn"),
   openScheduleModalBtn: document.querySelector("#openScheduleModalBtn"),
   projectBoard: document.querySelector("#projectBoard"),
@@ -249,6 +250,9 @@ const els = {
   memberModalCloseBtn: document.querySelector("#memberModalCloseBtn"),
   memberForm: document.querySelector("#memberForm"),
   memberManagerField: document.querySelector("#memberManagerField"),
+  myProfileModal: document.querySelector("#myProfileModal"),
+  myProfileCloseBtn: document.querySelector("#myProfileCloseBtn"),
+  myProfileForm: document.querySelector("#myProfileForm"),
   archiveNoteModal: document.querySelector("#archiveNoteModal"),
   archiveNoteModalTitle: document.querySelector("#archiveNoteModalTitle"),
   archiveNoteForm: document.querySelector("#archiveNoteForm"),
@@ -1448,6 +1452,7 @@ function bindEvents() {
   els.registerForm.addEventListener("submit", handleRegister);
   els.openRegisterPanelBtn.addEventListener("click", openRegisterPanel);
   els.backToLoginBtn.addEventListener("click", closeRegisterPanel);
+  els.openMyProfileBtn?.addEventListener("click", openMyProfileModal);
   els.logoutBtn.addEventListener("click", logout);
   els.navDashboardBtn.addEventListener("click", () => switchView("dashboard"));
   els.navMembersBtn.addEventListener("click", () => switchView("members"));
@@ -1538,6 +1543,8 @@ function bindEvents() {
   els.worklogForm.addEventListener("submit", handleWorklogSave);
   els.memberModalCloseBtn.addEventListener("click", closeMemberModal);
   els.memberForm.addEventListener("submit", handleMemberSave);
+  els.myProfileCloseBtn?.addEventListener("click", closeMyProfileModal);
+  els.myProfileForm?.addEventListener("submit", handleMyProfileSave);
   els.archiveNoteCloseBtn?.addEventListener("click", closeArchiveNoteModal);
   els.archiveNoteEditBtn?.addEventListener("click", () => setArchiveNoteEditing(true));
   els.archiveNoteDeleteBtn?.addEventListener("click", deleteCurrentArchiveNote);
@@ -2387,6 +2394,7 @@ function bindOverlayDismissals() {
     [els.annualGoalAddModal, closeAnnualGoalAddModal],
     [els.changeHistoryModal, closeChangeHistoryModal],
     [els.memberModal, closeMemberModal, "member"],
+    [els.myProfileModal, closeMyProfileModal],
     [els.archiveNoteModal, closeArchiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, closeArchiveCodeModal, "archiveCode"],
     [els.archiveCategoryModal, closeArchiveCategoryModal, "archiveCategory"],
@@ -4055,6 +4063,23 @@ function closeMemberModal() {
   els.memberModal.classList.add("hidden");
 }
 
+function openMyProfileModal() {
+  const user = currentUser();
+  if (!user || !els.myProfileForm) return;
+  els.myProfileForm.reset();
+  els.myProfileForm.elements.id.value = user.id || "";
+  els.myProfileForm.elements.name.value = user.name || "";
+  els.myProfileForm.elements.roleLabel.value = user.roleLabel || "";
+  els.myProfileForm.elements.phone.value = user.phone || "";
+  els.myProfileForm.elements.email.value = user.email || "";
+  els.myProfileForm.elements.notes.value = user.notes || "";
+  els.myProfileModal?.classList.remove("hidden");
+}
+
+function closeMyProfileModal() {
+  els.myProfileModal?.classList.add("hidden");
+}
+
 function setArchiveNoteEditing(editable) {
   archiveNoteEditing = editable;
   const fields = els.archiveNoteForm?.querySelectorAll('input[name="title"], textarea[name="content"]') || [];
@@ -4428,6 +4453,58 @@ function handleMemberSave(event) {
   closeMemberModal();
   renderMembers();
   openNoticeModal("저장이 완료되었어요!");
+}
+
+async function handleMyProfileSave(event) {
+  event.preventDefault();
+  const user = currentUser();
+  if (!user) return;
+  const formData = new FormData(event.currentTarget);
+  const updatedUser = {
+    ...user,
+    name: String(formData.get("name") || "").trim(),
+    phone: String(formData.get("phone") || "").trim(),
+    notes: String(formData.get("notes") || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const userIndex = state.users.findIndex((item) => item.id === user.id);
+  if (userIndex >= 0) {
+    state.users[userIndex] = updatedUser;
+  }
+
+  const bridge = getSupabaseBridge();
+  if (bridge?.isReady()) {
+    const result = await bridge.upsertProfile({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      name: updatedUser.name,
+      role_label: updatedUser.roleLabel,
+      phone: updatedUser.phone,
+      email: updatedUser.email,
+      notes: updatedUser.notes,
+      can_manage_members: updatedUser.canManageMembers,
+      is_owner: updatedUser.isOwner,
+      approved: updatedUser.approved,
+      rejected: updatedUser.rejected,
+      last_login_at: updatedUser.lastLoginAt || null,
+      last_login_ip: updatedUser.lastLoginIp || "",
+      created_at: updatedUser.createdAt,
+      updated_at: updatedUser.updatedAt,
+    });
+    if (result.error) {
+      const message = `내 정보 저장 실패: ${result.error.message || "Supabase 오류"}`;
+      toast(message);
+      openNoticeModal(message);
+      return;
+    }
+    state.users[userIndex] = normalizeProfileRecord(result.data);
+  }
+
+  saveState();
+  closeMyProfileModal();
+  render();
+  openNoticeModal("내 정보를 저장했어요!");
 }
 
 function deleteCurrentProject() {
