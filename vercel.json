@@ -10,10 +10,13 @@
       ]
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/",
-      "destination": "/api/index"
+      "src": "^/$",
+      "dest": "/api/index.js"
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
