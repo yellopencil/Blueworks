@@ -79,6 +79,12 @@
       }
       return this.client.from("site_settings").upsert(payload).select().single();
     },
+    async fetchProjectDocuments() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("project_documents").select("*").order("created_at", { ascending: false });
+    },
     async upsertProjectDocuments(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -249,9 +255,3 @@
 
   window.BLUEWORKS_SUPABASE = bridge;
 })();
-    async fetchProjectDocuments() {
-      if (!this.client) {
-        return { data: null, error: new Error("Supabase client is not ready.") };
-      }
-      return this.client.from("project_documents").select("*").order("created_at", { ascending: false });
-    },
