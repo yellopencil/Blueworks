@@ -903,7 +903,7 @@ async function applyAuthSession(session, options = {}) {
     state.users = [];
     saveState({ history: false });
     render();
-    return { ok: true };
+    return { ok: true, message: "" };
   }
 
   const bridge = getSupabaseBridge();
@@ -917,8 +917,9 @@ async function applyAuthSession(session, options = {}) {
   } else {
     const profileResult = await syncProfilesFromSupabase();
     if (!profileResult.ok) {
-      toast("멤버 정보를 불러오지 못했습니다.");
-      return profileResult;
+      const message = profileResult.error?.message || currentProfileResult?.error?.message || "멤버 정보를 불러오지 못했습니다.";
+      toast(message);
+      return { ok: false, message };
     }
     profile = currentUser();
   }
@@ -928,8 +929,9 @@ async function applyAuthSession(session, options = {}) {
     state.users = [];
     saveState({ history: false });
     render();
-    toast("회원 정보를 찾지 못해 다시 로그인해주세요.");
-    return { ok: false };
+    const message = "회원 정보를 찾지 못해 다시 로그인해주세요.";
+    toast(message);
+    return { ok: false, message };
   }
 
   if (profile.rejected) {
@@ -938,8 +940,9 @@ async function applyAuthSession(session, options = {}) {
     state.users = [];
     saveState({ history: false });
     render();
-    if (!options.silent) toast("가입 요청이 거절되었습니다.");
-    return { ok: false };
+    const message = "가입 요청이 거절되었습니다.";
+    if (!options.silent) toast(message);
+    return { ok: false, message };
   }
 
   if (!profile.approved) {
@@ -947,14 +950,15 @@ async function applyAuthSession(session, options = {}) {
     state.sessionUserId = null;
     saveState({ history: false });
     render();
-    if (!options.silent) toast("아직 소유자 승인이 완료되지 않았습니다.");
-    return { ok: false };
+    const message = "아직 소유자 승인이 완료되지 않았습니다.";
+    if (!options.silent) toast(message);
+    return { ok: false, message };
   }
 
   syncProfilesFromSupabase().catch(() => {});
   saveState({ history: false });
   render();
-  return { ok: true };
+  return { ok: true, message: "" };
 }
 
 async function initializeSupabaseAuth() {
@@ -2145,7 +2149,7 @@ async function handleLogin(event) {
     setAuthStatus(els.loginStatusMessage, "로그인에 성공했어요. 화면을 전환하고 있습니다...");
     const authResult = await applyAuthSession(session);
     if (!authResult?.ok) {
-      setAuthStatus(els.loginStatusMessage, "로그인은 되었지만 계정 정보를 불러오지 못했어요. 다시 시도해주세요.");
+      setAuthStatus(els.loginStatusMessage, authResult?.message || "로그인은 되었지만 계정 정보를 불러오지 못했어요. 다시 시도해주세요.");
       return;
     }
   } catch (error) {
