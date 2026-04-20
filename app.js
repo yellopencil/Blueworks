@@ -1468,9 +1468,7 @@ function canManageMembers(user = currentUser()) {
 }
 
 function isRepresentativeAccount(user = currentUser()) {
-  if (!user) return false;
-  const roleLabel = String(user.roleLabel || "").trim();
-  return Boolean(user.isOwner || (user.canManageMembers && roleLabel === "대표"));
+  return Boolean(user?.isOwner);
 }
 
 function canManageSiteSettings(user = currentUser()) {
@@ -3132,7 +3130,7 @@ function renderMembers() {
         <div class="member-item-main">
           <div class="member-name-row">
             <strong>${escapeHtml(user.name || user.username)}</strong>
-            <span class="member-pill${isRepresentativeAccount(user) ? " representative" : ""}">${isRepresentativeAccount(user) ? "대표" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
+            <span class="member-pill${isRepresentativeAccount(user) ? " representative" : ""}">${escapeHtml(isRepresentativeAccount(user) ? (user.roleLabel || "대표") : user.canManageMembers ? "운영진" : (user.roleLabel || "멤버"))}</span>
           </div>
           <div class="member-meta">
             <span>${escapeHtml(user.email || "-")}</span>
