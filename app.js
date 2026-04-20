@@ -319,6 +319,7 @@ const modalSnapshots = {
 bindEvents();
 normalizeAppLayout();
 render();
+syncProjectsAndSchedulesFromSupabase();
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -522,6 +523,176 @@ function saveState(options = {}) {
   return true;
 }
 
+function getSupabaseBridge() {
+  return window.BLUEWORKS_SUPABASE || null;
+}
+
+function amountFromSupabase(value) {
+  if (value === null || value === undefined || value === "") return "";
+  return formatAmount(String(value));
+}
+
+function serializeProjectForSupabase(project, index = 0) {
+  return {
+    id: project.id,
+    title: project.title || "",
+    client: project.client || "",
+    manager_name: project.managerName || "",
+    manager_phone: project.managerPhone || "",
+    status: project.status || "ready",
+    progress_stage: project.progressStage || "",
+    start_date: project.startDate || null,
+    due_date: project.dueDate || null,
+    timeline: project.timeline || "",
+    notes: project.notes || "",
+    imweb_id: project.imwebId || "",
+    imweb_password: project.imwebPassword || "",
+    contract_amount: parseAmount(project.contractAmount),
+    payback_status: project.paybackStatus || "none",
+    payback_amount: parseAmount(project.paybackAmount),
+    payback_note: project.paybackNote || "",
+    kmong_fee: parseAmount(project.kmongFee),
+    payment_method: project.paymentMethod || "cash",
+    tax_invoice: project.taxInvoice || "",
+    package_type: project.packageType || "",
+    site_type: project.siteType || "",
+    language_count: Number(project.languageCount || 0),
+    progress_order: index,
+    project_type: project.projectType || "",
+    website_url: project.websiteUrl || "",
+    languages: Array.isArray(project.languages) ? project.languages : [],
+    contracts_json: Array.isArray(project.contracts) ? project.contracts : [],
+    created_at: project.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeProjectFromSupabase(row) {
+  const project = {
+    id: row.id || crypto.randomUUID(),
+    title: row.title || "",
+    client: row.client || "",
+    projectType: row.project_type || "",
+    websiteUrl: row.website_url || "",
+    managerName: row.manager_name || "",
+    managerPhone: row.manager_phone || "",
+    packageType: row.package_type || "",
+    siteType: row.site_type || "",
+    languageCount: Number(row.language_count || 0),
+    languages: Array.isArray(row.languages) ? row.languages : [],
+    status: row.status || "ready",
+    progressStage: row.progress_stage || "",
+    startDate: row.start_date || "",
+    dueDate: row.due_date || "",
+    timeline: row.timeline || "",
+    notes: row.notes || "",
+    imwebId: row.imweb_id || "",
+    imwebPassword: row.imweb_password || "",
+    contractAmount: amountFromSupabase(row.contract_amount),
+    paybackStatus: row.payback_status || "none",
+    paybackAmount: amountFromSupabase(row.payback_amount),
+    paybackNote: row.payback_note || "",
+    paymentMethod: row.payment_method || "cash",
+    kmongFee: amountFromSupabase(row.kmong_fee),
+    taxInvoice: row.tax_invoice || "",
+    contracts: Array.isArray(row.contracts_json) ? row.contracts_json : [],
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+  project.searchIndex = buildProjectSearchIndex(project);
+  return project;
+}
+
+function serializeScheduleForSupabase(schedule) {
+  return {
+    id: schedule.id,
+    title: schedule.title || "",
+    date: schedule.date || null,
+    notes: schedule.notes || "",
+    project_id: schedule.projectId || null,
+    created_at: schedule.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeScheduleFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    title: row.title || "",
+    date: row.date || "",
+    notes: row.notes || "",
+    projectId: row.project_id || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+async function syncProjectsAndSchedulesFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) {
+    renderSiteSettings();
+    return;
+  }
+
+  bridge.statusDetail = "Supabase에서 프로젝트와 일정을 확인하는 중입니다.";
+  renderSiteSettings();
+
+  const [projectResult, scheduleResult] = await Promise.all([
+    bridge.fetchProjects(),
+    bridge.fetchSchedules(),
+  ]);
+
+  if (projectResult.error || scheduleResult.error) {
+    bridge.mode = "supabase-error";
+    bridge.error = projectResult.error || scheduleResult.error;
+    bridge.statusDetail = bridge.error?.message || "Supabase 데이터를 가져오지 못했습니다.";
+    renderSiteSettings();
+    return;
+  }
+
+  const remoteProjects = (projectResult.data || []).map(deserializeProjectFromSupabase);
+  const remoteSchedules = (scheduleResult.data || []).map(deserializeScheduleFromSupabase);
+  const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0;
+  const hasLocalData = state.projects.length > 0 || state.schedules.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await seedSupabaseFromLocalState();
+    if (!seedResult.ok) {
+      bridge.mode = "supabase-error";
+      bridge.error = seedResult.error;
+      bridge.statusDetail = seedResult.error?.message || "브라우저 데이터를 Supabase로 옮기지 못했습니다.";
+      renderSiteSettings();
+      return;
+    }
+    bridge.statusDetail = "브라우저에 있던 프로젝트와 일정을 Supabase로 복사했어요.";
+    renderSiteSettings();
+    return;
+  }
+
+  state.projects = remoteProjects;
+  state.schedules = remoteSchedules;
+  saveState({ history: false });
+  bridge.statusDetail = `프로젝트 ${remoteProjects.length}개, 일정 ${remoteSchedules.length}개를 Supabase에서 불러왔어요.`;
+  render();
+}
+
+async function seedSupabaseFromLocalState() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  for (const [index, project] of state.projects.entries()) {
+    const result = await bridge.upsertProject(serializeProjectForSupabase(project, index));
+    if (result.error) return { ok: false, error: result.error };
+  }
+
+  for (const schedule of state.schedules) {
+    const result = await bridge.upsertSchedule(serializeScheduleForSupabase(schedule));
+    if (result.error) return { ok: false, error: result.error };
+  }
+
+  return { ok: true };
+}
+
 function upsertMetaByName(name, content) {
   let meta = document.querySelector(`meta[name="${name}"]`);
   if (!content) {
@@ -600,7 +771,7 @@ function renderSupabaseStatus() {
 
   if (bridge.mode === "supabase-ready") {
     els.supabaseStatusText.textContent = "Supabase 연결 준비가 완료됐어요.";
-    els.supabaseStatusDetail.textContent = `프로젝트 URL: ${bridge.url} · 다음 단계에서 프로젝트와 일정 데이터를 Supabase로 옮길 수 있습니다.`;
+    els.supabaseStatusDetail.textContent = bridge.statusDetail || `프로젝트 URL: ${bridge.url} · 다음 단계에서 프로젝트와 일정 데이터를 Supabase로 옮길 수 있습니다.`;
     els.supabaseStatusCard.classList.add("is-ready");
     return;
   }
@@ -2998,7 +3169,7 @@ function getProjectTypeLabel(type) {
   }
 }
 
-function handleProjectSave(event) {
+async function handleProjectSave(event) {
   event.preventDefault();
   syncProjectRichEditorValues();
   const formData = new FormData(event.currentTarget);
@@ -3053,6 +3224,23 @@ function handleProjectSave(event) {
     Object.assign(existing, payload, { contracts: [...draftProjectDocuments] });
   } else {
     state.projects.unshift({ ...payload, contracts: [...draftProjectDocuments] });
+  }
+
+  const nextProject = existing || state.projects[0];
+  const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
+  const bridge = getSupabaseBridge();
+  if (bridge?.isReady()) {
+    const result = await bridge.upsertProject(
+      serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
+    );
+    if (result.error) {
+      openNoticeModal("Supabase에 프로젝트를 저장하지 못했어요.");
+      return;
+    }
+    const syncedProject = deserializeProjectFromSupabase(result.data);
+    const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
+    if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
+    else state.projects.unshift(syncedProject);
   }
 
   state.selectedProjectId = payload.id;
@@ -3386,7 +3574,15 @@ function handleMemberSave(event) {
 function deleteCurrentProject() {
   const project = selectedProject();
   if (!project) return;
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      const result = await bridge.deleteProject(project.id);
+      if (result.error) {
+        toast("Supabase에서 프로젝트를 삭제하지 못했습니다.");
+        return;
+      }
+    }
     state.projects = state.projects.filter((item) => item.id !== project.id);
     state.schedules = state.schedules.filter((item) => item.projectId !== project.id);
     state.selectedProjectId = null;
@@ -3604,7 +3800,15 @@ function renderSchedules() {
 
 function deleteSchedule(scheduleId) {
   const schedule = state.schedules.find((item) => item.id === scheduleId);
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      const result = await bridge.deleteSchedule(scheduleId);
+      if (result.error) {
+        toast("Supabase에서 일정을 삭제하지 못했습니다.");
+        return;
+      }
+    }
     state.schedules = state.schedules.filter((item) => item.id !== scheduleId);
     removeScheduleFromWorklog(scheduleId, schedule?.date || "");
     saveState();
@@ -4209,8 +4413,8 @@ function closeConfirmModal() {
   els.confirmModal.classList.add("hidden");
 }
 
-function runConfirmedAction() {
-  if (pendingConfirmAction) pendingConfirmAction();
+async function runConfirmedAction() {
+  if (pendingConfirmAction) await pendingConfirmAction();
   closeConfirmModal();
 }
 
@@ -4243,7 +4447,7 @@ function deleteScheduleFromDetailModal() {
   deleteSchedule(scheduleId);
 }
 
-function handleScheduleSave(event) {
+async function handleScheduleSave(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const payload = {
@@ -4258,6 +4462,19 @@ function handleScheduleSave(event) {
   const previousSchedule = existing ? { ...existing } : null;
   if (existing) Object.assign(existing, payload);
   else state.schedules.push(payload);
+
+  const bridge = getSupabaseBridge();
+  if (bridge?.isReady()) {
+    const result = await bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload));
+    if (result.error) {
+      openNoticeModal("Supabase에 일정을 저장하지 못했어요.");
+      return;
+    }
+    const syncedSchedule = deserializeScheduleFromSupabase(result.data);
+    const syncedIndex = state.schedules.findIndex((schedule) => schedule.id === syncedSchedule.id);
+    if (syncedIndex >= 0) state.schedules[syncedIndex] = syncedSchedule;
+    else state.schedules.push(syncedSchedule);
+  }
   syncScheduleToWorklog(payload, previousSchedule);
 
   saveState();

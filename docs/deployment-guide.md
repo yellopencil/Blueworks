@@ -98,6 +98,19 @@ Supabase 프로젝트 안에서:
 
 이 스키마는 Blueworks 데이터를 담기 위한 기본 테이블 초안입니다.
 
+### 3. 프로젝트 동기화용 컬럼 추가
+
+[supabase/002_project_sync_columns.sql](../supabase/002_project_sync_columns.sql) 파일도 이어서 실행해주세요.
+
+이 쿼리는 현재 프로젝트 상세 화면에서 실제로 쓰는 필드 중,
+
+- 작업 유형
+- 홈페이지 주소
+- 다국어 목록
+- 계약 문서 메타데이터
+
+를 DB 컬럼으로 보강하는 단계입니다.
+
 ---
 
 ## Vercel 관련 메모
