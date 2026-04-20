@@ -2116,14 +2116,12 @@ async function handleLogin(event) {
       ? { enabled: true, username: email, password: "" }
       : { enabled: false, username: "", password: "" };
     saveState({ history: false });
-    form.reset();
     const session = data?.session || (await bridge.getSession()).data?.session || null;
     if (!session) {
       toast("로그인 세션을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
-    const authResult = await applyAuthSession(session);
-    if (!authResult?.ok) return;
+    form.reset();
     window.location.reload();
   } catch (error) {
     toast(error?.message || "로그인 처리 중 문제가 생겼습니다.");
