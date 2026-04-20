@@ -1,5 +1,5 @@
 -- Blueworks auth/profile bootstrap
--- Execute this after 001_initial_schema.sql and 002_project_sync_columns.sql
+-- Execute this after 001_initial_schema.sql and 002_project_sync_columns.sql.
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -8,10 +8,14 @@ security definer
 set search_path = public
 as $$
 declare
-  profile_count integer;
-  initial_owner boolean;
+  profile_count integer := 0;
+  initial_owner boolean := false;
 begin
-  select count(*) into profile_count from public.profiles;
+  profile_count := (
+    select count(*)
+    from public.profiles
+  );
+
   initial_owner := profile_count = 0;
 
   insert into public.profiles (
@@ -44,6 +48,10 @@ begin
   )
   on conflict (id) do update
   set
+    username = excluded.username,
+    name = excluded.name,
+    role_label = excluded.role_label,
+    phone = excluded.phone,
     email = excluded.email,
     updated_at = now();
 
@@ -55,31 +63,3 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
-
-drop policy if exists "authenticated users can manage own profile" on public.profiles;
-create policy "authenticated users can manage own profile"
-on public.profiles for update
-to authenticated
-using (auth.uid() = id)
-with check (auth.uid() = id);
-
-drop policy if exists "owners can manage all profiles" on public.profiles;
-create policy "owners can manage all profiles"
-on public.profiles for all
-to authenticated
-using (
-  exists (
-    select 1
-    from public.profiles as owner_profile
-    where owner_profile.id = auth.uid()
-      and owner_profile.is_owner = true
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.profiles as owner_profile
-    where owner_profile.id = auth.uid()
-      and owner_profile.is_owner = true
-  )
-);
