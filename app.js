@@ -2067,21 +2067,41 @@ function toggleArchiveMenu() {
   syncCurrentView();
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
   const email = String(formData.get("email")).trim();
   const password = String(formData.get("password")).trim();
   const rememberLogin = Boolean(formData.get("rememberLogin"));
+  const submitButton = form.querySelector('button[type="submit"]');
   const bridge = getSupabaseBridge();
+
+  if (!email || !password) {
+    toast("이메일과 비밀번호를 모두 입력해주세요.");
+    return;
+  }
+
+  if (!/.+@.+\..+/.test(email)) {
+    toast("올바른 이메일 주소를 입력해주세요.");
+    return;
+  }
+
   if (!bridge?.isReady()) {
     toast("Supabase 로그인 준비가 아직 끝나지 않았습니다.");
     return;
   }
 
-  bridge.signInWithPassword({ email, password }).then(async ({ data, error }) => {
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = "로그인 중...";
+  }
+
+  try {
+    const { data, error } = await bridge.signInWithPassword({ email, password });
     if (error) {
-      toast("이메일 또는 비밀번호를 확인해주세요.");
+      toast(error.message || "이메일 또는 비밀번호를 확인해주세요.");
       return;
     }
 
@@ -2089,9 +2109,17 @@ function handleLogin(event) {
       ? { enabled: true, username: email, password: "" }
       : { enabled: false, username: "", password: "" };
     saveState({ history: false });
-    event.currentTarget.reset();
+    form.reset();
     await applyAuthSession(data?.session || null);
-  });
+  } catch (error) {
+    toast(error?.message || "로그인 처리 중 문제가 생겼습니다.");
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || "로그인";
+      delete submitButton.dataset.originalText;
+    }
+  }
 }
 
 async function handleRegister(event) {
