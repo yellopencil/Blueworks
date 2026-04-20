@@ -2171,15 +2171,15 @@ async function handleRegister(event) {
   const formData = new FormData(form);
   const name = String(formData.get("name")).trim();
   const email = String(formData.get("email")).trim();
-  const username = String(formData.get("username")).trim();
   const password = String(formData.get("password")).trim();
   const roleLabel = String(formData.get("roleLabel")).trim();
+  const username = email.split("@")[0] || "user";
   const submitButton = form.querySelector('button[type="submit"]');
   const bridge = getSupabaseBridge();
   setAuthStatus(els.registerStatusMessage, "");
 
-  if (!name || !email || !username || !password || !roleLabel) {
-    const message = "이름, 이메일, 아이디, 비밀번호, 직책을 모두 입력해주세요.";
+  if (!name || !email || !password || !roleLabel) {
+    const message = "이름, 이메일, 비밀번호, 직책을 모두 입력해주세요.";
     setAuthStatus(els.registerStatusMessage, message);
     toast(message);
     return;
@@ -2407,7 +2407,7 @@ function renderMembers() {
             <span class="member-pill pending">승인 대기</span>
           </div>
           <div class="member-meta">
-            <span>${escapeHtml(user.username)}</span>
+            <span>${escapeHtml(user.email || "-")}</span>
             <span>${escapeHtml(user.roleLabel || "-")}</span>
             <span>최근 로그인 ${user.lastLoginAt ? escapeHtml(formatDateTime(user.lastLoginAt)) : "-"}</span>
             <span>IP ${escapeHtml(user.lastLoginIp || "-")}</span>
@@ -2436,9 +2436,9 @@ function renderMembers() {
             <span class="member-pill">${user.isOwner ? "소유자" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
           </div>
           <div class="member-meta">
-            <span>${escapeHtml(user.username)}</span>
-            <span>${escapeHtml(user.phone || "-")}</span>
             <span>${escapeHtml(user.email || "-")}</span>
+            <span>${escapeHtml(user.phone || "-")}</span>
+            <span>${escapeHtml(user.roleLabel || "-")}</span>
             <span>최근 로그인 ${user.lastLoginAt ? escapeHtml(formatDateTime(user.lastLoginAt)) : "-"}</span>
             <span>IP ${escapeHtml(user.lastLoginIp || "-")}</span>
           </div>
@@ -3518,8 +3518,6 @@ function openMemberModal(memberId = null) {
   els.memberForm.elements.id.value = member?.id || "";
   els.memberForm.elements.name.value = member?.name || "";
   els.memberForm.elements.roleLabel.value = member?.roleLabel || "";
-  els.memberForm.elements.username.value = member?.username || "";
-  els.memberForm.elements.password.value = member?.password || "";
   els.memberForm.elements.phone.value = member?.phone || "";
   els.memberForm.elements.email.value = member?.email || "";
   els.memberForm.elements.notes.value = member?.notes || "";
@@ -3787,8 +3785,6 @@ function handleMemberSave(event) {
     id: String(formData.get("id") || crypto.randomUUID()),
     name: String(formData.get("name") || "").trim(),
     roleLabel: String(formData.get("roleLabel") || "").trim(),
-    username: String(formData.get("username") || "").trim(),
-    password: String(formData.get("password") || "").trim(),
     phone: String(formData.get("phone") || "").trim(),
     email: String(formData.get("email") || "").trim(),
     notes: String(formData.get("notes") || "").trim(),
@@ -3800,12 +3796,6 @@ function handleMemberSave(event) {
     createdAt: new Date().toISOString(),
   };
 
-  const duplicate = state.users.find((user) => user.username === payload.username && user.id !== payload.id);
-  if (duplicate) {
-    toast("이미 사용 중인 아이디입니다.");
-    return;
-  }
-
   const existing = state.users.find((user) => user.id === payload.id);
   if (!existing) {
     toast("새 멤버는 회원가입으로 추가해주세요.");
@@ -3814,7 +3804,10 @@ function handleMemberSave(event) {
 
   const bridge = getSupabaseBridge();
   if (existing) {
+    const fallbackUsername = existing.username || existing.email?.split("@")[0] || payload.email.split("@")[0] || "";
     Object.assign(existing, payload, {
+      username: fallbackUsername,
+      password: "",
       createdAt: existing.createdAt || payload.createdAt,
       lastLoginAt: existing.lastLoginAt || "",
       lastLoginIp: existing.lastLoginIp || "",

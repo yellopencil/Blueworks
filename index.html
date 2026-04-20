@@ -51,7 +51,6 @@
           <form id="registerForm" class="form-stack" novalidate>
             <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명"></label>
             <label>이메일<input name="email" type="email" required placeholder="로그인에 사용할 이메일"></label>
-            <label>아이디<input name="username" type="text" required placeholder="로그인 아이디"></label>
             <label>비밀번호<input name="password" type="password" required placeholder="비밀번호"></label>
             <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너"></label>
             <button type="submit" class="secondary auth-submit">가입 요청 보내기</button>
@@ -1045,12 +1044,8 @@
           <label>직책 / 역할<input name="roleLabel" type="text"></label>
         </div>
         <div class="two-col">
-          <label>아이디<input name="username" type="text" required></label>
-          <label>비밀번호<input name="password" type="text" required></label>
-        </div>
-        <div class="two-col">
           <label>연락처<input name="phone" type="text"></label>
-          <label>이메일<input name="email" type="email"></label>
+          <label>로그인 이메일<input name="email" type="email"></label>
         </div>
         <label>메모<textarea name="notes" rows="5"></textarea></label>
         <label class="checkbox-row"><input name="approved" type="checkbox"> 승인완료</label>
