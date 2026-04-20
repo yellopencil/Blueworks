@@ -1420,8 +1420,14 @@ function canManageMembers(user = currentUser()) {
   return Boolean(user?.isOwner || user?.canManageMembers);
 }
 
+function isRepresentativeAccount(user = currentUser()) {
+  if (!user) return false;
+  const roleLabel = String(user.roleLabel || "").trim();
+  return Boolean(user.isOwner || (user.canManageMembers && roleLabel === "대표"));
+}
+
 function canManageSiteSettings(user = currentUser()) {
-  return Boolean(user?.isOwner);
+  return isRepresentativeAccount(user);
 }
 
 function selectedProject() {
@@ -2855,13 +2861,17 @@ function renderMembers() {
   }
 
   const pendingUsers = state.users
-    .filter((user) => !user.isOwner && !user.approved && !user.rejected)
+    .filter((user) => !isRepresentativeAccount(user) && !user.approved && !user.rejected)
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-  const ownerUsers = state.users
-    .filter((user) => user.isOwner)
-    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const representativeUsers = state.users
+    .filter((user) => isRepresentativeAccount(user))
+    .sort((a, b) => {
+      if (a.id === viewer?.id) return -1;
+      if (b.id === viewer?.id) return 1;
+      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
   const approvedUsers = state.users
-    .filter((user) => !user.isOwner && user.approved)
+    .filter((user) => !isRepresentativeAccount(user) && user.approved)
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   if (!pendingUsers.length) {
@@ -2891,7 +2901,7 @@ function renderMembers() {
     `).join("");
   }
 
-  const visibleMembers = [...ownerUsers, ...approvedUsers];
+  const visibleMembers = [...representativeUsers, ...approvedUsers];
 
   if (!visibleMembers.length) {
     els.memberList.innerHTML = '<li class="muted small">등록된 멤버가 없습니다.</li>';
@@ -2901,7 +2911,7 @@ function renderMembers() {
         <div class="member-item-main">
           <div class="member-name-row">
             <strong>${escapeHtml(user.name || user.username)}</strong>
-            <span class="member-pill">${user.isOwner ? "소유자" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
+            <span class="member-pill">${isRepresentativeAccount(user) ? "소유자" : user.canManageMembers ? "운영진" : escapeHtml(user.roleLabel || "멤버")}</span>
           </div>
           <div class="member-meta">
             <span>${escapeHtml(user.email || "-")}</span>
@@ -2912,7 +2922,7 @@ function renderMembers() {
           </div>
         </div>
         <div class="approval-actions">
-          <button type="button" class="ghost" data-edit-member="${user.id}">${user.isOwner ? "보기" : "수정"}</button>
+          <button type="button" class="ghost" data-edit-member="${user.id}">${isRepresentativeAccount(user) ? "보기" : "수정"}</button>
         </div>
       </li>
     `).join("");
