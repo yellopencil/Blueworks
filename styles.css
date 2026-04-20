@@ -1996,6 +1996,10 @@ body[data-theme="dark"] .primary { color: #111418; }
   flex-wrap: wrap;
 }
 
+.customer-list-add-btn {
+  margin-left: 8px;
+}
+
 .panel-head,
 .section-head {
   margin-bottom: 22px;
