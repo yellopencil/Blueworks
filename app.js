@@ -4174,8 +4174,14 @@ async function handleProjectSave(event) {
   event.preventDefault();
   syncProjectRichEditorValues();
   const formData = new FormData(event.currentTarget);
+  const title = String(formData.get("title") || "").trim();
+  const client = String(formData.get("client") || "").trim();
   const startDate = String(formData.get("startDate") || "");
   const dueDate = String(formData.get("dueDate") || "");
+  if (!title || !client) {
+    openNoticeModal("프로젝트명과 고객사명을 입력해주세요.");
+    return;
+  }
   if (!startDate || !dueDate) {
     openNoticeModal("계약일과 1차 시안 마감일을 선택해주세요.");
     return;
@@ -4186,10 +4192,10 @@ async function handleProjectSave(event) {
     : [];
   const payload = {
     id: String(formData.get("id") || crypto.randomUUID()),
-    title: String(formData.get("title")).trim(),
-    client: String(formData.get("client")).trim(),
+    title,
+    client,
     projectType: String(formData.get("projectType") || ""),
-    websiteUrl: String(formData.get("websiteUrl")).trim(),
+    websiteUrl: String(formData.get("websiteUrl") || "").trim(),
     managerName: String(formData.get("managerName")).trim(),
     managerPhone: String(formData.get("managerPhone")).trim(),
     packageType: String(formData.get("packageType")),
