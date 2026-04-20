@@ -33,6 +33,12 @@
       }
       return this.client.from("profiles").select("*").order("created_at", { ascending: false });
     },
+    async fetchCurrentProfile(userId) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("profiles").select("*").eq("id", userId).maybeSingle();
+    },
     async upsertProfile(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };

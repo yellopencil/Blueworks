@@ -898,15 +898,23 @@ async function applyAuthSession(session, options = {}) {
     return { ok: true };
   }
 
-  const profileResult = await syncProfilesFromSupabase();
-  if (!profileResult.ok) {
-    toast("멤버 정보를 불러오지 못했습니다.");
-    return profileResult;
-  }
+  const bridge = getSupabaseBridge();
+  let profile = null;
 
-  const profile = currentUser();
+  const currentProfileResult = await bridge?.fetchCurrentProfile?.(state.sessionUserId);
+  if (currentProfileResult?.data) {
+    profile = normalizeProfileRecord(currentProfileResult.data);
+    const otherUsers = state.users.filter((user) => user.id !== profile.id);
+    state.users = [profile, ...otherUsers];
+  } else {
+    const profileResult = await syncProfilesFromSupabase();
+    if (!profileResult.ok) {
+      toast("멤버 정보를 불러오지 못했습니다.");
+      return profileResult;
+    }
+    profile = currentUser();
+  }
   if (!profile) {
-    const bridge = getSupabaseBridge();
     await bridge?.signOut();
     state.sessionUserId = null;
     state.users = [];
@@ -917,7 +925,6 @@ async function applyAuthSession(session, options = {}) {
   }
 
   if (profile.rejected) {
-    const bridge = getSupabaseBridge();
     await bridge?.signOut();
     state.sessionUserId = null;
     state.users = [];
@@ -928,7 +935,6 @@ async function applyAuthSession(session, options = {}) {
   }
 
   if (!profile.approved) {
-    const bridge = getSupabaseBridge();
     await bridge?.signOut();
     state.sessionUserId = null;
     saveState({ history: false });
@@ -937,6 +943,7 @@ async function applyAuthSession(session, options = {}) {
     return { ok: false };
   }
 
+  syncProfilesFromSupabase().catch(() => {});
   saveState({ history: false });
   render();
   return { ok: true };
