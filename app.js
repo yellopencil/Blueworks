@@ -4624,6 +4624,8 @@ function handleMemberSave(event) {
       createdAt: existing.createdAt || payload.createdAt,
       lastLoginAt: existing.lastLoginAt || "",
       lastLoginIp: existing.lastLoginIp || "",
+      isOwner: existing.isOwner,
+      approved: existing.isOwner ? true : payload.approved,
       canManageMembers: existing.isOwner ? true : currentUser()?.isOwner ? payload.canManageMembers : existing.canManageMembers,
     });
     if (state.pendingApproval?.username === existing.username && existing.approved) state.pendingApproval = null;
