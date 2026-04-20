@@ -1802,6 +1802,17 @@ button {
   width: 100%;
 }
 
+.auth-status-message {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f6f8fc;
+  border: 1px solid #d7e1f3;
+  color: #526178;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 #registerPanel {
   position: relative;
   padding-top: 24px;

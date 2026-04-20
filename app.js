@@ -108,7 +108,9 @@ const els = {
   mobileNavOverlay: document.querySelector("#mobileNavOverlay"),
   loginPanel: document.querySelector("#loginPanel"),
   loginForm: document.querySelector("#loginForm"),
+  loginStatusMessage: document.querySelector("#loginStatusMessage"),
   registerForm: document.querySelector("#registerForm"),
+  registerStatusMessage: document.querySelector("#registerStatusMessage"),
   registerPanel: document.querySelector("#registerPanel"),
   openRegisterPanelBtn: document.querySelector("#openRegisterPanelBtn"),
   backToLoginBtn: document.querySelector("#backToLoginBtn"),
@@ -528,6 +530,12 @@ function saveState(options = {}) {
 
 function getSupabaseBridge() {
   return window.BLUEWORKS_SUPABASE || null;
+}
+
+function setAuthStatus(target, message = "") {
+  if (!target) return;
+  target.textContent = message;
+  target.classList.toggle("hidden", !message);
 }
 
 function amountFromSupabase(value) {
@@ -2083,19 +2091,26 @@ async function handleLogin(event) {
   const rememberLogin = Boolean(formData.get("rememberLogin"));
   const submitButton = form.querySelector('button[type="submit"]');
   const bridge = getSupabaseBridge();
+  setAuthStatus(els.loginStatusMessage, "");
 
   if (!email || !password) {
-    toast("이메일과 비밀번호를 모두 입력해주세요.");
+    const message = "이메일과 비밀번호를 모두 입력해주세요.";
+    setAuthStatus(els.loginStatusMessage, message);
+    toast(message);
     return;
   }
 
   if (!/.+@.+\..+/.test(email)) {
-    toast("올바른 이메일 주소를 입력해주세요.");
+    const message = "올바른 이메일 주소를 입력해주세요.";
+    setAuthStatus(els.loginStatusMessage, message);
+    toast(message);
     return;
   }
 
   if (!bridge?.isReady()) {
-    toast("Supabase 로그인 준비가 아직 끝나지 않았습니다.");
+    const message = "Supabase 로그인 준비가 아직 끝나지 않았습니다.";
+    setAuthStatus(els.loginStatusMessage, message);
+    toast(message);
     return;
   }
 
@@ -2104,11 +2119,14 @@ async function handleLogin(event) {
     submitButton.dataset.originalText = submitButton.textContent;
     submitButton.textContent = "로그인 중...";
   }
+  setAuthStatus(els.loginStatusMessage, "로그인 정보를 확인하고 있어요...");
 
   try {
     const { data, error } = await bridge.signInWithPassword({ email, password });
     if (error) {
-      toast(error.message || "이메일 또는 비밀번호를 확인해주세요.");
+      const message = error.message || "이메일 또는 비밀번호를 확인해주세요.";
+      setAuthStatus(els.loginStatusMessage, message);
+      toast(message);
       return;
     }
 
@@ -2118,13 +2136,18 @@ async function handleLogin(event) {
     saveState({ history: false });
     const session = data?.session || (await bridge.getSession()).data?.session || null;
     if (!session) {
-      toast("로그인 세션을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      const message = "로그인 세션을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.";
+      setAuthStatus(els.loginStatusMessage, message);
+      toast(message);
       return;
     }
     form.reset();
+    setAuthStatus(els.loginStatusMessage, "로그인에 성공했어요. 화면을 전환하고 있습니다...");
     window.location.reload();
   } catch (error) {
-    toast(error?.message || "로그인 처리 중 문제가 생겼습니다.");
+    const message = error?.message || "로그인 처리 중 문제가 생겼습니다.";
+    setAuthStatus(els.loginStatusMessage, message);
+    toast(message);
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
@@ -2145,24 +2168,33 @@ async function handleRegister(event) {
   const roleLabel = String(formData.get("roleLabel")).trim();
   const submitButton = form.querySelector('button[type="submit"]');
   const bridge = getSupabaseBridge();
+  setAuthStatus(els.registerStatusMessage, "");
 
   if (!name || !email || !username || !password || !roleLabel) {
-    toast("이름, 이메일, 아이디, 비밀번호, 직책을 모두 입력해주세요.");
+    const message = "이름, 이메일, 아이디, 비밀번호, 직책을 모두 입력해주세요.";
+    setAuthStatus(els.registerStatusMessage, message);
+    toast(message);
     return;
   }
 
   if (!/.+@.+\..+/.test(email)) {
-    toast("올바른 이메일 주소를 입력해주세요.");
+    const message = "올바른 이메일 주소를 입력해주세요.";
+    setAuthStatus(els.registerStatusMessage, message);
+    toast(message);
     return;
   }
 
   if (password.length < 8) {
-    toast("비밀번호는 8자 이상으로 입력해주세요.");
+    const message = "비밀번호는 8자 이상으로 입력해주세요.";
+    setAuthStatus(els.registerStatusMessage, message);
+    toast(message);
     return;
   }
 
   if (!bridge?.isReady()) {
-    toast("Supabase 회원가입 준비가 아직 끝나지 않았습니다.");
+    const message = "Supabase 회원가입 준비가 아직 끝나지 않았습니다.";
+    setAuthStatus(els.registerStatusMessage, message);
+    toast(message);
     return;
   }
 
@@ -2171,6 +2203,7 @@ async function handleRegister(event) {
     submitButton.dataset.originalText = submitButton.textContent;
     submitButton.textContent = "가입 요청 보내는 중...";
   }
+  setAuthStatus(els.registerStatusMessage, "가입 요청을 보내고 있어요...");
 
   try {
     const { data, error } = await bridge.signUp({
@@ -2187,7 +2220,9 @@ async function handleRegister(event) {
     });
 
     if (error) {
-      toast(error.message || "회원가입에 실패했습니다.");
+      const message = error.message || "회원가입에 실패했습니다.";
+      setAuthStatus(els.registerStatusMessage, message);
+      toast(message);
       return;
     }
 
@@ -2198,13 +2233,17 @@ async function handleRegister(event) {
 
     if (data?.session) {
       await applyAuthSession(data.session);
+      setAuthStatus(els.registerStatusMessage, "가입이 완료되었습니다.");
       toast("가입이 완료되었습니다.");
       return;
     }
 
+    setAuthStatus(els.registerStatusMessage, "가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
     toast("가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
   } catch (error) {
-    toast(error?.message || "회원가입 처리 중 문제가 생겼습니다.");
+    const message = error?.message || "회원가입 처리 중 문제가 생겼습니다.";
+    setAuthStatus(els.registerStatusMessage, message);
+    toast(message);
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
