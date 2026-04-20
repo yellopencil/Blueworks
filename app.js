@@ -2294,12 +2294,20 @@ function hydrateRememberedLogin() {
 }
 
 function openRegisterPanel() {
+  els.registerForm?.reset();
+  setAuthStatus(els.registerStatusMessage, "");
+  const registerElements = els.registerForm?.elements;
+  if (registerElements?.email) registerElements.email.value = "";
+  if (registerElements?.phone) registerElements.phone.value = "";
+  if (registerElements?.password) registerElements.password.value = "";
   els.registerPanel.classList.remove("hidden");
   els.loginPanel.classList.add("hidden");
   els.authView.classList.add("auth-grid-single");
 }
 
 function closeRegisterPanel() {
+  els.registerForm?.reset();
+  setAuthStatus(els.registerStatusMessage, "");
   els.registerPanel.classList.add("hidden");
   els.loginPanel.classList.remove("hidden");
   els.authView.classList.add("auth-grid-single");

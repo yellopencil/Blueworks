@@ -44,12 +44,12 @@
             </div>
             <button type="button" id="backToLoginBtn" class="text-link auth-back-link">돌아가기</button>
           </div>
-          <form id="registerForm" class="form-stack" novalidate>
-            <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명"></label>
-            <label>이메일<input name="email" type="email" required placeholder="로그인에 사용할 이메일"></label>
-            <label>연락처<input name="phone" type="text" required placeholder="예: 010-1234-5678"></label>
-            <label>비밀번호<input name="password" type="password" required placeholder="비밀번호"></label>
-            <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너"></label>
+          <form id="registerForm" class="form-stack" novalidate autocomplete="off">
+            <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명" autocomplete="off"></label>
+            <label>이메일<input name="email" type="email" required placeholder="로그인에 사용할 이메일" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+            <label>연락처<input name="phone" type="text" required placeholder="예: 010-1234-5678" autocomplete="off" inputmode="tel"></label>
+            <label>비밀번호<input name="password" type="password" required placeholder="비밀번호" autocomplete="new-password"></label>
+            <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너" autocomplete="off"></label>
             <button type="submit" class="secondary auth-submit">가입 요청 보내기</button>
           </form>
           <div id="registerStatusMessage" class="auth-status-message hidden"></div>
