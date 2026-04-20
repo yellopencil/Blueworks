@@ -2240,14 +2240,20 @@ async function handleRegister(event) {
     openRegisterPanel();
 
     if (data?.session) {
-      await applyAuthSession(data.session);
-      setAuthStatus(els.registerStatusMessage, "가입이 완료되었습니다.");
-      toast("가입이 완료되었습니다.");
+      const authResult = await applyAuthSession(data.session, { silent: true });
+      if (authResult?.ok) {
+        setAuthStatus(els.registerStatusMessage, "가입이 완료되었습니다.");
+        toast("가입이 완료되었습니다.");
+        return;
+      }
+      await bridge.signOut();
+      setAuthStatus(els.registerStatusMessage, "가입 요청이 접수되었어요. 관리자 승인 후 로그인할 수 있어요.");
+      toast("가입 요청이 접수되었어요. 관리자 승인 후 로그인할 수 있어요.");
       return;
     }
 
-    setAuthStatus(els.registerStatusMessage, "가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
-    toast("가입 요청이 접수되었어요. 이메일 인증 후 로그인해주세요.");
+    setAuthStatus(els.registerStatusMessage, "가입 요청이 접수되었어요. 관리자 승인 후 로그인할 수 있어요.");
+    toast("가입 요청이 접수되었어요. 관리자 승인 후 로그인할 수 있어요.");
   } catch (error) {
     const message = error?.message || "회원가입 처리 중 문제가 생겼습니다.";
     setAuthStatus(els.registerStatusMessage, message);
