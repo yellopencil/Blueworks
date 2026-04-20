@@ -1,0 +1,12 @@
+.edge-headless/
+
+# Local verification artifacts
+mobile-*.png
+mobile-*.html
+quote-generator-verify-latest.png
+archive-dom.html
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store

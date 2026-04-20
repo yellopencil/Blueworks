@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>옐로펜슬 견적 · 계약서 관리</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="./quote-generator.css">
+</head>
+<body>
+  <div id="quoteApp" class="qa-app">
+    <div class="qa-toolbar">
+      <div class="qa-toolbar-group qa-toolbar-group-docs">
+        <button type="button" class="qa-btn qa-docbtn is-active" data-doc="estimate">홈페이지 제작 견적서</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="contract">홈페이지 제작 계약서</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="estimate_krmong">홈페이지 제작 견적서 (크몽)</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="contract_krmong">홈페이지 제작 계약서 (크몽)</button>
+      </div>
+      <div class="qa-toolbar-group qa-toolbar-group-actions">
+        <button id="downloadPdfBtn" type="button" class="qa-btn qa-btn-primary">PDF 내보내기</button>
+      </div>
+    </div>
+
+    <main class="qa-layout">
+      <section class="qa-hero">
+        <div class="qa-hero-main">
+          <div class="qa-hero-logo">
+            <img
+              class="qa-hero-logo-img"
+              src="https://cdn.imweb.me/upload/S20210903c0421227bca81/11e1f4c49fda7.png"
+              alt="옐로펜슬 로고"
+              crossorigin="anonymous"
+              referrerpolicy="no-referrer"
+            >
+          </div>
+          <div class="qa-hero-copy">
+            <h1 id="docTitle" class="qa-doc-title">홈페이지 제작 견적서</h1>
+            <div class="qa-date-row">
+              <label class="qa-date-field">
+                <span>작성일</span>
+                <input id="quoteDate" type="date" class="qa-input qa-input-small">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <aside class="qa-maker-card">
+          <h2 class="qa-card-title">제작사 정보</h2>
+          <dl class="qa-kv-list">
+            <div><dt>상호명</dt><dd>옐로펜슬</dd></div>
+            <div><dt>사업자번호</dt><dd>276-06-02233</dd></div>
+            <div><dt>대표</dt><dd>차민석, 신승진</dd></div>
+            <div><dt>연락처</dt><dd>010-7368-7241</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="qa-card">
+        <div class="qa-section-head">
+          <h2>제작 요청사 정보</h2>
+          <p>계약서에 들어갈 기본 정보를 입력해주세요.</p>
+        </div>
+        <div class="qa-grid qa-grid-3">
+          <label class="qa-field">
+            <span>제작 요청사</span>
+            <input id="clientCompany" class="qa-input" placeholder="제작 요청사명을 입력하세요.">
+          </label>
+          <label class="qa-field">
+            <span>담당자명</span>
+            <input id="clientName" class="qa-input" placeholder="예: 홍길동">
+          </label>
+          <label class="qa-field">
+            <span>담당자 연락처</span>
+            <input id="clientPhone" class="qa-input" placeholder="예: 010-1234-5678">
+          </label>
+        </div>
+        <div id="reqWarn" class="qa-warn hidden">제작 요청사 / 담당자명 / 담당자 연락처는 필수 입력입니다.</div>
+      </section>
+
+      <section class="qa-card qa-card-table">
+        <div class="qa-section-head qa-section-head-spaced">
+          <div>
+            <h2>견적 항목</h2>
+            <p>항목을 추가하고 드래그해서 순서를 바꿀 수 있습니다.</p>
+          </div>
+          <div class="qa-section-actions">
+            <button id="addRowBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">+ 항목</button>
+            <button id="saveRowPresetBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">항목 저장</button>
+            <button id="loadRowPresetBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">항목 불러오기</button>
+          </div>
+        </div>
+
+        <div class="qa-table-wrap">
+          <div class="qa-table-scroll">
+            <table class="qa-table" aria-label="견적 항목 표">
+              <colgroup>
+                <col style="width: 26%;">
+                <col style="width: 34%;">
+                <col style="width: 10%;">
+                <col style="width: 15%;">
+                <col style="width: 15%;">
+                <col style="width: 118px;">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>설명</th>
+                  <th class="num">수량</th>
+                  <th class="num">단가</th>
+                  <th class="num">금액</th>
+                  <th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="itemsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="qa-dual-grid">
+        <section class="qa-card qa-addon-card">
+          <div class="qa-section-head">
+            <h2>다국어 지원</h2>
+            <p>다국어 사이트는 언어당 총 비용의 30%가 추가됩니다.</p>
+          </div>
+          <div class="qa-addon-layout">
+            <label class="qa-field qa-addon-field">
+              <span>추가 언어 수</span>
+              <select id="langCount" class="qa-select">
+                <option value="0" selected>0 (미적용)</option>
+                <option value="1">1개 (+30%)</option>
+                <option value="2">2개 (+60%)</option>
+                <option value="3">3개 (+90%)</option>
+                <option value="4">4개 (+120%)</option>
+                <option value="5">5개 (+150%)</option>
+              </select>
+            </label>
+            <div class="qa-metric-grid">
+              <div class="qa-metric">
+                <span>추가율</span>
+                <strong id="langRateTxt">0%</strong>
+              </div>
+              <div class="qa-metric">
+                <span>다국어 추가금</span>
+                <strong id="langFeeTxt">0원</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="qa-card">
+          <div class="qa-section-head">
+            <h2>작업 일정</h2>
+            <p>작업 기간과 수정 횟수를 정리해주세요.</p>
+          </div>
+          <div class="qa-grid qa-grid-2">
+            <label class="qa-field">
+              <span>1차 작업 기간</span>
+              <input id="workPeriod" class="qa-input" value="결제일로부터 4주">
+            </label>
+            <label class="qa-field">
+              <span>수정 횟수</span>
+              <input id="revCount" class="qa-input" type="text" inputmode="numeric" value="3">
+            </label>
+          </div>
+          <p class="qa-helper">이는 최대 기간으로, 작업 상황에 따라 단축될 수 있습니다.</p>
+        </section>
+      </section>
+
+      <section class="qa-card">
+        <div class="qa-section-head">
+          <h2>비고</h2>
+          <p>개발 범위, 납기, 유지보수 조건 등 필요한 메모를 남겨주세요.</p>
+        </div>
+        <textarea id="memo" class="qa-textarea" rows="4" placeholder="필요한 내용을 입력해주세요."></textarea>
+      </section>
+
+      <section class="qa-summary-grid">
+        <section class="qa-card">
+          <div class="qa-section-head">
+            <div>
+              <h2 id="termsTitle">결제 방법</h2>
+              <p>문서 유형에 따라 자동으로 안내 문구가 바뀝니다.</p>
+            </div>
+            <div class="qa-agreement-actions">
+              <button id="termsEditBtn" type="button" class="qa-btn qa-btn-subtle">수정</button>
+              <button id="termsSaveBtn" type="button" class="qa-btn qa-btn-primary hidden">저장</button>
+            </div>
+          </div>
+          <ul id="termsList" class="qa-terms-list"></ul>
+          <textarea id="termsEditor" class="qa-textarea hidden" rows="8"></textarea>
+        </section>
+
+        <section class="qa-card qa-total-card">
+          <div class="qa-total-row"><span>기본 견적</span><strong id="baseSubtotalTxt">0원</strong></div>
+          <div class="qa-total-row"><span id="langRowLabel">다국어 추가(30% × 0)</span><strong id="langAddonTxt">0원</strong></div>
+          <div class="qa-total-divider"></div>
+          <div class="qa-total-row"><span>공급가액</span><strong id="subtotalTxt">0원</strong></div>
+          <div class="qa-total-row qa-total-row-vat">
+            <span>
+              부가세(VAT 10%)
+              <label class="qa-vat-toggle" for="vatToggle">
+                <input type="checkbox" id="vatToggle" checked>
+                <em>적용</em>
+              </label>
+            </span>
+            <strong id="vatTxt">0원</strong>
+          </div>
+          <div class="qa-total-divider"></div>
+          <div class="qa-total-row qa-total-row-grand"><span>총 합계</span><strong id="totalTxt">0원</strong></div>
+        </section>
+      </section>
+
+      <section class="qa-sign-row">
+        <p id="signNote" class="qa-sign-note">본 문서 유효기간은 발행일로부터 7일입니다.</p>
+        <div class="qa-signature">
+          <span>옐로펜슬 대표 차민석</span>
+          <span class="qa-in">(인)</span>
+          <img
+            class="qa-stamp-overlay"
+            src="https://cdn.imweb.me/upload/S20210903c0421227bca81/8f10c47f62d80.png"
+            alt="직인"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+          >
+        </div>
+      </section>
+
+      <section class="qa-card qa-agreement-card">
+        <div class="qa-section-head">
+          <div>
+            <h2>약관동의서</h2>
+            <p>필요할 때만 수정 버튼을 눌러 편집하고 저장할 수 있습니다.</p>
+          </div>
+          <div class="qa-agreement-actions">
+            <button id="agreementBoldBtn" type="button" class="qa-btn qa-btn-subtle hidden">볼드</button>
+            <button id="agreementEditBtn" type="button" class="qa-btn qa-btn-subtle">수정</button>
+            <button id="agreementSaveBtn" type="button" class="qa-btn qa-btn-primary hidden">저장</button>
+          </div>
+        </div>
+        <div id="agreementContent" class="qa-textarea qa-textarea-large qa-agreement-editor" contenteditable="false" aria-label="약관동의서 본문"></div>
+      </section>
+    </main>
+
+    <div id="pdfTemplateRoot" class="hidden" aria-hidden="true"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="./quote-generator.js"></script>
+</body>
+</html>

@@ -1,0 +1,1220 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>옐로펜슬 업무 관리 데모</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="./styles.css?v=20260420-copyupdate1">
+  <link rel="stylesheet" href="./quote-generator.css?v=20260420-copyupdate1">
+</head>
+<body>
+  <div class="shell">
+    <main class="main">
+      <section id="authView" class="auth-grid auth-grid-single">
+        <div class="auth-brand">
+        <div class="auth-brandmark" aria-label="BLUE WORKS">
+          <span class="auth-brandmark-blue">BLUE</span>
+          <span class="auth-brandmark-works">WORKS</span>
+        </div>
+          <p class="auth-brand-copy">Copyright ⓒ 옐로펜슬 All rights reserved.</p>
+        </div>
+        <div id="loginPanel" class="panel">
+          <div class="panel-head">
+            <p class="eyebrow">Login</p>
+            <h2>로그인</h2>
+          </div>
+          <form id="loginForm" class="form-stack">
+            <label>아이디<input name="username" type="text" required placeholder="아이디를 입력하세요."></label>
+            <label>비밀번호<input name="password" type="password" required placeholder="비밀번호를 입력하세요."></label>
+            <label class="checkbox-row"><input name="rememberLogin" type="checkbox"> 아이디와 비밀번호 저장</label>
+            <button type="submit" class="primary auth-submit">로그인</button>
+          </form>
+          <div class="button-row auth-entry-actions">
+            <button type="button" id="openRegisterPanelBtn" class="ghost auth-submit auth-register-btn">회원가입</button>
+          </div>
+        </div>
+
+        <div id="registerPanel" class="panel hidden">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Join Request</p>
+              <h2>가입 승인 요청</h2>
+            </div>
+            <button type="button" id="backToLoginBtn" class="text-link auth-back-link">돌아가기</button>
+          </div>
+          <div id="pendingApprovalCard" class="info-card hidden">
+            <strong>가입 요청이 접수되었어요.</strong>
+            <p>소유자의 승인 후 가입이 완료됩니다. 승인 전에는 로그인할 수 없습니다.</p>
+          </div>
+          <form id="registerForm" class="form-stack">
+            <label>이름<input name="name" type="text" required placeholder="이름 또는 담당자명"></label>
+            <label>아이디<input name="username" type="text" required placeholder="로그인 아이디"></label>
+            <label>비밀번호<input name="password" type="password" required placeholder="비밀번호"></label>
+            <label>직책/역할<input name="roleLabel" type="text" required placeholder="예: PM, 디자이너"></label>
+            <button type="submit" class="secondary auth-submit">가입 요청 보내기</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="appView" class="hidden">
+        <button id="mobileNavOpenBtn" class="mobile-nav-toggle" type="button" aria-label="메뉴 열기">
+          <i class="fa fa-bars" aria-hidden="true"></i>
+        </button>
+        <div id="mobileNavOverlay" class="mobile-nav-overlay hidden" aria-hidden="true"></div>
+        <div class="app-shell">
+          <aside class="sidebar panel">
+            <div class="sidebar-head">
+              <div>
+                <p class="sidebar-brand-mini">BLUE WORKS</p>
+                <h3 id="sidebarSiteTitle">옐로펜슬</h3>
+              </div>
+              <button id="sidebarToggleBtn" class="ghost small-btn sidebar-toggle-btn" type="button">접기</button>
+              <button id="mobileNavCloseBtn" class="mobile-sidebar-close" type="button" aria-label="메뉴 닫기">
+                <i class="fa fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+            <nav class="sidebar-nav">
+              <button id="navDashboardBtn" class="sidebar-link active" type="button" aria-label="대시보드" title="대시보드">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-rocket"></i></span>
+                <span class="sidebar-link-label">대시보드</span>
+              </button>
+              <button id="navMembersBtn" class="sidebar-link" type="button" aria-label="멤버 관리" title="멤버 관리">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-user"></i></span>
+                <span class="sidebar-link-label">멤버 관리</span>
+              </button>
+              <button id="navCustomersBtn" class="sidebar-link" type="button" aria-label="프로젝트 관리" title="프로젝트 관리">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-flag"></i></span>
+                <span class="sidebar-link-label">프로젝트 관리</span>
+              </button>
+              <button id="navSalesBtn" class="sidebar-link" type="button" aria-label="매출 관리" title="매출 관리">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-area-chart"></i></span>
+                <span class="sidebar-link-label">매출 관리</span>
+              </button>
+              <button id="navQuotesBtn" class="sidebar-link" type="button" aria-label="견적 · 계약서 관리" title="견적 · 계약서 관리">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-pencil"></i></span>
+                <span class="sidebar-link-label">견적 · 계약서 관리</span>
+              </button>
+              <div class="sidebar-nav-group">
+                <button id="navArchiveBtn" class="sidebar-link sidebar-parent-link" type="button" aria-label="아카이브" title="아카이브">
+                  <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-server"></i></span>
+                  <span class="sidebar-link-label">아카이브</span>
+                </button>
+                <div id="archiveSubnav" class="sidebar-subnav">
+                  <button id="navArchiveNotesBtn" class="sidebar-sublink" type="button">
+                    <span class="sidebar-sublink-icon" aria-hidden="true"><i class="fa fa-file-text"></i></span>
+                    <span class="sidebar-sublink-label">메모</span>
+                  </button>
+                  <button id="navArchiveCodesBtn" class="sidebar-sublink" type="button">
+                    <span class="sidebar-sublink-icon" aria-hidden="true"><i class="fa fa-folder"></i></span>
+                    <span class="sidebar-sublink-label">코드</span>
+                  </button>
+                </div>
+              </div>
+              <button id="navSettingsBtn" class="sidebar-link" type="button" aria-label="환경설정" title="환경설정">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-cog"></i></span>
+                <span class="sidebar-link-label">환경설정</span>
+              </button>
+            </nav>
+          </aside>
+
+          <div class="app-content">
+            <header class="utility-bar">
+              <div class="utility-home-link">
+                <button id="homepageShortcutBtn" class="ghost small-btn utility-shortcut-btn" type="button">옐로펜슬</button>
+                <button id="portfolioShortcutBtn" class="ghost small-btn utility-shortcut-btn" type="button">포트폴리오</button>
+                <button id="reviewShortcutBtn" class="ghost small-btn utility-shortcut-btn" type="button">후기</button>
+              </div>
+              <div class="utility-actions">
+                <button id="logoutBtn" class="primary small-btn" type="button">로그아웃</button>
+              </div>
+            </header>
+
+            <section id="dashboardView">
+              <div class="hero-banner">
+                <div>
+                  <p class="eyebrow">Workspace Dashboard</p>
+                  <h2 id="welcomeText">차민석 대표님, 블루웍스에 오신 것을 환영해요!</h2>
+                </div>
+              </div>
+
+              <div class="summary-grid">
+                <article class="panel summary-card summary-ready">
+                  <span>작업 준비</span>
+                  <strong id="readyCount">0</strong>
+                </article>
+                <article class="panel summary-card summary-progress">
+                  <span>작업 중</span>
+                  <strong id="progressCount">0</strong>
+                  <div id="progressStageSummary" class="summary-stage-list"></div>
+                </article>
+                <article class="panel summary-card summary-year-projects">
+                  <span>올해 프로젝트</span>
+                  <strong id="yearProjectCount">0건</strong>
+                </article>
+                <article class="panel summary-card summary-year-sales">
+                  <span id="yearSalesLabel">2026년 매출</span>
+                  <strong id="yearSalesAmount">0원</strong>
+                </article>
+              </div>
+
+              <div class="workspace-grid">
+                <section class="panel board-panel">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">Projects</p>
+                      <h3>프로젝트 보드</h3>
+                    </div>
+                    <div class="board-tools">
+                      <button id="newProjectBtn" class="secondary" type="button">새 프로젝트</button>
+                    </div>
+                  </div>
+                  <div id="projectBoard" class="board-columns"></div>
+                </section>
+              </div>
+
+              <section class="panel calendar-panel">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Schedule</p>
+                    <h3>캘린더</h3>
+                  </div>
+                  <div class="calendar-nav">
+                    <button id="prevMonthBtn" class="ghost" type="button">이전</button>
+                    <strong id="calendarTitle"></strong>
+                    <button id="nextMonthBtn" class="ghost" type="button">다음</button>
+                  </div>
+                </div>
+                <div id="calendarWeekdays" class="calendar-weekdays"></div>
+                <div id="calendarGrid" class="calendar-grid"></div>
+              </section>
+
+              <section class="panel annual-goal-panel">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Annual Goals</p>
+                    <h3>연간 목표</h3>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="openAnnualGoalAddBtn" class="secondary">목표 추가</button>
+                    <button type="button" id="openAnnualGoalArchiveBtn" class="ghost">완료한 목표</button>
+                  </div>
+                </div>
+                <div id="annualGoalBoard" class="annual-goal-board"></div>
+              </section>
+
+              <section class="panel schedule-panel">
+                <div class="section-head">
+                  <div>
+                    <p class="eyebrow">Planner</p>
+                    <h3>일정 관리</h3>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="openScheduleModalBtn" class="secondary">새 일정</button>
+                  </div>
+                </div>
+                <ul id="scheduleList" class="schedule-list"></ul>
+              </section>
+            </section>
+
+            <section id="membersView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Member Management</p>
+                  <h2 id="membersHeroText">옐로펜슬 멤버를 관리하세요.</h2>
+                </div>
+              </div>
+              <div class="members-grid">
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">Approvals</p>
+                      <h3>가입 요청</h3>
+                    </div>
+                  </div>
+                  <ul id="approvalList" class="approval-list"></ul>
+                </section>
+
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">Members</p>
+                      <h3>멤버 목록</h3>
+                    </div>
+                    <div class="board-tools">
+                      <button type="button" id="newMemberBtn" class="secondary">새 멤버</button>
+                    </div>
+                  </div>
+                  <ul id="memberList" class="approval-list"></ul>
+                </section>
+              </div>
+            </section>
+
+            <section id="customersView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Project Management</p>
+                  <h2 id="projectsHeroText">대표님, 모든 프로젝트를 모아놨어요.</h2>
+                </div>
+              </div>
+              <div class="customers-grid">
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">Search</p>
+                      <h3>프로젝트 검색</h3>
+                    </div>
+                  </div>
+                  <label class="customer-search-field">
+                    <input id="customerSearchInput" type="search" placeholder="프로젝트명 또는 고객사명을 검색해보세요.">
+                  </label>
+                  <label class="customer-sort-field">
+                    <span>정렬</span>
+                    <select id="customerSortSelect">
+                      <option value="contractAsc">계약일 순</option>
+                      <option value="contractDesc">계약일 역순</option>
+                      <option value="amountAsc">금액 높은순</option>
+                      <option value="amountDesc">금액 낮은순</option>
+                    </select>
+                  </label>
+                </section>
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <h3>프로젝트 리스트</h3>
+                    </div>
+                    <div class="board-tools">
+                      <span id="customerListMeta" class="customer-card-meta"></span>
+                    </div>
+                  </div>
+                  <div id="customerList" class="customer-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section id="salesView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <h2 id="salesHeroText">대표님, 월별 · 연도별 매출표에요.</h2>
+                </div>
+              </div>
+              <div class="sales-grid">
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <h3>월별 매출</h3>
+                    </div>
+                  </div>
+                  <div id="salesMonthlySummary" class="sales-summary"></div>
+                  <div id="salesMonthlyChart" class="sales-chart"></div>
+                </section>
+                <section class="panel">
+                  <div class="section-head">
+                    <div>
+                      <h3>연도별 매출</h3>
+                    </div>
+                  </div>
+                  <div id="salesYearlySummary" class="sales-summary"></div>
+                  <div id="salesYearlyChart" class="sales-chart"></div>
+                </section>
+              </div>
+              <section class="panel sales-total-panel">
+                <div id="salesTotalSummary" class="sales-total-summary"></div>
+              </section>
+            </section>
+
+            <section id="quotesView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Estimate & Contract</p>
+                  <h2 id="quotesHeroText">대표님, 견적서와 계약서를 생성하고 관리하세요.</h2>
+                </div>
+              </div>
+<div id="quoteApp" class="qa-app">
+    <div class="qa-toolbar">
+      <div class="qa-toolbar-group qa-toolbar-group-docs">
+        <button type="button" class="qa-btn qa-docbtn is-active" data-doc="estimate">홈페이지 제작 견적서</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="contract">홈페이지 제작 계약서</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="estimate_krmong">홈페이지 제작 견적서 (크몽)</button>
+        <button type="button" class="qa-btn qa-docbtn" data-doc="contract_krmong">홈페이지 제작 계약서 (크몽)</button>
+      </div>
+      <div class="qa-toolbar-group qa-toolbar-group-actions">
+        <button id="downloadPdfBtn" type="button" class="qa-btn qa-btn-primary">PDF 내보내기</button>
+      </div>
+    </div>
+
+    <main class="qa-layout">
+      <section class="qa-hero">
+        <div class="qa-hero-main">
+          <div class="qa-hero-logo">
+            <img
+              class="qa-hero-logo-img"
+              src="https://cdn.imweb.me/upload/S20210903c0421227bca81/11e1f4c49fda7.png"
+              alt="옐로펜슬 로고"
+              crossorigin="anonymous"
+              referrerpolicy="no-referrer"
+            >
+          </div>
+          <div class="qa-hero-copy">
+            <h1 id="docTitle" class="qa-doc-title">홈페이지 제작 견적서</h1>
+            <div class="qa-date-row">
+              <label class="qa-date-field">
+                <span>작성일</span>
+                <input id="quoteDate" type="date" class="qa-input qa-input-small">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <aside class="qa-maker-card">
+          <h2 class="qa-card-title">제작사 정보</h2>
+          <dl class="qa-kv-list">
+            <div><dt>상호명</dt><dd>옐로펜슬</dd></div>
+            <div><dt>사업자번호</dt><dd>276-06-02233</dd></div>
+            <div><dt>대표</dt><dd>차민석, 신승진</dd></div>
+            <div><dt>연락처</dt><dd>010-7368-7241</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="qa-card">
+        <div class="qa-section-head">
+          <h2>제작 요청사 정보</h2>
+          <p>계약서에 들어갈 기본 정보를 입력해주세요.</p>
+        </div>
+        <div class="qa-grid qa-grid-3">
+          <label class="qa-field">
+            <span>제작 요청사</span>
+            <input id="clientCompany" class="qa-input" placeholder="제작 요청사명을 입력하세요.">
+          </label>
+          <label class="qa-field">
+            <span>담당자명</span>
+            <input id="clientName" class="qa-input" placeholder="예: 홍길동">
+          </label>
+          <label class="qa-field">
+            <span>담당자 연락처</span>
+            <input id="clientPhone" class="qa-input" placeholder="예: 010-1234-5678">
+          </label>
+        </div>
+        <div id="reqWarn" class="qa-warn hidden">제작 요청사 / 담당자명 / 담당자 연락처는 필수 입력입니다.</div>
+      </section>
+
+      <section class="qa-card qa-card-table">
+        <div class="qa-section-head qa-section-head-spaced">
+          <div>
+            <h2>견적 항목</h2>
+            <p>항목을 추가하고 드래그해서 순서를 바꿀 수 있습니다.</p>
+          </div>
+          <div class="qa-section-actions">
+            <button id="addRowBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">+ 항목</button>
+            <button id="saveRowPresetBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">항목 저장</button>
+            <button id="loadRowPresetBtn" type="button" class="qa-btn qa-btn-subtle qa-section-action">항목 불러오기</button>
+          </div>
+        </div>
+
+        <div class="qa-table-wrap">
+          <div class="qa-table-scroll">
+            <table class="qa-table" aria-label="견적 항목 표">
+              <colgroup>
+                <col style="width: 26%;">
+                <col style="width: 34%;">
+                <col style="width: 10%;">
+                <col style="width: 15%;">
+                <col style="width: 15%;">
+                <col style="width: 118px;">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>설명</th>
+                  <th class="num">수량</th>
+                  <th class="num">단가</th>
+                  <th class="num">금액</th>
+                  <th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="itemsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="qa-dual-grid">
+        <section class="qa-card qa-addon-card">
+          <div class="qa-section-head">
+            <h2>다국어 지원</h2>
+            <p>다국어 사이트는 언어당 총 비용의 30%가 추가됩니다.</p>
+          </div>
+          <div class="qa-addon-layout">
+            <label class="qa-field qa-addon-field">
+              <span>추가 언어 수</span>
+              <select id="langCount" class="qa-select">
+                <option value="0" selected>0 (미적용)</option>
+                <option value="1">1개 (+30%)</option>
+                <option value="2">2개 (+60%)</option>
+                <option value="3">3개 (+90%)</option>
+                <option value="4">4개 (+120%)</option>
+                <option value="5">5개 (+150%)</option>
+              </select>
+            </label>
+            <div class="qa-metric-grid">
+              <div class="qa-metric">
+                <span>추가율</span>
+                <strong id="langRateTxt">0%</strong>
+              </div>
+              <div class="qa-metric">
+                <span>다국어 추가금</span>
+                <strong id="langFeeTxt">0원</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="qa-card">
+          <div class="qa-section-head">
+            <h2>작업 일정</h2>
+            <p>작업 기간과 수정 횟수를 정리해주세요.</p>
+          </div>
+          <div class="qa-grid qa-grid-2">
+            <label class="qa-field">
+              <span>1차 작업 기간</span>
+              <input id="workPeriod" class="qa-input" value="결제일로부터 4주">
+            </label>
+            <label class="qa-field">
+              <span>수정 횟수</span>
+              <input id="revCount" class="qa-input" type="text" inputmode="numeric" value="3">
+            </label>
+          </div>
+          <p class="qa-helper">이는 최대 기간으로, 작업 상황에 따라 단축될 수 있습니다.</p>
+        </section>
+      </section>
+
+      <section class="qa-card">
+        <div class="qa-section-head">
+          <h2>비고</h2>
+          <p>개발 범위, 납기, 유지보수 조건 등 필요한 메모를 남겨주세요.</p>
+        </div>
+        <textarea id="memo" class="qa-textarea" rows="4" placeholder="필요한 내용을 입력해주세요."></textarea>
+      </section>
+
+      <section class="qa-summary-grid">
+        <section class="qa-card">
+          <div class="qa-section-head">
+            <div>
+              <h2 id="termsTitle">결제 방법</h2>
+              <p>문서 유형에 따라 자동으로 안내 문구가 바뀝니다.</p>
+            </div>
+            <div class="qa-agreement-actions">
+              <button id="termsEditBtn" type="button" class="qa-btn qa-btn-subtle">수정</button>
+              <button id="termsSaveBtn" type="button" class="qa-btn qa-btn-primary hidden">저장</button>
+            </div>
+          </div>
+          <ul id="termsList" class="qa-terms-list"></ul>
+          <textarea id="termsEditor" class="qa-textarea hidden" rows="8"></textarea>
+        </section>
+
+        <section class="qa-card qa-total-card">
+          <div class="qa-total-row"><span>기본 견적</span><strong id="baseSubtotalTxt">0원</strong></div>
+          <div class="qa-total-row"><span id="langRowLabel">다국어 추가(30% × 0)</span><strong id="langAddonTxt">0원</strong></div>
+          <div class="qa-total-divider"></div>
+          <div class="qa-total-row"><span>공급가액</span><strong id="subtotalTxt">0원</strong></div>
+          <div class="qa-total-row qa-total-row-vat">
+            <span>
+              부가세(VAT 10%)
+              <label class="qa-vat-toggle" for="vatToggle">
+                <input type="checkbox" id="vatToggle" checked>
+                <em>적용</em>
+              </label>
+            </span>
+            <strong id="vatTxt">0원</strong>
+          </div>
+          <div class="qa-total-divider"></div>
+          <div class="qa-total-row qa-total-row-grand"><span>총 합계</span><strong id="totalTxt">0원</strong></div>
+        </section>
+      </section>
+
+      <section class="qa-sign-row">
+        <p id="signNote" class="qa-sign-note">본 문서 유효기간은 발행일로부터 7일입니다.</p>
+        <div class="qa-signature">
+          <span>옐로펜슬 대표 차민석</span>
+          <span class="qa-in">(인)</span>
+          <img
+            class="qa-stamp-overlay"
+            src="https://cdn.imweb.me/upload/S20210903c0421227bca81/8f10c47f62d80.png"
+            alt="직인"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+          >
+        </div>
+      </section>
+
+      <section class="qa-card qa-agreement-card">
+        <div class="qa-section-head">
+          <div>
+            <h2>약관동의서</h2>
+            <p>필요할 때만 수정 버튼을 눌러 편집하고 저장할 수 있습니다.</p>
+          </div>
+          <div class="qa-agreement-actions">
+            <button id="agreementBoldBtn" type="button" class="qa-btn qa-btn-subtle hidden">볼드</button>
+            <button id="agreementEditBtn" type="button" class="qa-btn qa-btn-subtle">수정</button>
+            <button id="agreementSaveBtn" type="button" class="qa-btn qa-btn-primary hidden">저장</button>
+          </div>
+        </div>
+        <div id="agreementContent" class="qa-textarea qa-textarea-large qa-agreement-editor" contenteditable="false" aria-label="약관동의서 본문"></div>
+      </section>
+    </main>
+
+    <div id="pdfTemplateRoot" class="hidden" aria-hidden="true"></div>
+  </div>
+            </section>
+
+            <section id="archiveNotesView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Archive Notes</p>
+                  <h2 id="archiveNotesHeroText">대표님, 자주 쓰는 문장을 아카이브하세요.</h2>
+                </div>
+              </div>
+              <section class="panel archive-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>메모</h3>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="newArchiveNoteBtn" class="secondary">새 메모</button>
+                  </div>
+                </div>
+                <div id="archiveNotesList" class="archive-list"></div>
+              </section>
+            </section>
+
+            <section id="archiveCodesView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Archive Codes</p>
+                  <h2 id="archiveCodesHeroText">대표님, 자주 쓰는 코드를 아카이브하세요.</h2>
+                </div>
+              </div>
+              <section class="panel archive-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>코드</h3>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="newArchiveCodeBtn" class="secondary">새 코드</button>
+                  </div>
+                </div>
+                <div id="archiveCodesList" class="archive-list"></div>
+              </section>
+              <section class="panel archive-panel archive-category-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>카테고리 관리</h3>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="newArchiveCategoryBtn" class="secondary">새 카테고리</button>
+                  </div>
+                </div>
+                <div id="archiveCodeCategoriesList" class="archive-category-list"></div>
+              </section>
+            </section>
+
+            <section id="settingsView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Site Settings</p>
+                  <h2>사이트 기본 정보를 설정할 수 있어요.</h2>
+                </div>
+              </div>
+              <section class="panel settings-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>환경설정</h3>
+                    <p class="muted small">타이틀, 메타 정보, 대표 이미지와 검색엔진 수집 설정을 관리합니다.</p>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="openChangeHistoryBtn" class="ghost">변경 이력 보기</button>
+                    <button type="submit" form="siteSettingsForm" class="primary">설정 저장</button>
+                  </div>
+                </div>
+                <form id="siteSettingsForm" class="form-stack">
+                  <section class="section-group settings-section">
+                    <div class="section-label">
+                      <p class="eyebrow">Basic</p>
+                      <h4>기본 정보</h4>
+                    </div>
+                    <div class="two-col">
+                      <label>사이트 타이틀<input name="title" type="text" placeholder="예: 옐로펜슬 프로젝트 관리"></label>
+                      <label>디스크립션<input name="description" type="text" placeholder="검색 결과에 표시될 설명"></label>
+                    </div>
+                  </section>
+
+                  <section class="section-group settings-section">
+                    <div class="section-label">
+                      <p class="eyebrow">Brand Assets</p>
+                      <h4>브랜드 이미지</h4>
+                    </div>
+                    <div class="settings-upload-grid">
+                      <label class="settings-upload-card">
+                        <span>파비콘 업로드</span>
+                        <p class="settings-upload-hint">권장 사이즈 32×32px 또는 48×48px, PNG/ICO 권장</p>
+                        <input id="faviconUploadInput" type="file" accept="image/*">
+                        <div id="faviconPreview" class="settings-preview">미등록</div>
+                        <button type="button" id="faviconRemoveBtn" class="ghost small-btn settings-remove-btn">파비콘 삭제</button>
+                      </label>
+                      <label class="settings-upload-card">
+                        <span>대표 섬네일 업로드</span>
+                        <p class="settings-upload-hint">권장 사이즈 1200×630px, JPG/PNG 권장</p>
+                        <input id="thumbnailUploadInput" type="file" accept="image/*">
+                        <div id="thumbnailPreview" class="settings-preview settings-preview-wide">미등록</div>
+                        <button type="button" id="thumbnailRemoveBtn" class="ghost small-btn settings-remove-btn">섬네일 삭제</button>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="section-group settings-section">
+                    <div class="section-label">
+                      <p class="eyebrow">SEO</p>
+                      <h4>검색 및 메타 설정</h4>
+                    </div>
+                    <label>메타태그 입력란<textarea name="metaTags" rows="6" placeholder="예: &lt;meta property=&quot;og:title&quot; content=&quot;...&quot;&gt;"></textarea></label>
+                    <label class="checkbox-row"><input name="blockCrawling" type="checkbox"> 사이트의 크롤링 수집을 거부합니다.</label>
+                  </section>
+
+                </form>
+              </section>
+            </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="projectModal" class="modal-overlay hidden">
+    <div class="modal-card project-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Project Detail</p>
+          <h3 id="projectModalTitle">프로젝트 상세</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="topDeleteProjectBtn" class="danger">삭제</button>
+          <button type="submit" form="projectForm" class="primary">저장</button>
+          <button type="button" id="projectModalCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+
+      <form id="projectForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group section-base">
+          <div class="section-label">
+            <p class="eyebrow">Base Info</p>
+            <h4 class="section-title-row">
+              <span class="section-title-icon" aria-hidden="true"><i class="fa fa-info-circle"></i></span>
+              <span>기본 정보</span>
+            </h4>
+          </div>
+          <div class="two-col">
+            <label>프로젝트명<input name="title" type="text" required placeholder="프로젝트명"></label>
+            <label>고객사<input name="client" type="text" required placeholder="고객사명"></label>
+          </div>
+          <label>홈페이지 주소<input name="websiteUrl" type="text" placeholder="example.com"></label>
+          <div class="two-col">
+            <label>담당자명<input name="managerName" type="text" placeholder="홍길동"></label>
+            <label>담당자 연락처<input name="managerPhone" type="text" placeholder="010-1234-5678"></label>
+          </div>
+          <div class="two-col">
+            <label>아임웹 아이디<input name="imwebId" type="text" placeholder="아임웹 아이디"></label>
+            <label>아임웹 비밀번호<input name="imwebPassword" type="text" placeholder="아임웹 비밀번호"></label>
+          </div>
+          <label>작업 유형
+            <select name="projectType" id="projectTypeSelect">
+              <option value="">선택</option>
+              <option value="newHomepage">신규 홈페이지</option>
+              <option value="renewal">홈페이지 리뉴얼</option>
+              <option value="partialManagement">홈페이지 부분 수정 · 관리</option>
+              <option value="popupBanner">팝업 · 배너</option>
+              <option value="detailPage">상세페이지</option>
+              <option value="businessCard">명함</option>
+              <option value="other">기타</option>
+            </select>
+          </label>
+          <div class="three-col">
+            <label>패키지
+              <select name="packageType">
+                <option value="">선택</option>
+                <option value="basic">베이직 패키지</option>
+                <option value="premium">프리미엄 패키지</option>
+              </select>
+            </label>
+            <label>타입
+              <select name="siteType">
+                <option value="">선택</option>
+                <option value="onePage">원페이지 타입</option>
+                <option value="business">비즈니스 타입</option>
+                <option value="businessPlus">비즈니스 플러스 타입</option>
+                <option value="shoppingMall">쇼핑몰 타입</option>
+              </select>
+            </label>
+            <label>다국어
+              <select name="languageCount" id="languageCountSelect">
+                <option value="0">다국어 없음</option>
+                <option value="2">다국어 2개</option>
+                <option value="3">다국어 3개</option>
+                <option value="4">다국어 4개</option>
+                <option value="5">다국어 5개</option>
+              </select>
+            </label>
+          </div>
+          <div id="languageFields" class="language-fields hidden"></div>
+        </section>
+
+        <section class="section-group section-timeline">
+          <div class="section-label">
+            <p class="eyebrow">Timeline</p>
+            <h4 class="section-title-row">
+              <span class="section-title-icon" aria-hidden="true"><i class="fa fa-calendar"></i></span>
+              <span>일정 정보</span>
+            </h4>
+          </div>
+          <div class="two-col">
+            <label>작업 상태
+              <select name="status">
+                <option value="ready">작업 준비</option>
+                <option value="inProgress">작업 중</option>
+                <option value="done">작업 완료</option>
+              </select>
+            </label>
+            <label id="projectStageField">세부 단계
+              <select name="progressStage" id="progressStageSelect">
+                <option value="">선택</option>
+                <option value="firstDraft">1차 시안 작업 중</option>
+                <option value="firstDraftDone">1차 시안 완료</option>
+                <option value="firstRevisionDone">1차 수정 완료</option>
+                <option value="secondRevisionDone">2차 수정 완료</option>
+                <option value="thirdRevisionDone">3차 수정 완료</option>
+                <option value="mobileDone">모바일 · SEO 작업 완료</option>
+              </select>
+            </label>
+          </div>
+          <div class="two-col">
+            <label>계약일<input name="startDate" type="date" class="picker-date"></label>
+            <label>1차 시안 마감일<input name="dueDate" type="date" class="picker-date"></label>
+          </div>
+          <label>타임라인<textarea name="timeline" rows="6"></textarea></label>
+          <label>메모<textarea name="notes" rows="6"></textarea></label>
+        </section>
+
+        <section class="section-group section-payment">
+          <div class="section-label">
+            <p class="eyebrow">Payment</p>
+            <h4 class="section-title-row">
+              <span class="section-title-icon" aria-hidden="true"><i class="fa fa-credit-card"></i></span>
+              <span>결제 및 계정</span>
+            </h4>
+          </div>
+          <div class="two-col">
+            <label>계약 금액<input name="contractAmount" type="text" inputmode="numeric" placeholder="예: 3,300,000"></label>
+            <label>결제 방식
+              <select name="paymentMethod" id="paymentMethodSelect">
+                <option value="">선택</option>
+                <option value="card">카드</option>
+                <option value="cash">현금</option>
+                <option value="kmong">크몽 결제</option>
+              </select>
+            </label>
+            <label>페이백
+              <select name="paybackStatus" id="paybackStatusSelect">
+                <option value="none">페이백 안함</option>
+                <option value="enabled">페이백 함</option>
+              </select>
+            </label>
+            <label id="taxInvoiceField">세금계산서 여부
+              <select name="taxInvoice">
+                <option value="">선택</option>
+                <option value="issued">발행</option>
+                <option value="notIssued">미발행</option>
+              </select>
+            </label>
+          </div>
+          <div id="paybackAmountField" class="hidden">
+            <div class="two-col">
+              <label>페이백 금액<input name="paybackAmount" type="text" inputmode="numeric" placeholder="예: 200,000"></label>
+              <label>비고<input name="paybackNote" type="text"></label>
+            </div>
+          </div>
+          <div id="kmongFeeField" class="hidden">
+            <div class="two-col">
+              <label>크몽 수수료<input name="kmongFee" type="text" inputmode="numeric" placeholder="예: 120,000"></label>
+              <div class="input-spacer" aria-hidden="true"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-group section-documents">
+          <div class="section-label">
+            <p class="eyebrow">Documents</p>
+            <h4 class="section-title-row">
+              <span class="section-title-icon" aria-hidden="true"><i class="fa fa-folder-open-o"></i></span>
+              <span>문서 관리</span>
+            </h4>
+          </div>
+          <p id="contractGuide" class="muted small contract-guide hidden">문서를 업로드하면 프로젝트와 함께 저장됩니다.</p>
+          <div class="form-stack compact-stack">
+            <select id="documentTypeSelect">
+              <option value="contract">계약서</option>
+              <option value="businessLicense">사업자등록증</option>
+            </select>
+            <input id="contractFile" type="file" accept=".pdf,.doc,.docx,.hwp,.txt,image/*">
+            <button type="button" id="uploadContractBtn" class="secondary">문서 업로드</button>
+          </div>
+          <ul id="contractList" class="file-list"></ul>
+        </section>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <p class="eyebrow">Confirm</p>
+      <h3 id="confirmMessage">삭제할까요?</h3>
+      <div class="modal-actions confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="ghost">취소</button>
+        <button type="button" id="confirmOkBtn" class="danger">삭제하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="scheduleDetailModal" class="modal-overlay hidden">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Schedule Detail</p>
+          <h3 id="scheduleDetailTitle">일정 상세</h3>
+        </div>
+        <button type="button" id="scheduleDetailCloseBtn" class="ghost">닫기</button>
+      </div>
+      <div class="detail-stack">
+        <div class="detail-row"><span>날짜</span><strong id="scheduleDetailDate">-</strong></div>
+        <div class="detail-block">
+          <span>메모</span>
+          <p id="scheduleDetailNotes">-</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="scheduleDetailDeleteBtn" class="danger">삭제</button>
+        <button type="button" id="scheduleDetailEditBtn" class="secondary">수정</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="scheduleEditorModal" class="modal-overlay hidden">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">New Schedule</p>
+          <h3 id="scheduleEditorTitle">일정 등록</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="scheduleModalForm" id="scheduleEditorSubmitBtn" class="primary">일정 저장</button>
+          <button type="button" id="scheduleEditorCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="scheduleModalForm" class="form-stack">
+        <input type="hidden" name="id">
+        <label>일정 제목<input name="title" type="text" required placeholder="예: 클라이언트 미팅"></label>
+        <label>날짜<input name="date" type="date" class="picker-date" required></label>
+        <label>메모<textarea name="notes" rows="4" placeholder="전달사항이나 회의 내용을 적어주세요."></textarea></label>
+      </form>
+    </div>
+  </div>
+
+  <div id="calendarDayModal" class="modal-overlay hidden">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Calendar Day</p>
+          <h3 id="calendarDayTitle">일정 모아보기</h3>
+        </div>
+        <button type="button" id="calendarDayCloseBtn" class="ghost">닫기</button>
+      </div>
+      <ul id="calendarDayList" class="schedule-list day-schedule-list"></ul>
+      <div class="modal-actions">
+        <button type="button" id="calendarDayAddBtn" class="primary">이 날짜에 일정 추가</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="documentPreviewModal" class="modal-overlay hidden">
+    <div class="modal-card document-preview-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Document Preview</p>
+          <h3 id="documentPreviewTitle">문서 바로보기</h3>
+        </div>
+        <button type="button" id="documentPreviewCloseBtn" class="ghost">닫기</button>
+      </div>
+      <div id="documentPreviewBody" class="document-preview-body"></div>
+      <div class="modal-actions">
+        <button type="button" id="documentPreviewDownloadBtn" class="secondary">다운로드</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="noticeModal" class="modal-overlay hidden">
+    <div class="modal-card notice-modal-card">
+      <p class="eyebrow">Saved</p>
+      <h3 id="noticeMessage">저장이 완료되었어요!</h3>
+      <div class="modal-actions">
+        <button type="button" id="noticeOkBtn" class="primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="worklogModal" class="modal-overlay hidden">
+    <div class="modal-card worklog-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Daily Log</p>
+          <h3 id="worklogTitle">업무일지</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="worklogForm" class="primary">저장</button>
+          <button type="button" id="worklogCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="worklogForm" class="form-stack">
+        <input type="hidden" name="date">
+        <section class="section-group section-worklog">
+          <div class="section-label">
+            <p class="eyebrow">Today Tasks</p>
+            <h4>오늘의 업무 일지</h4>
+          </div>
+          <div class="worklog-progress">
+            <div class="worklog-progress-meta">
+              <strong id="worklogProgressText">0%</strong>
+              <span id="worklogProgressSummary" class="muted small">0 / 0 완료</span>
+            </div>
+            <div class="worklog-progress-bar">
+              <div id="worklogProgressFill" class="worklog-progress-fill"></div>
+            </div>
+          </div>
+          <div id="worklogTasks" class="worklog-tasks"></div>
+          <div class="button-row worklog-add-row">
+            <button type="button" id="addWorklogTaskBtn" class="secondary">업무 추가</button>
+          </div>
+        </section>
+        <section class="section-group section-worklog-notes">
+          <div class="section-label">
+            <p class="eyebrow">Notes</p>
+            <h4>특이사항</h4>
+          </div>
+          <textarea name="notes" rows="6"></textarea>
+        </section>
+      </form>
+    </div>
+  </div>
+
+  <div id="memberModal" class="modal-overlay hidden">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Member Detail</p>
+          <h3 id="memberModalTitle">멤버 정보</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="memberForm" class="primary">저장</button>
+          <button type="button" id="memberModalCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="memberForm" class="form-stack">
+        <input type="hidden" name="id">
+        <div class="two-col">
+          <label>이름<input name="name" type="text" required></label>
+          <label>직책 / 역할<input name="roleLabel" type="text"></label>
+        </div>
+        <div class="two-col">
+          <label>아이디<input name="username" type="text" required></label>
+          <label>비밀번호<input name="password" type="text" required></label>
+        </div>
+        <div class="two-col">
+          <label>연락처<input name="phone" type="text"></label>
+          <label>이메일<input name="email" type="email"></label>
+        </div>
+        <label>메모<textarea name="notes" rows="5"></textarea></label>
+        <label class="checkbox-row"><input name="approved" type="checkbox"> 승인완료</label>
+        <label id="memberManagerField" class="checkbox-row"><input name="canManageMembers" type="checkbox"> 운영진권한</label>
+      </form>
+    </div>
+  </div>
+
+  <div id="annualGoalModal" class="modal-overlay hidden">
+    <div class="modal-card annual-goal-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Goal Archive</p>
+          <h3>연간 목표 전체 보기</h3>
+        </div>
+        <button type="button" id="annualGoalModalCloseBtn" class="ghost">닫기</button>
+      </div>
+      <div class="annual-goal-search">
+        <input id="annualGoalSearchInput" type="search" placeholder="목표 내용, 연도, 상반기/하반기로 검색">
+      </div>
+      <div class="annual-goal-modal-grid">
+        <section>
+          <h4>진행중인 목표</h4>
+          <ul id="annualGoalActiveList" class="annual-goal-archive-list"></ul>
+        </section>
+        <section>
+          <h4>완료한 목표</h4>
+          <ul id="annualGoalDoneList" class="annual-goal-archive-list"></ul>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="annualGoalAddModal" class="modal-overlay hidden">
+    <div class="modal-card annual-goal-add-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Annual Goal</p>
+          <h3 id="annualGoalAddTitle">목표 추가</h3>
+        </div>
+        <button type="button" id="annualGoalAddCloseBtn" class="ghost">닫기</button>
+      </div>
+      <form id="annualGoalAddForm" class="form-stack">
+        <input type="hidden" name="year">
+        <input type="hidden" name="half">
+        <label>목표 내용<input name="goal" type="text" required placeholder="목표를 입력하세요."></label>
+        <div class="button-row">
+          <button type="button" id="annualGoalAddCancelBtn" class="ghost">취소</button>
+          <button type="submit" class="primary annual-goal-add-submit">추가</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="changeHistoryModal" class="modal-overlay hidden">
+    <div class="modal-card change-history-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Change History</p>
+          <h3>변경 이력</h3>
+        </div>
+        <button type="button" id="changeHistoryCloseBtn" class="ghost">닫기</button>
+      </div>
+      <p class="muted small">최근 데이터 변경 전 상태를 최대 20개까지 보관합니다. 복원하면 현재 데이터가 선택한 시점의 상태로 되돌아갑니다.</p>
+      <div id="changeHistoryList" class="change-history-list"></div>
+    </div>
+  </div>
+
+  <div id="archiveNoteModal" class="modal-overlay hidden">
+    <div class="modal-card archive-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Archive Note</p>
+          <h3 id="archiveNoteModalTitle">새 메모</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="archiveNoteEditBtn" class="ghost hidden">수정</button>
+          <button type="submit" form="archiveNoteForm" id="archiveNoteSaveBtn" class="primary">저장</button>
+          <button type="button" id="archiveNoteCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="archiveNoteForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group archive-modal-section">
+          <div class="section-label">
+            <p class="eyebrow">Note Info</p>
+            <h4>메모 정보</h4>
+          </div>
+          <label>제목<input name="title" type="text" required placeholder="메모 제목"></label>
+          <input type="hidden" name="color" value="gray">
+          <div class="archive-color-field">
+            <span>카드 색상</span>
+            <div id="archiveNoteColorPalette" class="archive-color-palette" role="radiogroup" aria-label="메모 카드 색상"></div>
+          </div>
+          <label>내용<textarea name="content" rows="14" placeholder="메모 내용을 입력하세요."></textarea></label>
+        </section>
+      </form>
+      <div class="button-row archive-modal-actions">
+        <button type="button" id="archiveNoteDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="archiveCodeModal" class="modal-overlay hidden">
+    <div class="modal-card archive-modal-card archive-code-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Archive Code</p>
+          <h3 id="archiveCodeModalTitle">새 코드</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="archiveCodeEditBtn" class="ghost hidden">수정</button>
+          <button type="submit" form="archiveCodeForm" id="archiveCodeSaveBtn" class="primary">저장</button>
+          <button type="button" id="archiveCodeCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="archiveCodeForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group archive-modal-section">
+          <div class="section-label">
+            <p class="eyebrow">Code Info</p>
+            <h4>코드 정보</h4>
+          </div>
+          <label>제목<input name="title" type="text" required placeholder="코드 제목"></label>
+          <label>설명<textarea name="description" rows="4" placeholder="코드 설명을 입력하세요."></textarea></label>
+          <label>카테고리<select name="categoryId"></select></label>
+          <label>코드
+            <div class="archive-code-editor">
+              <pre id="archiveCodeHighlight" class="archive-code-highlight" aria-hidden="true"></pre>
+              <textarea id="archiveCodeInput" name="content" rows="18" class="archive-code-input" placeholder="코드를 입력하세요."></textarea>
+            </div>
+          </label>
+        </section>
+      </form>
+      <div class="button-row archive-modal-actions">
+        <button type="button" id="archiveCodeDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="archiveCategoryModal" class="modal-overlay hidden">
+    <div class="modal-card archive-category-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Archive Category</p>
+          <h3 id="archiveCategoryModalTitle">새 카테고리</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="archiveCategoryForm" id="archiveCategorySaveBtn" class="primary">저장</button>
+          <button type="button" id="archiveCategoryCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="archiveCategoryForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group archive-modal-section">
+          <div class="section-label">
+            <p class="eyebrow">Category Info</p>
+            <h4>카테고리 정보</h4>
+          </div>
+          <label>카테고리명<input name="name" type="text" required placeholder="카테고리 이름"></label>
+          <input type="hidden" name="color" value="gray">
+          <div class="archive-color-field">
+            <span>카테고리 색상</span>
+            <div id="archiveCategoryColorPalette" class="archive-color-palette" role="radiogroup" aria-label="카테고리 색상"></div>
+          </div>
+        </section>
+      </form>
+      <div class="button-row archive-modal-actions">
+        <button type="button" id="archiveCategoryDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="./app.js?v=20260420-copyupdate1"></script>
+  <script src="./quote-generator.js?v=20260420-copyupdate1"></script>
+</body>
+</html>
+
+
