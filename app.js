@@ -4374,12 +4374,8 @@ async function handleProjectSave(event) {
         toast(message);
         return;
       }
-      const result = await withAsyncTimeout(
-        bridge.upsertProject(
-          serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
-        ),
-        15000,
-        "프로젝트 저장 요청이 오래 걸리고 있어요. 인터넷 연결이나 로그인 상태를 확인한 뒤 다시 시도해주세요.",
+      const result = await bridge.upsertProject(
+        serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
       );
       if (result.error) {
         if (existing && previousProject) {
@@ -4397,11 +4393,7 @@ async function handleProjectSave(event) {
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
       if (documentPayloads.length) {
-        const documentResult = await withAsyncTimeout(
-          bridge.upsertProjectDocuments(documentPayloads),
-          15000,
-          "문서 저장 요청이 오래 걸리고 있어요. 파일 상태와 인터넷 연결을 확인한 뒤 다시 시도해주세요.",
-        );
+        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
         if (documentResult.error) {
           if (existing && previousProject) {
             Object.assign(existing, previousProject);
@@ -4418,11 +4410,7 @@ async function handleProjectSave(event) {
       const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
       if (removedDocuments.length) {
         const removedIds = removedDocuments.map((document) => document.id);
-        const deleteResult = await withAsyncTimeout(
-          bridge.deleteProjectDocumentsByIds(removedIds),
-          12000,
-          "삭제된 문서 정리 요청이 오래 걸리고 있어요. 잠시 후 다시 확인해주세요.",
-        );
+        const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
         if (deleteResult.error) {
           const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
           openNoticeModal(message);
