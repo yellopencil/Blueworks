@@ -430,7 +430,8 @@ body[data-sidebar-collapsed="true"] .main {
   margin-top: 14px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 4px;
 }
 .summary-stage-chip {
   display: inline-flex;
