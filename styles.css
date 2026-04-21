@@ -3058,11 +3058,18 @@ body[data-theme="dark"] .archive-code-input {
 }
 
 .worklog-task.is-dragging {
-  opacity: 0.55;
+  visibility: hidden;
 }
 
-.worklog-task.drag-over {
-  border-color: var(--accent);
+.worklog-task-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  opacity: 0.82;
+  transform: rotate(-1deg) scale(1.01);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
 }
 
 .worklog-drag-handle {
@@ -3071,6 +3078,7 @@ body[data-theme="dark"] .archive-code-input {
   color: var(--muted);
   padding: 0;
   cursor: grab;
+  touch-action: none;
 }
 
 .worklog-order {

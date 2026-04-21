@@ -314,6 +314,9 @@ let currentCalendarDayKey = "";
 let currentWorklogDate = "";
 let currentWorklogDraft = null;
 let draggedWorklogTaskId = null;
+let worklogTaskDragGhost = null;
+let worklogTaskPointerOffsetX = 0;
+let worklogTaskPointerOffsetY = 0;
 let currentMemberId = null;
 let currentCustomerPage = 1;
 let currentSalesYear = "";
@@ -5527,7 +5530,15 @@ function createWorklogTask(task = {}) {
     done: Boolean(task.done),
     scheduleId: task.scheduleId || "",
     auto: Boolean(task.auto),
+    sourceTaskId: task.sourceTaskId || "",
+    carriedFromDate: task.carriedFromDate || "",
   };
+}
+
+function getAdjacentDateKey(dateKey, offsetDays = 1) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  date.setDate(date.getDate() + offsetDays);
+  return formatDateKey(date);
 }
 
 function getScheduleWorklogText(schedule) {
@@ -5575,6 +5586,51 @@ function syncSchedulesForDateToWorklog(dateKey) {
     .forEach((schedule) => syncScheduleToWorklog(schedule));
 }
 
+function carryForwardIncompleteWorklogTasks(dateKey) {
+  if (!dateKey) return false;
+  state.worklogs = state.worklogs || {};
+  const previousDateKey = getAdjacentDateKey(dateKey, -1);
+  const previousWorklog = state.worklogs[previousDateKey];
+  if (!previousWorklog?.tasks?.length) return false;
+
+  const currentWorklog = state.worklogs[dateKey] || { date: dateKey, tasks: [], notes: "" };
+  currentWorklog.tasks = Array.isArray(currentWorklog.tasks)
+    ? currentWorklog.tasks.map((task) => createWorklogTask(task))
+    : [];
+
+  let changed = false;
+  previousWorklog.tasks
+    .filter((task) => String(task.text || "").trim() && !task.done)
+    .forEach((task) => {
+      const sourceTaskId = task.sourceTaskId || task.id;
+      const alreadyExists = currentWorklog.tasks.some((existingTask) => {
+        const existingSourceId = existingTask.sourceTaskId || existingTask.id;
+        return (
+          existingSourceId === sourceTaskId ||
+          (
+            String(existingTask.text || "").trim() === String(task.text || "").trim() &&
+            String(existingTask.scheduleId || "") === String(task.scheduleId || "")
+          )
+        );
+      });
+      if (alreadyExists) return;
+
+      currentWorklog.tasks.push(createWorklogTask({
+        ...task,
+        id: crypto.randomUUID(),
+        done: false,
+        sourceTaskId,
+        carriedFromDate: previousDateKey,
+      }));
+      changed = true;
+    });
+
+  if (changed) {
+    state.worklogs[dateKey] = currentWorklog;
+  }
+  return changed;
+}
+
 function getWorklogProgress(dateKey) {
   const worklog = state.worklogs?.[dateKey];
   if (!worklog?.tasks?.length) return 0;
@@ -5605,6 +5661,7 @@ function openWorklogModal(dateKey) {
   currentWorklogDate = dateKey;
   currentWorklogDraft = null;
   syncSchedulesForDateToWorklog(dateKey);
+  carryForwardIncompleteWorklogTasks(dateKey);
   saveState();
   ensureWorklogDraft(dateKey);
   els.worklogTitle.textContent = formatWorklogTitle(dateKey);
@@ -5619,7 +5676,77 @@ function closeWorklogModal() {
   currentWorklogDate = "";
   currentWorklogDraft = null;
   draggedWorklogTaskId = null;
+  worklogTaskDragGhost?.remove();
+  worklogTaskDragGhost = null;
   els.worklogModal.classList.add("hidden");
+}
+
+function buildWorklogTaskGhost(item) {
+  const ghost = item.cloneNode(true);
+  ghost.classList.add("worklog-task-ghost");
+  const rect = item.getBoundingClientRect();
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  ghost.style.left = `${rect.left}px`;
+  ghost.style.top = `${rect.top}px`;
+  return ghost;
+}
+
+function getWorklogTaskAfterElement(container, x, y) {
+  const items = [...container.querySelectorAll("[data-worklog-task]")]
+    .filter((item) => !item.classList.contains("is-dragging"));
+  for (const item of items) {
+    const box = item.getBoundingClientRect();
+    const midY = box.top + box.height / 2;
+    if (y < midY && x <= box.right) return item;
+  }
+  return null;
+}
+
+function persistWorklogTaskOrder(container) {
+  const orderedIds = [...container.querySelectorAll("[data-worklog-task]")]
+    .map((item) => item.dataset.worklogTask);
+  currentWorklogDraft.tasks = orderedIds
+    .map((id) => currentWorklogDraft.tasks.find((task) => task.id === id))
+    .filter(Boolean);
+}
+
+function startWorklogTaskDrag(event, item) {
+  event.preventDefault();
+  if (!els.worklogTasks || !currentWorklogDraft) return;
+
+  draggedWorklogTaskId = item.dataset.worklogTask;
+  const rect = item.getBoundingClientRect();
+  worklogTaskPointerOffsetX = event.clientX - rect.left;
+  worklogTaskPointerOffsetY = event.clientY - rect.top;
+  worklogTaskDragGhost?.remove();
+  worklogTaskDragGhost = buildWorklogTaskGhost(item);
+  document.body.appendChild(worklogTaskDragGhost);
+  item.classList.add("is-dragging");
+
+  const onMove = (moveEvent) => {
+    moveEvent.preventDefault();
+    if (!worklogTaskDragGhost) return;
+    worklogTaskDragGhost.style.left = `${moveEvent.clientX - worklogTaskPointerOffsetX}px`;
+    worklogTaskDragGhost.style.top = `${moveEvent.clientY - worklogTaskPointerOffsetY}px`;
+    const after = getWorklogTaskAfterElement(els.worklogTasks, moveEvent.clientX, moveEvent.clientY);
+    if (after) els.worklogTasks.insertBefore(item, after);
+    else els.worklogTasks.appendChild(item);
+  };
+
+  const onUp = () => {
+    item.classList.remove("is-dragging");
+    worklogTaskDragGhost?.remove();
+    worklogTaskDragGhost = null;
+    persistWorklogTaskOrder(els.worklogTasks);
+    draggedWorklogTaskId = null;
+    renderWorklogTasks();
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove, { passive: false });
+  window.addEventListener("pointerup", onUp, { passive: false });
 }
 
 function renderWorklogTasks() {
@@ -5668,30 +5795,8 @@ function renderWorklogTasks() {
     });
   });
   els.worklogTasks.querySelectorAll("[data-worklog-task]").forEach((item) => {
-    item.addEventListener("dragstart", () => {
-      draggedWorklogTaskId = item.dataset.worklogTask;
-      item.classList.add("is-dragging");
-    });
-    item.addEventListener("dragend", () => {
-      draggedWorklogTaskId = null;
-      item.classList.remove("is-dragging");
-    });
-    item.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      item.classList.add("drag-over");
-    });
-    item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-    item.addEventListener("drop", (event) => {
-      event.preventDefault();
-      item.classList.remove("drag-over");
-      if (!draggedWorklogTaskId || draggedWorklogTaskId === item.dataset.worklogTask) return;
-      const fromIndex = currentWorklogDraft.tasks.findIndex((task) => task.id === draggedWorklogTaskId);
-      const toIndex = currentWorklogDraft.tasks.findIndex((task) => task.id === item.dataset.worklogTask);
-      if (fromIndex < 0 || toIndex < 0) return;
-      const [moved] = currentWorklogDraft.tasks.splice(fromIndex, 1);
-      currentWorklogDraft.tasks.splice(toIndex, 0, moved);
-      renderWorklogTasks();
-    });
+    const handle = item.querySelector(".worklog-drag-handle");
+    handle?.addEventListener("pointerdown", (event) => startWorklogTaskDrag(event, item));
   });
 
   const actionableTasks = tasks.filter((task) => task.text.trim());
@@ -5715,6 +5820,8 @@ function handleWorklogSave(event) {
       done: Boolean(task.done),
       scheduleId: task.scheduleId || "",
       auto: Boolean(task.auto),
+      sourceTaskId: task.sourceTaskId || "",
+      carriedFromDate: task.carriedFromDate || "",
     })),
     notes: currentWorklogDraft.notes,
   };
