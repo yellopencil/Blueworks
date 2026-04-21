@@ -4317,12 +4317,7 @@ async function handleProjectSave(event) {
     const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const sessionResult = await withAsyncTimeout(
-        bridge.getSession(),
-        8000,
-        "로그인 상태를 확인하는 중 응답이 늦어졌어요. 다시 로그인 후 저장해주세요.",
-      );
-      if (sessionResult?.error || !sessionResult?.data?.session) {
+      if (!state.sessionUserId || !currentUser()) {
         const message = "로그인 세션을 확인하지 못했어요. 다시 로그인한 뒤 저장해주세요.";
         openNoticeModal(message);
         toast(message);
