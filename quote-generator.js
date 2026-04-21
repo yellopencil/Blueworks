@@ -76,6 +76,7 @@
   };
 
   const ROW_PRESET_STORAGE_KEY = "yellopencil-quote-row-preset-v1";
+  const QUOTE_SETTINGS_STORAGE_KEY = "yellopencil-quote-settings-v1";
   const PDF_HISTORY_DB_NAME = "yellopencil-quote-history-db";
   const PDF_HISTORY_STORE_NAME = "pdfHistory";
   const PDF_HISTORY_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
@@ -128,6 +129,7 @@
   let pointerOffsetX = 0;
   let pointerOffsetY = 0;
   let currentPdfPreviewUrl = null;
+  let quoteSettings = loadQuoteSettings();
 
   function getTodayIso() {
     const now = new Date();
@@ -183,7 +185,48 @@
   }
 
   function getPaymentLines() {
-    return isKrmongDoc(currentDocType) ? PAYMENT_LINES.kmong : PAYMENT_LINES.normal;
+    if (isKrmongDoc(currentDocType)) {
+      return Array.isArray(quoteSettings.paymentLines?.kmong) ? quoteSettings.paymentLines.kmong : PAYMENT_LINES.kmong;
+    }
+    return Array.isArray(quoteSettings.paymentLines?.normal) ? quoteSettings.paymentLines.normal : PAYMENT_LINES.normal;
+  }
+
+  function createDefaultQuoteSettings() {
+    return {
+      agreementHtml: agreementTextToHtml(TERMS_TEMPLATE),
+      paymentLines: {
+        normal: [...PAYMENT_LINES.normal],
+        kmong: [...PAYMENT_LINES.kmong],
+      },
+    };
+  }
+
+  function normalizeQuoteSettings(raw) {
+    const fallback = createDefaultQuoteSettings();
+    const paymentLines = raw && typeof raw === "object" ? raw.paymentLines || {} : {};
+    return {
+      agreementHtml: String(raw?.agreementHtml || fallback.agreementHtml || "").trim() || fallback.agreementHtml,
+      paymentLines: {
+        normal: Array.isArray(paymentLines.normal) ? paymentLines.normal.map((line) => String(line ?? "")) : fallback.paymentLines.normal,
+        kmong: Array.isArray(paymentLines.kmong) ? paymentLines.kmong.map((line) => String(line ?? "")) : fallback.paymentLines.kmong,
+      },
+    };
+  }
+
+  function loadQuoteSettings() {
+    try {
+      const raw = localStorage.getItem(QUOTE_SETTINGS_STORAGE_KEY);
+      if (!raw) return createDefaultQuoteSettings();
+      return normalizeQuoteSettings(JSON.parse(raw));
+    } catch (error) {
+      console.warn("견적 설정을 불러오지 못했습니다.", error);
+      return createDefaultQuoteSettings();
+    }
+  }
+
+  function saveQuoteSettings() {
+    quoteSettings = normalizeQuoteSettings(quoteSettings);
+    localStorage.setItem(QUOTE_SETTINGS_STORAGE_KEY, JSON.stringify(quoteSettings));
   }
 
   function ensureNoticeModal() {
@@ -1115,6 +1158,8 @@ ${escapeHtml(data.memo || "-")}
     });
 
     els.agreementSaveBtn.addEventListener("click", () => {
+      quoteSettings.agreementHtml = getAgreementHtml();
+      saveQuoteSettings();
       agreementEditable = false;
       syncAgreementEditor();
     });
@@ -1131,7 +1176,8 @@ ${escapeHtml(data.memo || "-")}
 
     els.termsSaveBtn.addEventListener("click", () => {
       const key = isKrmongDoc(currentDocType) ? "kmong" : "normal";
-      PAYMENT_LINES[key] = els.termsEditor.value.split("\n");
+      quoteSettings.paymentLines[key] = els.termsEditor.value.split("\n");
+      saveQuoteSettings();
       termsEditable = false;
       renderTerms();
       syncTermsEditor();
@@ -1163,7 +1209,8 @@ ${escapeHtml(data.memo || "-")}
     ensurePdfViewerModal();
     ensureDeleteConfirmModal();
     els.quoteDate.value = els.quoteDate.value || getTodayIso();
-    els.agreementContent.innerHTML = agreementTextToHtml(TERMS_TEMPLATE);
+    quoteSettings = normalizeQuoteSettings(quoteSettings);
+    els.agreementContent.innerHTML = quoteSettings.agreementHtml || agreementTextToHtml(TERMS_TEMPLATE);
     DEFAULT_ROWS.forEach(addRow);
     initSortable();
     bindEvents();
