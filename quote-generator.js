@@ -130,6 +130,7 @@
   let pointerOffsetY = 0;
   let currentPdfPreviewUrl = null;
   let quoteSettings = loadQuoteSettings();
+  let quoteSettingsSyncPromise = null;
 
   function getTodayIso() {
     const now = new Date();
@@ -227,6 +228,79 @@
   function saveQuoteSettings() {
     quoteSettings = normalizeQuoteSettings(quoteSettings);
     localStorage.setItem(QUOTE_SETTINGS_STORAGE_KEY, JSON.stringify(quoteSettings));
+  }
+
+  function getSupabaseBridge() {
+    return window.BLUEWORKS_SUPABASE || null;
+  }
+
+  async function hasAuthenticatedSession() {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.()) return false;
+    const sessionResult = await bridge.getSession();
+    return Boolean(sessionResult?.data?.session);
+  }
+
+  function buildQuoteSettingsPayload() {
+    quoteSettings = normalizeQuoteSettings(quoteSettings);
+    return {
+      id: "global",
+      agreement_html: quoteSettings.agreementHtml,
+      payment_lines_normal: quoteSettings.paymentLines.normal,
+      payment_lines_kmong: quoteSettings.paymentLines.kmong,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  function applySupabaseQuoteSettings(record) {
+    if (!record) return false;
+    quoteSettings = normalizeQuoteSettings({
+      agreementHtml: record.agreement_html,
+      paymentLines: {
+        normal: Array.isArray(record.payment_lines_normal) ? record.payment_lines_normal : undefined,
+        kmong: Array.isArray(record.payment_lines_kmong) ? record.payment_lines_kmong : undefined,
+      },
+    });
+    saveQuoteSettings();
+    els.agreementContent.innerHTML = quoteSettings.agreementHtml || agreementTextToHtml(TERMS_TEMPLATE);
+    renderTerms();
+    syncTermsEditor();
+    syncAgreementEditor();
+    calc();
+    return true;
+  }
+
+  async function loadQuoteSettingsFromSupabase() {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.()) return null;
+    if (!(await hasAuthenticatedSession())) return null;
+    const result = await bridge.fetchQuoteSettings();
+    if (result?.error) throw result.error;
+    if (!result?.data) return null;
+    applySupabaseQuoteSettings(result.data);
+    return result.data;
+  }
+
+  async function persistQuoteSettingsToSupabase() {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.()) return null;
+    if (!(await hasAuthenticatedSession())) return null;
+    const result = await bridge.upsertQuoteSettings(buildQuoteSettingsPayload());
+    if (result?.error) throw result.error;
+    return result?.data || null;
+  }
+
+  function queueQuoteSettingsSync() {
+    if (quoteSettingsSyncPromise) return quoteSettingsSyncPromise;
+    quoteSettingsSyncPromise = persistQuoteSettingsToSupabase()
+      .catch((error) => {
+        console.warn("견적 설정을 Supabase에 저장하지 못했습니다.", error);
+        return null;
+      })
+      .finally(() => {
+        quoteSettingsSyncPromise = null;
+      });
+    return quoteSettingsSyncPromise;
   }
 
   function ensureNoticeModal() {
@@ -1160,6 +1234,7 @@ ${escapeHtml(data.memo || "-")}
     els.agreementSaveBtn.addEventListener("click", () => {
       quoteSettings.agreementHtml = getAgreementHtml();
       saveQuoteSettings();
+      queueQuoteSettingsSync();
       agreementEditable = false;
       syncAgreementEditor();
     });
@@ -1178,6 +1253,7 @@ ${escapeHtml(data.memo || "-")}
       const key = isKrmongDoc(currentDocType) ? "kmong" : "normal";
       quoteSettings.paymentLines[key] = els.termsEditor.value.split("\n");
       saveQuoteSettings();
+      queueQuoteSettingsSync();
       termsEditable = false;
       renderTerms();
       syncTermsEditor();
@@ -1220,6 +1296,9 @@ ${escapeHtml(data.memo || "-")}
     calc();
     validateRequired();
     pruneOldPdfHistory().catch((error) => console.error(error));
+    loadQuoteSettingsFromSupabase().catch((error) => {
+      console.warn("견적 설정을 Supabase에서 불러오지 못했습니다.", error);
+    });
   }
 
   init();

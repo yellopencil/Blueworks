@@ -178,6 +178,18 @@
       }
       return this.client.from("site_settings").upsert(payload).select().single();
     },
+    async fetchQuoteSettings() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("quote_settings").select("*").eq("id", "global").maybeSingle();
+    },
+    async upsertQuoteSettings(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("quote_settings").upsert(payload).select().single();
+    },
     async fetchProjectDocuments() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
