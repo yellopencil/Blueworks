@@ -1819,8 +1819,8 @@ function setupCustomerFilters() {
           <label>패키지
             <select id="customerFilterPackage">
               <option value="">전체</option>
-              <option value="basic">베이직 패키지</option>
               <option value="premium">프리미엄 패키지</option>
+              <option value="basic">베이직 패키지</option>
             </select>
           </label>
           <label>타입
@@ -1919,8 +1919,8 @@ function setupCustomerFilters() {
 function setupProjectRichEditors() {
   ensureRichLinkModal();
   [
-    { name: "timeline", label: "타임라인" },
     { name: "notes", label: "메모" },
+    { name: "timeline", label: "타임라인" },
   ].forEach(({ name, label }) => {
     const textarea = els.projectForm?.elements?.[name];
     if (!textarea || textarea.dataset.richEditor === "ready") return;
@@ -3832,14 +3832,14 @@ function getSalesBreakdown(projects) {
   return projects.reduce((acc, project) => {
     const net = getProjectNetAmount(project);
     const payback = project.paybackStatus === "enabled" ? parseAmount(project.paybackAmount) : 0;
-    const kmongFee = project.paymentMethod === "kmong" ? parseAmount(project.kmongFee) : 0;
+    const kmongRevenue = project.paymentMethod === "kmong" ? parseAmount(project.kmongFee) : 0;
     if (project.paymentMethod === "card") acc.card += net;
     if (project.paymentMethod === "cash") acc.cash += net;
     if (project.paymentMethod === "kmong") acc.kmong += net;
     if (project.taxInvoice === "issued") acc.taxIssued += net;
     if (project.paymentMethod === "cash" && project.taxInvoice === "notIssued") acc.taxNotIssued += net;
     acc.payback += payback;
-    acc.kmongFee += kmongFee;
+    acc.kmongFee += kmongRevenue;
     acc.net += net;
     return acc;
   }, { card: 0, cash: 0, kmong: 0, taxIssued: 0, taxNotIssued: 0, payback: 0, kmongFee: 0, net: 0 });
@@ -6198,8 +6198,9 @@ function parseAmount(value) {
 function getProjectNetAmount(project) {
   const contractAmount = parseAmount(project?.contractAmount);
   const paybackAmount = project?.paybackStatus === "enabled" ? parseAmount(project?.paybackAmount) : 0;
-  const kmongFee = project?.paymentMethod === "kmong" ? parseAmount(project?.kmongFee) : 0;
-  return Math.max(0, contractAmount - paybackAmount - kmongFee);
+  const kmongRevenue = project?.paymentMethod === "kmong" ? parseAmount(project?.kmongFee) : 0;
+  const baseAmount = project?.paymentMethod === "kmong" ? kmongRevenue : contractAmount;
+  return Math.max(0, baseAmount - paybackAmount);
 }
 
 function formatProjectStatus(project) {
