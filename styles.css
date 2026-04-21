@@ -3057,7 +3057,7 @@ body[data-theme="dark"] .archive-code-input {
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -3105,7 +3105,7 @@ body[data-theme="dark"] .archive-code-input {
   min-width: 0;
   font-size: 0.92rem;
   line-height: 1.35;
-  padding-block: 10px;
+  padding-block: 14px;
 }
 
 .worklog-task.is-done .worklog-task-input {
