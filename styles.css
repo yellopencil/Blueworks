@@ -818,6 +818,11 @@ body[data-sidebar-collapsed="true"] .main {
   color: var(--text);
   font-weight: 400;
   outline: none;
+  cursor: text;
+}
+
+.rich-editor-surface * {
+  cursor: text;
 }
 
 .rich-editor-surface:empty::before {
@@ -827,6 +832,12 @@ body[data-sidebar-collapsed="true"] .main {
 .rich-editor-surface a {
   color: #2563eb;
   text-decoration: underline;
+  cursor: pointer;
+}
+
+.rich-editor-surface a *,
+.rich-editor-surface a:hover,
+.rich-editor-surface a:hover * {
   cursor: pointer;
 }
 

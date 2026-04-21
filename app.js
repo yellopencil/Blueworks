@@ -4197,6 +4197,14 @@ function sanitizeRichEditorHtml(value) {
   const container = document.createElement("div");
   container.innerHTML = String(value || "");
 
+  const getInlineColor = (node) => {
+    const colorAttr = String(node.getAttribute?.("color") || "").trim();
+    if (colorAttr) return colorAttr;
+    const styleColor = String(node.style?.color || "").trim();
+    if (styleColor) return styleColor;
+    return "";
+  };
+
   const renderNode = (node) => {
     if (node.nodeType === Node.TEXT_NODE) {
       return escapeHtml(node.textContent || "");
@@ -4217,6 +4225,14 @@ function sanitizeRichEditorHtml(value) {
         return inner ? `<em>${inner}</em>` : "";
       case "u":
         return inner ? `<u>${inner}</u>` : "";
+      case "span":
+      case "font": {
+        const color = getInlineColor(node);
+        if (!inner) return "";
+        return color
+          ? `<span style="color:${escapeHtml(color)}">${inner}</span>`
+          : inner;
+      }
       case "a": {
         const rawHref = String(node.getAttribute("href") || "").trim();
         if (!rawHref || !inner) return inner;
