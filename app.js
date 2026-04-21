@@ -1984,6 +1984,16 @@ function setupProjectRichEditors() {
 
     surface.addEventListener("input", syncValue);
     surface.addEventListener("blur", syncValue);
+    surface.addEventListener("paste", (event) => {
+      const text = event.clipboardData?.getData("text/plain");
+      if (typeof text !== "string") return;
+      event.preventDefault();
+      surface.focus();
+      if (!insertPlainTextIntoSelection(text)) {
+        document.execCommand("insertText", false, text);
+      }
+      syncValue();
+    });
 
     boldBtn.addEventListener("click", () => {
       surface.focus();
@@ -4140,6 +4150,40 @@ function normalizeRichEditorHtml(value) {
   return html === "<br>" ? "" : html;
 }
 
+function insertPlainTextIntoSelection(text) {
+  const selection = window.getSelection?.();
+  if (!selection || !selection.rangeCount) return false;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const fragment = document.createDocumentFragment();
+  String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .forEach((line, index) => {
+      if (index > 0) fragment.appendChild(document.createElement("br"));
+      fragment.appendChild(document.createTextNode(line));
+    });
+  range.insertNode(fragment);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+async function withAsyncTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
+}
+
 function normalizeHexColor(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -4273,8 +4317,23 @@ async function handleProjectSave(event) {
     const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await bridge.upsertProject(
-        serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
+      const sessionResult = await withAsyncTimeout(
+        bridge.getSession(),
+        8000,
+        "로그인 상태를 확인하는 중 응답이 늦어졌어요. 다시 로그인 후 저장해주세요.",
+      );
+      if (sessionResult?.error || !sessionResult?.data?.session) {
+        const message = "로그인 세션을 확인하지 못했어요. 다시 로그인한 뒤 저장해주세요.";
+        openNoticeModal(message);
+        toast(message);
+        return;
+      }
+      const result = await withAsyncTimeout(
+        bridge.upsertProject(
+          serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
+        ),
+        15000,
+        "프로젝트 저장 요청이 오래 걸리고 있어요. 인터넷 연결이나 로그인 상태를 확인한 뒤 다시 시도해주세요.",
       );
       if (result.error) {
         if (existing && previousProject) {
@@ -4292,7 +4351,11 @@ async function handleProjectSave(event) {
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
       if (documentPayloads.length) {
-        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
+        const documentResult = await withAsyncTimeout(
+          bridge.upsertProjectDocuments(documentPayloads),
+          15000,
+          "문서 저장 요청이 오래 걸리고 있어요. 파일 상태와 인터넷 연결을 확인한 뒤 다시 시도해주세요.",
+        );
         if (documentResult.error) {
           if (existing && previousProject) {
             Object.assign(existing, previousProject);
@@ -4309,7 +4372,11 @@ async function handleProjectSave(event) {
       const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
       if (removedDocuments.length) {
         const removedIds = removedDocuments.map((document) => document.id);
-        const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
+        const deleteResult = await withAsyncTimeout(
+          bridge.deleteProjectDocumentsByIds(removedIds),
+          12000,
+          "삭제된 문서 정리 요청이 오래 걸리고 있어요. 잠시 후 다시 확인해주세요.",
+        );
         if (deleteResult.error) {
           const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
           openNoticeModal(message);
