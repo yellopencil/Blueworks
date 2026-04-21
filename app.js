@@ -4173,6 +4173,28 @@ function getProjectTypeLabel(type) {
   }
 }
 
+function getProjectSaveValidationIssues(formData) {
+  const issues = [];
+  const getText = (name) => String(formData.get(name) || "").trim();
+  const title = getText("title");
+  const client = getText("client");
+  if (!title) issues.push("프로젝트명을 입력해주세요.");
+  if (!client) issues.push("고객사명을 입력해주세요.");
+
+  const parsedLanguageCount = Number(formData.get("languageCount") || 0);
+  const languageCount = Number.isFinite(parsedLanguageCount) && parsedLanguageCount > 0 ? parsedLanguageCount : 0;
+  if (languageCount >= 2) {
+    const missingLabels = Array.from({ length: languageCount }, (_, index) => index + 1)
+      .filter((index) => !getText(`language_${index}`))
+      .map((index) => `${index}번 언어`);
+    if (missingLabels.length) {
+      issues.push(`다국어 항목을 채워주세요: ${missingLabels.join(", ")}`);
+    }
+  }
+
+  return issues;
+}
+
 async function handleProjectSave(event) {
   event.preventDefault();
   const submitButton = event.submitter || document.activeElement;
@@ -4185,6 +4207,12 @@ async function handleProjectSave(event) {
   try {
     syncProjectRichEditorValues();
     const formData = new FormData(event.currentTarget);
+    const validationIssues = getProjectSaveValidationIssues(formData);
+    if (validationIssues.length) {
+      openNoticeModal(validationIssues[0]);
+      toast(validationIssues[0]);
+      return;
+    }
     const getText = (name) => String(formData.get(name) || "").trim();
     const title = getText("title");
     const client = getText("client");
@@ -4254,7 +4282,7 @@ async function handleProjectSave(event) {
         } else {
           state.projects = state.projects.filter((project) => project.id !== payload.id);
         }
-        const message = `프로젝트 저장 실패: ${result.error.message || "Supabase 오류"}`;
+        const message = `프로젝트 저장 실패: ${result.error.message || "Supabase 오류"}\n입력한 값 중 문제가 있는 항목이 없는지 다시 확인해주세요.`;
         openNoticeModal(message);
         toast(message);
         return;
@@ -4272,7 +4300,7 @@ async function handleProjectSave(event) {
           } else {
             state.projects = state.projects.filter((project) => project.id !== payload.id);
           }
-          const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}`;
+          const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}\n업로드한 문서 이름이나 파일 상태를 다시 확인해주세요.`;
           openNoticeModal(message);
           toast(message);
           return;
@@ -4308,7 +4336,7 @@ async function handleProjectSave(event) {
     openNoticeModal("저장이 완료되었어요!");
     render();
   } catch (error) {
-    const message = `프로젝트 저장 실패: ${error?.message || "알 수 없는 오류"}`;
+    const message = `프로젝트 저장 실패: ${error?.message || "알 수 없는 오류"}\n어느 항목에서 막혔는지 다시 확인해주세요.`;
     openNoticeModal(message);
     toast(message);
   } finally {
@@ -5615,7 +5643,7 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
 
   let changed = false;
   previousWorklog.tasks
-    .filter((task) => String(task.text || "").trim() && !task.done && !task.carriedFromDate)
+    .filter((task) => String(task.text || "").trim() && !task.done)
     .forEach((task) => {
       const sourceTaskId = task.sourceTaskId || task.id;
       const alreadyExists = currentWorklog.tasks.some((existingTask) => {
