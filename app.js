@@ -708,6 +708,65 @@ async function withTimeout(promise, ms, message) {
   }
 }
 
+async function uploadQueuedProjectDocuments(projectId, queuedDocuments = []) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId || !queuedDocuments.length) return;
+
+  const uploadedDocuments = [];
+  const failedDocumentNames = [];
+
+  for (const document of queuedDocuments) {
+    if (!document?.fileObject) continue;
+    try {
+      const nextStoragePath = buildProjectDocumentObjectPath(projectId, document.name);
+      const uploadResult = await withTimeout(
+        bridge.uploadProjectDocument(document.fileObject, nextStoragePath),
+        20000,
+        "문서 업로드 응답이 지연되고 있어요.",
+      );
+      if (uploadResult?.error) {
+        failedDocumentNames.push(document.name || "문서");
+        continue;
+      }
+
+      uploadedDocuments.push({
+        ...document,
+        storagePath: nextStoragePath,
+        dataUrl: "",
+        fileObject: undefined,
+        persisted: true,
+      });
+    } catch (error) {
+      failedDocumentNames.push(document.name || "문서");
+    }
+  }
+
+  if (uploadedDocuments.length) {
+    const metadataResult = await bridge.upsertProjectDocuments(
+      uploadedDocuments.map((document) => serializeProjectDocumentForSupabase(projectId, document)),
+    );
+    if (metadataResult.error) {
+      failedDocumentNames.push("문서 메타데이터");
+    } else {
+      const project = state.projects.find((item) => item.id === projectId);
+      if (project) {
+        const currentContracts = Array.isArray(project.contracts) ? project.contracts : [];
+        project.contracts = [...uploadedDocuments, ...currentContracts];
+        project.searchIndex = buildProjectSearchIndex(project);
+        saveState({ history: false });
+        render();
+      }
+      toast("대기 중이던 문서 업로드가 완료되었어요.");
+    }
+  }
+
+  if (failedDocumentNames.length) {
+    const message = `프로젝트는 저장됐지만 일부 문서 업로드가 완료되지 않았어요.\n다시 프로젝트를 열어 아래 문서를 다시 업로드해주세요.\n- ${failedDocumentNames.join("\n- ")}`;
+    openNoticeModal(message);
+    toast("프로젝트는 저장됐지만 문서 업로드 일부가 실패했습니다.");
+  }
+}
+
 function deserializeProjectDocumentFromSupabase(row) {
   return {
     id: row.id || crypto.randomUUID(),
@@ -4413,30 +4472,19 @@ async function handleProjectSave(event) {
         return;
       }
       const syncedProject = deserializeProjectFromSupabase(result.data);
-      const failedDocumentNames = [];
-      for (const document of draftProjectDocuments) {
-        if (document.storagePath || !document.fileObject) continue;
-        const nextStoragePath = buildProjectDocumentObjectPath(payload.id, document.name);
-        const uploadResult = await withTimeout(
-          bridge.uploadProjectDocument(document.fileObject, nextStoragePath),
-          20000,
-          "문서 업로드 응답이 지연되고 있어요.",
-        );
-        if (uploadResult.error) {
-          failedDocumentNames.push(document.name || "문서");
-          continue;
-        }
-        document.storagePath = nextStoragePath;
-        document.dataUrl = "";
-      }
-
+      const queuedDocuments = draftProjectDocuments
+        .filter((document) => !document.storagePath && document.fileObject)
+        .map((document) => ({ ...document }));
       const documentPayloads = draftProjectDocuments
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
       if (documentPayloads.length) {
         const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
         if (documentResult.error) {
-          failedDocumentNames.push("문서 메타데이터");
+          const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}\n업로드한 문서 이름이나 파일 상태를 다시 확인해주세요.`;
+          openNoticeModal(message);
+          toast(message);
+          return;
         }
       }
       const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
@@ -4465,19 +4513,17 @@ async function handleProjectSave(event) {
       const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
       if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
       else state.projects.unshift(syncedProject);
-      if (failedDocumentNames.length) {
-        const message = `프로젝트는 저장됐지만 일부 문서 업로드가 완료되지 않았어요.\n다시 프로젝트를 열어 아래 문서를 다시 업로드해주세요.\n- ${failedDocumentNames.join("\n- ")}`;
-        openNoticeModal(message);
-        toast("프로젝트는 저장됐지만 문서 업로드 일부가 실패했습니다.");
+      if (queuedDocuments.length) {
+        window.setTimeout(() => {
+          uploadQueuedProjectDocuments(payload.id, queuedDocuments).catch(() => {});
+        }, 0);
       }
     }
 
     state.selectedProjectId = payload.id;
     saveState();
     closeProjectModal();
-    if (!(bridge?.isReady() && draftProjectDocuments.some((document) => !document.storagePath))) {
-      openNoticeModal("저장이 완료되었어요!");
-    }
+    openNoticeModal("저장이 완료되었어요!");
     render();
   } catch (error) {
     const message = `프로젝트 저장 실패: ${error?.message || "알 수 없는 오류"}\n어느 항목에서 막혔는지 다시 확인해주세요.`;
