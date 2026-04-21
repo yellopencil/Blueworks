@@ -699,6 +699,7 @@ function serializeProjectDocumentForSupabase(projectId, document) {
 function deserializeProjectDocumentFromSupabase(row) {
   return {
     id: row.id || crypto.randomUUID(),
+    projectId: row.project_id || "",
     type: row.document_type || "contract",
     name: row.file_name || "",
     mimeType: row.mime_type || "application/octet-stream",
@@ -4443,14 +4444,22 @@ async function handleProjectSave(event) {
         .filter((document) => document.storagePath)
         .map((document) => ({
           ...document,
+          projectId: payload.id,
           dataUrl: document.storagePath ? "" : document.dataUrl,
           fileObject: undefined,
           persisted: true,
         }));
+      const refreshedDocumentsResult = await bridge.fetchProjectDocuments();
+      if (!refreshedDocumentsResult.error && Array.isArray(refreshedDocumentsResult.data)) {
+        syncedProject.contracts = refreshedDocumentsResult.data
+          .filter((row) => row.project_id === syncedProject.id)
+          .map(deserializeProjectDocumentFromSupabase);
+      }
       syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
       const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
       if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
       else state.projects.unshift(syncedProject);
+      draftProjectDocuments = [...syncedProject.contracts];
     }
 
     state.selectedProjectId = payload.id;
@@ -5085,7 +5094,11 @@ async function previewOrDownloadDocument(documentId, options = {}) {
   let accessibleUrl = file.dataUrl || "";
 
   if (!accessibleUrl && file.storagePath && bridge?.isReady()) {
-    const signedResult = await bridge.createProjectDocumentSignedUrl(file.storagePath, 3600);
+    const signedResult = await withTimeout(
+      bridge.createProjectDocumentSignedUrl(file.storagePath, 3600),
+      12000,
+      "문서 열기 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+    );
     if (signedResult.error || !signedResult.data?.signedUrl) {
       const message = `문서 열기 실패: ${signedResult.error?.message || "Storage 오류"}`;
       toast(message);
