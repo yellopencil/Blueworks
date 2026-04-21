@@ -182,11 +182,31 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
+      if (this.cachedSession?.access_token) {
+        return this.restRequest("quote_settings", {
+          method: "GET",
+          query: "id=eq.global&select=*",
+        }).then((result) => ({
+          data: Array.isArray(result?.data) ? result.data[0] || null : result?.data || null,
+          error: result?.error || null,
+        }));
+      }
       return this.client.from("quote_settings").select("*").eq("id", "global").maybeSingle();
     },
     async upsertQuoteSettings(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (this.cachedSession?.access_token) {
+        return this.restRequest("quote_settings", {
+          method: "POST",
+          query: "on_conflict=id&select=*",
+          body: payload,
+          prefer: "resolution=merge-duplicates,return=representation",
+        }).then((result) => ({
+          data: Array.isArray(result?.data) ? result.data[0] || null : result?.data || null,
+          error: result?.error || null,
+        }));
       }
       return this.client.from("quote_settings").upsert(payload).select().single();
     },

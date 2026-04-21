@@ -205,8 +205,9 @@
   function normalizeQuoteSettings(raw) {
     const fallback = createDefaultQuoteSettings();
     const paymentLines = raw && typeof raw === "object" ? raw.paymentLines || {} : {};
+    const agreementSource = String(raw?.agreementHtml || fallback.agreementHtml || "").trim() || fallback.agreementHtml;
     return {
-      agreementHtml: String(raw?.agreementHtml || fallback.agreementHtml || "").trim() || fallback.agreementHtml,
+      agreementHtml: sanitizeAgreementHtml(agreementSource),
       paymentLines: {
         normal: Array.isArray(paymentLines.normal) ? paymentLines.normal.map((line) => String(line ?? "")) : fallback.paymentLines.normal,
         kmong: Array.isArray(paymentLines.kmong) ? paymentLines.kmong.map((line) => String(line ?? "")) : fallback.paymentLines.kmong,
@@ -253,6 +254,7 @@
   async function hasAuthenticatedSession() {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return false;
+    if (bridge.cachedSession?.access_token) return true;
     const sessionResult = await bridge.getSession();
     return Boolean(sessionResult?.data?.session);
   }
@@ -1359,6 +1361,401 @@ ${escapeHtml(data.memo || "-")}
     return page;
   }
 
+  function buildPrintableRowsHtml(data) {
+    return data.rows.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.name)}</td>
+        <td>${escapeHtml(row.desc)}</td>
+        <td class="num">${row.qty}</td>
+        <td class="num">${formatKRW(row.unit)}원</td>
+        <td class="num">${formatKRW(row.amount)}원</td>
+      </tr>
+    `).join("");
+  }
+
+  function buildPrintablePaymentLinesHtml(lines) {
+    return lines
+      .filter((line) => String(line || "").trim())
+      .map((line) => `<li>${escapeHtml(String(line).replace(/^[•·\-\s]+/, ""))}</li>`)
+      .join("");
+  }
+
+  function buildPrintableDocumentHtml(data) {
+    const printableTitle = createPdfFilename(data);
+    return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(printableTitle)}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #0f172a;
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    main {
+      width: 100%;
+    }
+    .doc-page {
+      page-break-after: always;
+    }
+    .doc-page:last-child {
+      page-break-after: auto;
+    }
+    .cover-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .brand {
+      display: grid;
+      gap: 8px;
+    }
+    .logo {
+      width: 84px;
+      height: auto;
+      display: block;
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+    .doc-date {
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      white-space: nowrap;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .box {
+      border: 1px solid #dbe3f0;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .box h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 78px 1fr;
+      gap: 6px 8px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .kv-label {
+      color: #64748b;
+      font-weight: 700;
+    }
+    .kv-value {
+      font-weight: 700;
+      word-break: break-word;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 11px;
+    }
+    th, td {
+      border: 1px solid #dbe3f0;
+      padding: 8px 9px;
+      vertical-align: top;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    th {
+      background: #f8faff;
+      text-align: left;
+      font-weight: 800;
+      color: #475569;
+    }
+    td.num, th.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+      align-items: start;
+    }
+    .note-box {
+      border: 1px solid #dbe3f0;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.65;
+      white-space: pre-line;
+    }
+    .note-box strong {
+      color: #0f172a;
+    }
+    .payment-list {
+      margin: 6px 0 0 18px;
+      padding: 0;
+    }
+    .payment-list li {
+      margin: 0 0 4px;
+    }
+    .totals {
+      border: 1px solid #dbe3f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .total-row strong {
+      white-space: nowrap;
+    }
+    .total-divider {
+      height: 1px;
+      background: #dbe3f0;
+      margin: 8px 0;
+    }
+    .total-grand {
+      font-size: 13px;
+    }
+    .sign {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #dbe3f0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .sign-note {
+      font-size: 11px;
+      line-height: 1.55;
+      font-weight: 700;
+      color: #334155;
+    }
+    .sign-name {
+      position: relative;
+      min-width: 180px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 800;
+      padding-right: 12px;
+    }
+    .stamp {
+      position: absolute;
+      right: -2px;
+      top: -28px;
+      width: 58px;
+      opacity: 0.92;
+    }
+    .agreement-wrap {
+      page-break-before: always;
+      break-before: page;
+    }
+    .agreement-title {
+      margin: 0 0 8px;
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .agreement-sub {
+      margin: 0 0 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #dbe3f0;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #475569;
+      font-weight: 700;
+    }
+    .agreement-html {
+      font-size: 11px;
+      line-height: 1.72;
+      color: #334155;
+    }
+    .agreement-html > *:first-child {
+      margin-top: 0;
+    }
+    .agreement-html > div,
+    .agreement-html > p,
+    .agreement-html > section,
+    .agreement-html > article,
+    .agreement-html > blockquote,
+    .agreement-html > pre,
+    .agreement-html > ul,
+    .agreement-html > ol {
+      margin: 0 0 8px;
+    }
+    .agreement-html ul,
+    .agreement-html ol {
+      padding-left: 18px;
+    }
+    .agreement-html li {
+      margin: 4px 0;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .agreement-html a {
+      color: #1d4ed8;
+      text-decoration: underline;
+    }
+    .agreement-footer {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="doc-page">
+      <div class="cover-head">
+        <div class="brand">
+          <img class="logo" src="${PDF_LOGO_URL}" alt="옐로펜슬 로고">
+          <h1>${escapeHtml(data.title)}</h1>
+        </div>
+        <div class="doc-date">작성일: ${escapeHtml(data.date || "-")}</div>
+      </div>
+
+      <div class="meta-grid">
+        <section class="box">
+          <h3>제작사 정보</h3>
+          <div class="kv">
+            <div class="kv-label">상호명</div><div class="kv-value">옐로펜슬</div>
+            <div class="kv-label">사업자번호</div><div class="kv-value">276-06-02233</div>
+            <div class="kv-label">대표</div><div class="kv-value">차민석</div>
+            <div class="kv-label">연락처</div><div class="kv-value">010-7368-7241</div>
+          </div>
+        </section>
+        <section class="box">
+          <h3>제작 요청사 정보</h3>
+          <div class="kv">
+            <div class="kv-label">제작 요청사</div><div class="kv-value">${escapeHtml(data.clientCompany || "-")}</div>
+            <div class="kv-label">담당자명</div><div class="kv-value">${escapeHtml(data.clientName || "-")}</div>
+            <div class="kv-label">담당자 연락처</div><div class="kv-value">${escapeHtml(data.clientPhone || "-")}</div>
+          </div>
+        </section>
+      </div>
+
+      <table>
+        <colgroup>
+          <col style="width:24%">
+          <col style="width:36%">
+          <col style="width:8%">
+          <col style="width:16%">
+          <col style="width:16%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th>설명</th>
+            <th class="num">수량</th>
+            <th class="num">단가</th>
+            <th class="num">금액</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildPrintableRowsHtml(data)}
+        </tbody>
+      </table>
+
+      <div class="summary-grid">
+        <section class="note-box"><strong>작업 일정</strong>
+1차 작업 기간 : ${escapeHtml(data.workPeriod || "-")}
+수정 횟수 : ${escapeHtml(data.revCount || "-")}회
+
+<strong>비고</strong>
+${escapeHtml(data.memo || "-")}
+
+<strong>결제 방법</strong>
+<ul class="payment-list">${buildPrintablePaymentLinesHtml(data.paymentLines)}</ul></section>
+
+        <section class="totals">
+          <div class="total-row"><span>기본 견적</span><strong>${formatKRW(data.baseSubtotal)}원</strong></div>
+          <div class="total-row"><span>다국어 추가(30% × ${data.langCount})</span><strong>${formatKRW(data.langFee)}원</strong></div>
+          <div class="total-divider"></div>
+          <div class="total-row"><span>공급가액</span><strong>${formatKRW(data.subtotal)}원</strong></div>
+          <div class="total-row"><span>부가세(VAT 10%)</span><strong>${formatKRW(data.vat)}원</strong></div>
+          <div class="total-divider"></div>
+          <div class="total-row total-grand"><span>총 합계</span><strong>${formatKRW(data.total)}원</strong></div>
+        </section>
+      </div>
+
+      <section class="sign">
+        <div class="sign-note">${escapeHtml(data.signNote || "")}</div>
+        <div class="sign-name">
+          옐로펜슬 대표 차민석 (인)
+          <img class="stamp" src="${PDF_STAMP_URL}" alt="직인">
+        </div>
+      </section>
+    </section>
+
+    <section class="agreement-wrap">
+      <h2 class="agreement-title">약관동의서</h2>
+      <p class="agreement-sub">약관동의서 내용을 꼼꼼히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>
+      <div class="agreement-html">${data.agreementHtml}</div>
+      <div class="agreement-footer">Copyright ⓒ 옐로펜슬 All Rights Reserved.</div>
+    </section>
+  </main>
+  <script>
+    const waitForAssets = () => {
+      const images = Array.from(document.images || []);
+      return Promise.all(images.map((img) => new Promise((resolve) => {
+        if (img.complete) {
+          resolve();
+          return;
+        }
+        img.onload = resolve;
+        img.onerror = resolve;
+      }))).then(() => document.fonts?.ready || Promise.resolve());
+    };
+    window.addEventListener("load", () => {
+      waitForAssets().finally(() => {
+        setTimeout(() => {
+          window.focus();
+          window.print();
+        }, 150);
+      });
+    });
+    window.addEventListener("afterprint", () => {
+      setTimeout(() => window.close(), 150);
+    });
+  </script>
+</body>
+</html>`;
+  }
+
   function buildAgreementPages(data) {
     const sections = parseAgreementSectionsFromHtml(data.agreementHtml);
     if (!sections.length) return [];
@@ -1483,61 +1880,25 @@ ${escapeHtml(data.memo || "-")}
       openNoticeModal("제작 요청사, 담당자명, 담당자 연락처를 입력해주세요.");
       return;
     }
-    if (!window.html2canvas || !window.jspdf?.jsPDF) {
-      openNoticeModal("PDF 라이브러리를 불러오지 못했습니다.");
-      return;
-    }
 
     const data = collectPdfData();
-    const rootEl = els.pdfTemplateRoot;
-    if (!rootEl) {
-      openNoticeModal("PDF 템플릿 영역을 찾지 못했습니다.");
-      return;
-    }
-
     const prevLabel = els.downloadPdfBtn.textContent;
     els.downloadPdfBtn.disabled = true;
-    els.downloadPdfBtn.textContent = "PDF 준비 중...";
+    els.downloadPdfBtn.textContent = "PDF 인쇄 준비 중...";
 
     try {
-      rootEl.classList.remove("hidden");
-      rootEl.innerHTML = "";
-      const pages = [buildPageOne(data), ...buildAgreementPages(data, rootEl)];
-      pages.forEach((page, index) => {
-        const pageNo = page.querySelector("[data-page-number]");
-        if (pageNo) pageNo.textContent = `${index + 1} / ${pages.length}`;
-      });
-      pages.forEach((page) => rootEl.appendChild(page));
-
-      await waitForPdfAssets(rootEl);
-
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
-
-      for (let index = 0; index < pages.length; index += 1) {
-        els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${pages.length}`;
-        const canvas = await window.html2canvas(pages[index], {
-          scale: 1.4,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff",
-          logging: false
-        });
-        const imageData = canvas.toDataURL("image/jpeg", 0.82);
-        if (index > 0) pdf.addPage();
-        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
+      const printWindow = window.open("", "_blank", "width=1100,height=900");
+      if (!printWindow) {
+        openNoticeModal("팝업이 차단되어 인쇄 창을 열지 못했습니다. 이 사이트의 팝업을 허용한 뒤 다시 시도해주세요.");
+        return;
       }
-
-      const fileName = createPdfFilename(data);
-      const pdfBlob = pdf.output("blob");
-      await savePdfHistoryRecord(makePdfHistoryRecord(data, pdfBlob));
-      triggerBlobDownload(pdfBlob, fileName);
+      printWindow.document.open();
+      printWindow.document.write(buildPrintableDocumentHtml(data));
+      printWindow.document.close();
     } catch (error) {
       console.error(error);
-      openNoticeModal("PDF를 내보내는 중 문제가 발생했습니다.");
+      openNoticeModal("PDF 인쇄용 문서를 준비하는 중 문제가 발생했습니다.");
     } finally {
-      rootEl.innerHTML = "";
-      rootEl.classList.add("hidden");
       els.downloadPdfBtn.disabled = false;
       els.downloadPdfBtn.textContent = prevLabel;
     }
