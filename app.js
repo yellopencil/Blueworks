@@ -313,6 +313,7 @@ let draftProjectDocuments = [];
 let currentCalendarDayKey = "";
 let currentWorklogDate = "";
 let currentWorklogDraft = null;
+let currentAnnualGoalEditId = null;
 let draggedWorklogTaskId = null;
 let worklogTaskDragGhost = null;
 let worklogTaskPointerOffsetX = 0;
@@ -5429,6 +5430,7 @@ function renderAnnualGoals() {
             <button type="button" class="ghost" data-annual-goal-toggle="${goal.id}">
               ${goal.done ? "완료 취소" : "달성"}
             </button>
+            <button type="button" class="ghost" data-annual-goal-edit="${goal.id}">수정</button>
             <button type="button" class="danger" data-annual-goal-delete="${goal.id}">삭제</button>
           </div>
         </li>
@@ -5450,6 +5452,9 @@ function renderAnnualGoals() {
   els.annualGoalBoard.querySelectorAll("[data-annual-goal-toggle]").forEach((button) => {
     button.addEventListener("click", () => toggleAnnualGoal(button.dataset.annualGoalToggle));
   });
+  els.annualGoalBoard.querySelectorAll("[data-annual-goal-edit]").forEach((button) => {
+    button.addEventListener("click", () => openAnnualGoalEditModal(button.dataset.annualGoalEdit));
+  });
   els.annualGoalBoard.querySelectorAll("[data-annual-goal-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteAnnualGoal(button.dataset.annualGoalDelete));
   });
@@ -5458,15 +5463,38 @@ function renderAnnualGoals() {
 function openAnnualGoalAddModal() {
   if (!els.annualGoalAddModal || !els.annualGoalAddForm) return;
   const period = getAnnualGoalPeriod();
+  currentAnnualGoalEditId = null;
   els.annualGoalAddForm.reset();
   els.annualGoalAddForm.elements.year.value = period.year;
   els.annualGoalAddForm.elements.half.value = period.half;
   if (els.annualGoalAddTitle) els.annualGoalAddTitle.textContent = `${getAnnualGoalPeriodLabel(period)} 추가`;
+  const submitButton = els.annualGoalAddForm.querySelector('[type="submit"]');
+  if (submitButton) submitButton.textContent = "추가";
   els.annualGoalAddModal.classList.remove("hidden");
   requestAnimationFrame(() => els.annualGoalAddForm.elements.goal?.focus());
 }
 
+function openAnnualGoalEditModal(goalId) {
+  if (!els.annualGoalAddModal || !els.annualGoalAddForm) return;
+  const goal = state.yearGoals.find((item) => item.id === goalId);
+  if (!goal) return;
+  currentAnnualGoalEditId = goal.id;
+  els.annualGoalAddForm.reset();
+  els.annualGoalAddForm.elements.year.value = goal.year;
+  els.annualGoalAddForm.elements.half.value = goal.half === "second" ? "second" : "first";
+  els.annualGoalAddForm.elements.goal.value = goal.text || "";
+  if (els.annualGoalAddTitle) els.annualGoalAddTitle.textContent = `${getAnnualGoalPeriodLabel(goal)} 수정`;
+  const submitButton = els.annualGoalAddForm.querySelector('[type="submit"]');
+  if (submitButton) submitButton.textContent = "수정";
+  els.annualGoalAddModal.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    els.annualGoalAddForm.elements.goal?.focus();
+    els.annualGoalAddForm.elements.goal?.select();
+  });
+}
+
 function closeAnnualGoalAddModal() {
+  currentAnnualGoalEditId = null;
   els.annualGoalAddModal?.classList.add("hidden");
 }
 
@@ -5475,15 +5503,23 @@ function handleAnnualGoalAdd(event) {
   const form = event.currentTarget;
   const text = normalizeGoalText(new FormData(form).get("goal"));
   if (!text) return;
-  state.yearGoals.push({
-    id: crypto.randomUUID(),
-    year: Number(form.elements.year.value),
-    half: form.elements.half.value === "second" ? "second" : "first",
-    text,
-    done: false,
-    createdAt: new Date().toISOString(),
-    completedAt: "",
-  });
+  if (currentAnnualGoalEditId) {
+    const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
+    if (!goal) return;
+    goal.text = text;
+    goal.year = Number(form.elements.year.value);
+    goal.half = form.elements.half.value === "second" ? "second" : "first";
+  } else {
+    state.yearGoals.push({
+      id: crypto.randomUUID(),
+      year: Number(form.elements.year.value),
+      half: form.elements.half.value === "second" ? "second" : "first",
+      text,
+      done: false,
+      createdAt: new Date().toISOString(),
+      completedAt: "",
+    });
+  }
   saveState();
   renderAnnualGoals();
   renderAnnualGoalArchiveLists();
@@ -6004,7 +6040,6 @@ function renderWorklogTasks() {
       <input type="text" class="worklog-task-input" data-worklog-input="${task.id}" value="${escapeHtml(task.text)}">
       <div class="inline-actions worklog-actions">
         <button type="button" class="ghost ${task.done ? "is-active" : ""}" data-worklog-complete="${task.id}">처리완료</button>
-        <button type="button" class="ghost ${!task.done ? "is-active" : ""}" data-worklog-cancel="${task.id}">취소</button>
         <button type="button" class="danger" data-worklog-remove="${task.id}">삭제</button>
       </div>
     </div>
@@ -6020,15 +6055,7 @@ function renderWorklogTasks() {
     button.addEventListener("click", () => {
       const task = currentWorklogDraft.tasks.find((item) => item.id === button.dataset.worklogComplete);
       if (!task) return;
-      task.done = true;
-      renderWorklogTasks();
-    });
-  });
-  els.worklogTasks.querySelectorAll("[data-worklog-cancel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const task = currentWorklogDraft.tasks.find((item) => item.id === button.dataset.worklogCancel);
-      if (!task) return;
-      task.done = false;
+      task.done = !task.done;
       renderWorklogTasks();
     });
   });
