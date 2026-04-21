@@ -1280,6 +1280,11 @@
   white-space: pre-line;
 }
 
+.qa-pdf-agreement-line-heading {
+  color: #0f172a;
+  font-weight: 800;
+}
+
 .qa-pdf-agreement-section h4 {
   margin: 0 0 6px;
   font-size: 12px;

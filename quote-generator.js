@@ -491,8 +491,187 @@
       .join("");
   }
 
+  function isAgreementBlockTag(tagName) {
+    return ["DIV", "P", "SECTION", "ARTICLE", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "PRE"].includes(tagName);
+  }
+
+  function normalizeAgreementColor(value) {
+    const color = String(value || "").trim();
+    if (!color) return "";
+    if (/^#[0-9a-f]{3,8}$/i.test(color)) return color;
+    if (/^rgb(a)?\([\d\s.,%]+\)$/i.test(color)) return color.replace(/\s+/g, " ");
+    return "";
+  }
+
+  function sanitizeAgreementInlineNode(node) {
+    if (!node) return null;
+    if (node.nodeType === Node.TEXT_NODE) {
+      return doc.createTextNode(node.textContent || "");
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+    const tagName = node.tagName.toUpperCase();
+    if (tagName === "BR") return doc.createElement("br");
+
+    if (tagName === "A") {
+      const anchor = doc.createElement("a");
+      const href = String(node.getAttribute("href") || "").trim();
+      if (/^(https?:|mailto:|tel:)/i.test(href)) {
+        anchor.setAttribute("href", href);
+      }
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) anchor.appendChild(sanitizedChild);
+      });
+      return anchor;
+    }
+
+    if (["STRONG", "B"].includes(tagName)) {
+      const strong = doc.createElement("strong");
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) strong.appendChild(sanitizedChild);
+      });
+      return strong;
+    }
+
+    if (["EM", "I"].includes(tagName)) {
+      const em = doc.createElement("em");
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) em.appendChild(sanitizedChild);
+      });
+      return em;
+    }
+
+    if (tagName === "U") {
+      const underline = doc.createElement("u");
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) underline.appendChild(sanitizedChild);
+      });
+      return underline;
+    }
+
+    if (["SPAN", "FONT"].includes(tagName)) {
+      const span = doc.createElement("span");
+      const color = normalizeAgreementColor(node.style?.color || node.getAttribute("color"));
+      if (color) span.style.color = color;
+      if (/^(700|800|900|bold)$/i.test(node.style?.fontWeight || "") || /font-weight\s*:\s*(700|800|900|bold)/i.test(node.getAttribute("style") || "")) {
+        span.style.fontWeight = "700";
+      }
+      if (/italic/i.test(node.style?.fontStyle || "")) {
+        span.style.fontStyle = "italic";
+      }
+      if (/underline/i.test(node.style?.textDecoration || "")) {
+        span.style.textDecoration = "underline";
+      }
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) span.appendChild(sanitizedChild);
+      });
+      if (!span.getAttribute("style")) {
+        const fragment = doc.createDocumentFragment();
+        Array.from(span.childNodes).forEach((child) => fragment.appendChild(child));
+        return fragment;
+      }
+      return span;
+    }
+
+    const fragment = doc.createDocumentFragment();
+    Array.from(node.childNodes).forEach((child) => {
+      const sanitizedChild = sanitizeAgreementInlineNode(child);
+      if (sanitizedChild) fragment.appendChild(sanitizedChild);
+    });
+    return fragment;
+  }
+
+  function buildAgreementBlockHtmlFromNode(node) {
+    if (!node) return [];
+    if (node.nodeType === Node.TEXT_NODE) {
+      return String(node.textContent || "")
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map((line) => (line.trim() ? `<div>${escapeHtml(line)}</div>` : "<div><br></div>"));
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return [];
+
+    const tagName = node.tagName.toUpperCase();
+    if (tagName === "BR") return ["<div><br></div>"];
+
+    if (["UL", "OL"].includes(tagName)) {
+      const list = doc.createElement(tagName.toLowerCase());
+      Array.from(node.children).forEach((child) => {
+        if (child.tagName?.toUpperCase() !== "LI") return;
+        const li = doc.createElement("li");
+        Array.from(child.childNodes).forEach((liChild) => {
+          const sanitizedChild = sanitizeAgreementInlineNode(liChild);
+          if (sanitizedChild) li.appendChild(sanitizedChild);
+        });
+        if (!li.innerHTML.trim()) li.innerHTML = "<br>";
+        list.appendChild(li);
+      });
+      return list.children.length ? [list.outerHTML] : [];
+    }
+
+    if (tagName === "LI") {
+      const list = doc.createElement("ul");
+      const li = doc.createElement("li");
+      Array.from(node.childNodes).forEach((child) => {
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) li.appendChild(sanitizedChild);
+      });
+      if (!li.innerHTML.trim()) li.innerHTML = "<br>";
+      list.appendChild(li);
+      return [list.outerHTML];
+    }
+
+    if (isAgreementBlockTag(tagName)) {
+      const wrapper = doc.createElement("div");
+      Array.from(node.childNodes).forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE && String(child.textContent || "").includes("\n")) {
+          buildAgreementBlockHtmlFromNode(child).forEach((blockHtml) => {
+            const temp = doc.createElement("div");
+            temp.innerHTML = blockHtml;
+            const first = temp.firstElementChild;
+            if (first) wrapper.appendChild(first);
+          });
+          return;
+        }
+        const sanitizedChild = sanitizeAgreementInlineNode(child);
+        if (sanitizedChild) wrapper.appendChild(sanitizedChild);
+      });
+      return [wrapper.innerHTML.trim() ? wrapper.outerHTML : "<div><br></div>"];
+    }
+
+    const wrapper = doc.createElement("div");
+    const sanitizedNode = sanitizeAgreementInlineNode(node);
+    if (sanitizedNode) wrapper.appendChild(sanitizedNode);
+    return [wrapper.innerHTML.trim() ? wrapper.outerHTML : "<div><br></div>"];
+  }
+
+  function sanitizeAgreementHtml(html) {
+    const temp = doc.createElement("div");
+    temp.innerHTML = html || "";
+    const blocks = [];
+    Array.from(temp.childNodes).forEach((node) => {
+      buildAgreementBlockHtmlFromNode(node).forEach((blockHtml) => blocks.push(blockHtml));
+    });
+    const sanitized = blocks.join("").trim();
+    if (sanitized) return sanitized;
+    return agreementTextToHtml(temp.textContent || "");
+  }
+
+  function insertAgreementTextAtCursor(text) {
+    const html = agreementTextToHtml(String(text || "").replace(/\r\n?/g, "\n"));
+    els.agreementContent.focus();
+    doc.execCommand("insertHTML", false, html);
+  }
+
   function getAgreementHtml() {
-    return els.agreementContent.innerHTML.trim();
+    const sanitized = sanitizeAgreementHtml(els.agreementContent.innerHTML);
+    els.agreementContent.innerHTML = sanitized;
+    return sanitized;
   }
 
   function sanitizeFilename(value) {
@@ -759,6 +938,69 @@
     });
 
     return sections;
+  }
+
+  function buildAgreementLineHtml(line, isHeading) {
+    const content = line.html || escapeHtml(line.text || "");
+    return {
+      sectionId: line.sectionId,
+      isHeading,
+      html: `<div class="qa-pdf-agreement-line${isHeading ? " qa-pdf-agreement-line-heading" : ""}">${content || "<br>"}</div>`
+    };
+  }
+
+  function renderAgreementItems(items) {
+    if (!Array.isArray(items) || !items.length) return "";
+    const sections = [];
+    let currentSectionId = null;
+    let buffer = [];
+
+    const flush = () => {
+      if (!buffer.length) return;
+      sections.push(`
+        <section class="qa-pdf-agreement-section qa-pdf-agreement-block">
+          ${buffer.join("")}
+        </section>
+      `);
+      buffer = [];
+    };
+
+    items.forEach((item) => {
+      if (item.sectionId !== currentSectionId) {
+        flush();
+        currentSectionId = item.sectionId;
+      }
+      buffer.push(item.html);
+    });
+    flush();
+    return sections.join("");
+  }
+
+  function createAgreementPageElement(contentHtml, includeIntro) {
+    const page = doc.createElement("section");
+    page.className = "qa-pdf-page";
+    page.innerHTML = `
+      <h2 class="qa-pdf-agreement-title">약관동의서</h2>
+      ${includeIntro ? '<p class="qa-pdf-agreement-sub">아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
+      ${contentHtml}
+      <div class="qa-pdf-footer">
+        <span>Copyright ⓒ 옐로펜슬 All Rights Reserved.</span>
+        <span data-page-number></span>
+      </div>
+    `;
+    return page;
+  }
+
+  function measureAgreementPageFits(measureRoot, items, includeIntro) {
+    const page = createAgreementPageElement(renderAgreementItems(items), includeIntro);
+    page.style.position = "absolute";
+    page.style.left = "0";
+    page.style.top = "0";
+    page.style.visibility = "hidden";
+    measureRoot.appendChild(page);
+    const fits = page.scrollHeight <= page.clientHeight + 2;
+    page.remove();
+    return fits;
   }
 
   function syncTermsEditor() {
@@ -1161,6 +1403,67 @@ ${escapeHtml(data.memo || "-")}
     });
   }
 
+  function buildAgreementPages(data, measureRoot) {
+    const sections = parseAgreementSectionsFromHtml(data.agreementHtml);
+    if (!sections.length) return [];
+
+    const flatItems = [];
+    const sectionHeadings = new Map();
+
+    sections.forEach((section, sectionIndex) => {
+      const sectionId = `section-${sectionIndex}`;
+      const heading = section.heading && (section.heading.text || section.heading.html)
+        ? { ...section.heading, sectionId }
+        : null;
+      if (heading) {
+        const headingItem = buildAgreementLineHtml(heading, true);
+        flatItems.push(headingItem);
+        sectionHeadings.set(sectionId, headingItem);
+      }
+      section.lines
+        .filter((line) => line && (line.text || line.html))
+        .forEach((line) => {
+          flatItems.push(buildAgreementLineHtml({ ...line, sectionId }, false));
+        });
+    });
+
+    const pages = [];
+    let currentItems = [];
+    let includeIntro = true;
+
+    flatItems.forEach((item) => {
+      const candidateItems = [...currentItems, item];
+      if (measureAgreementPageFits(measureRoot, candidateItems, includeIntro)) {
+        currentItems = candidateItems;
+        return;
+      }
+
+      if (currentItems.length) {
+        pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro));
+        includeIntro = false;
+      }
+
+      currentItems = [];
+      if (!item.isHeading) {
+        const headingItem = sectionHeadings.get(item.sectionId);
+        if (headingItem) currentItems.push(headingItem);
+      }
+      currentItems.push(item);
+
+      if (!measureAgreementPageFits(measureRoot, currentItems, includeIntro) && currentItems.length > 1) {
+        pages.push(createAgreementPageElement(renderAgreementItems([currentItems[0]]), includeIntro));
+        includeIntro = false;
+        currentItems = [item];
+      }
+    });
+
+    if (currentItems.length) {
+      pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro));
+    }
+
+    return pages;
+  }
+
   async function waitForPdfAssets(rootEl) {
     if (document.fonts?.ready) await document.fonts.ready;
     const images = Array.from(rootEl.querySelectorAll("img"));
@@ -1199,7 +1502,7 @@ ${escapeHtml(data.memo || "-")}
     try {
       rootEl.classList.remove("hidden");
       rootEl.innerHTML = "";
-      const pages = [buildPageOne(data), ...buildAgreementPages(data)];
+      const pages = [buildPageOne(data), ...buildAgreementPages(data, rootEl)];
       pages.forEach((page, index) => {
         const pageNo = page.querySelector("[data-page-number]");
         if (pageNo) pageNo.textContent = `${index + 1} / ${pages.length}`;
@@ -1209,20 +1512,20 @@ ${escapeHtml(data.memo || "-")}
       await waitForPdfAssets(rootEl);
 
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF("p", "mm", "a4");
+      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
 
       for (let index = 0; index < pages.length; index += 1) {
         els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${pages.length}`;
         const canvas = await window.html2canvas(pages[index], {
-          scale: 2,
+          scale: 1.4,
           useCORS: true,
           allowTaint: false,
           backgroundColor: "#ffffff",
           logging: false
         });
-        const imageData = canvas.toDataURL("image/png", 0.96);
+        const imageData = canvas.toDataURL("image/jpeg", 0.82);
         if (index > 0) pdf.addPage();
-        pdf.addImage(imageData, "PNG", 0, 0, 210, 297, undefined, "FAST");
+        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
       }
 
       const fileName = createPdfFilename(data);
@@ -1306,6 +1609,13 @@ ${escapeHtml(data.memo || "-")}
     });
 
     els.agreementContent.addEventListener("input", calc);
+    els.agreementContent.addEventListener("paste", (event) => {
+      if (!agreementEditable) return;
+      event.preventDefault();
+      const pastedText = event.clipboardData?.getData("text/plain") || "";
+      insertAgreementTextAtCursor(pastedText);
+      calc();
+    });
     els.langCount.addEventListener("change", calc);
     els.vatToggle.addEventListener("change", calc);
     els.revCount.addEventListener("input", () => {
