@@ -722,6 +722,33 @@ async function withTimeout(promise, ms, message) {
   }
 }
 
+async function refreshProjectDocumentsInBackground(projectId) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !projectId) return;
+
+  try {
+    const refreshedDocumentsResult = await withTimeout(
+      bridge.fetchProjectDocuments(),
+      8000,
+      "프로젝트 문서 목록을 새로 불러오는 응답이 늦어지고 있어요.",
+    );
+    if (refreshedDocumentsResult.error || !Array.isArray(refreshedDocumentsResult.data)) return;
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) return;
+    project.contracts = refreshedDocumentsResult.data
+      .filter((row) => row.project_id === projectId)
+      .map(deserializeProjectDocumentFromSupabase);
+    project.searchIndex = buildProjectSearchIndex(project);
+    if (state.selectedProjectId === projectId) {
+      draftProjectDocuments = [...project.contracts];
+    }
+    saveState();
+    render();
+  } catch (error) {
+    // Best effort only. Do not block project save UX on document list refresh.
+  }
+}
+
 function serializeScheduleForSupabase(schedule) {
   return {
     id: schedule.id,
@@ -4449,12 +4476,6 @@ async function handleProjectSave(event) {
           fileObject: undefined,
           persisted: true,
         }));
-      const refreshedDocumentsResult = await bridge.fetchProjectDocuments();
-      if (!refreshedDocumentsResult.error && Array.isArray(refreshedDocumentsResult.data)) {
-        syncedProject.contracts = refreshedDocumentsResult.data
-          .filter((row) => row.project_id === syncedProject.id)
-          .map(deserializeProjectDocumentFromSupabase);
-      }
       syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
       const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
       if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
@@ -4467,6 +4488,9 @@ async function handleProjectSave(event) {
     closeProjectModal();
     openNoticeModal("저장이 완료되었어요!");
     render();
+    if (bridge?.isReady()) {
+      refreshProjectDocumentsInBackground(payload.id);
+    }
   } catch (error) {
     const message = `프로젝트 저장 실패: ${error?.message || "알 수 없는 오류"}\n어느 항목에서 막혔는지 다시 확인해주세요.`;
     openNoticeModal(message);
