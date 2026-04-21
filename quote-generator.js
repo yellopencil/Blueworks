@@ -2600,20 +2600,61 @@ ${escapeHtml(data.memo || "-")}
       return;
     }
 
+    if (!window.html2canvas || !window.jspdf?.jsPDF) {
+      openNoticeModal("PDF 라이브러리를 불러오지 못했습니다.");
+      return;
+    }
+
     const data = collectPdfData();
+    const rootEl = els.pdfTemplateRoot;
+    if (!rootEl) {
+      openNoticeModal("PDF 템플릿 영역을 찾지 못했습니다.");
+      return;
+    }
+
     const prevLabel = els.downloadPdfBtn.textContent;
     els.downloadPdfBtn.disabled = true;
-    els.downloadPdfBtn.textContent = "PDF 생성 중...";
+    els.downloadPdfBtn.textContent = "PDF 준비 중...";
 
     try {
-      const blob = await buildDownloadablePdfBlob(data);
-      const record = makePdfHistoryRecord(data, blob);
-      await savePdfHistoryRecord(record);
-      triggerBlobDownload(blob, record.filename || createPdfFilename(data));
+      rootEl.classList.remove("hidden");
+      rootEl.innerHTML = "";
+      const pages = [buildPageOne(data), ...buildAgreementPages(data, rootEl)];
+      pages.forEach((page, index) => {
+        const pageNo = page.querySelector("[data-page-number]");
+        if (pageNo) pageNo.textContent = `${index + 1} / ${pages.length}`;
+      });
+      pages.forEach((page) => rootEl.appendChild(page));
+
+      await waitForPdfAssets(rootEl);
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
+
+      for (let index = 0; index < pages.length; index += 1) {
+        els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${pages.length}`;
+        const canvas = await window.html2canvas(pages[index], {
+          scale: 1.4,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const imageData = canvas.toDataURL("image/jpeg", 0.82);
+        if (index > 0) pdf.addPage();
+        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
+      }
+
+      const fileName = createPdfFilename(data);
+      const pdfBlob = pdf.output("blob");
+      await savePdfHistoryRecord(makePdfHistoryRecord(data, pdfBlob));
+      triggerBlobDownload(pdfBlob, fileName);
     } catch (error) {
       console.error(error);
-      openNoticeModal(`PDF를 생성하지 못했습니다.\n${error?.message || "알 수 없는 오류가 발생했습니다."}`);
+      openNoticeModal("PDF를 내보내는 중 문제가 발생했습니다.");
     } finally {
+      rootEl.innerHTML = "";
+      rootEl.classList.add("hidden");
       els.downloadPdfBtn.disabled = false;
       els.downloadPdfBtn.textContent = prevLabel;
     }
