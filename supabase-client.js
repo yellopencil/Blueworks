@@ -10,6 +10,7 @@
     siteAssetBucket: SITE_ASSET_BUCKET,
     projectDocumentBucket: PROJECT_DOCUMENT_BUCKET,
     client: null,
+    cachedSession: null,
     mode: "supabase-pending",
     error: null,
     statusDetail: "",
@@ -18,6 +19,60 @@
     },
     isReady() {
       return Boolean(this.client);
+    },
+    setCachedSession(session) {
+      this.cachedSession = session || null;
+    },
+    getAccessToken() {
+      return this.cachedSession?.access_token || "";
+    },
+    async restRequest(path, options = {}) {
+      const accessToken = this.getAccessToken();
+      if (!accessToken) {
+        return { data: null, error: new Error("Supabase session token is not ready.") };
+      }
+      const {
+        method = "GET",
+        query = "",
+        body,
+        prefer = "",
+      } = options;
+      const requestUrl = `${this.url}/rest/v1/${path}${query ? `?${query}` : ""}`;
+      const headers = {
+        apikey: this.publishableKey,
+        Authorization: `Bearer ${accessToken}`,
+      };
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      if (prefer) headers.Prefer = prefer;
+      try {
+        const response = await fetch(requestUrl, {
+          method,
+          headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const text = await response.text();
+        let parsed = null;
+        if (text) {
+          try {
+            parsed = JSON.parse(text);
+          } catch (error) {
+            parsed = text;
+          }
+        }
+        if (!response.ok) {
+          const message =
+            parsed?.message ||
+            parsed?.error_description ||
+            parsed?.hint ||
+            parsed?.details ||
+            response.statusText ||
+            "Request failed.";
+          return { data: null, error: new Error(message) };
+        }
+        return { data: parsed, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
     },
     async fetchProjects() {
       if (!this.client) {
@@ -89,6 +144,14 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
+      if (this.getAccessToken()) {
+        return this.restRequest("project_documents", {
+          method: "POST",
+          query: "on_conflict=id&select=*",
+          body: payload,
+          prefer: "resolution=merge-duplicates,return=representation",
+        });
+      }
       return this.client.from("project_documents").upsert(payload).select();
     },
     async deleteProjectDocumentsByIds(ids) {
@@ -96,6 +159,13 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      if (this.getAccessToken()) {
+        const encodedIds = ids.map((id) => encodeURIComponent(id)).join(",");
+        return this.restRequest("project_documents", {
+          method: "DELETE",
+          query: `id=in.(${encodedIds})`,
+        });
+      }
       return this.client.from("project_documents").delete().in("id", ids);
     },
     getSiteAssetPublicUrl(path) {
@@ -145,13 +215,17 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.signInWithPassword(credentials);
+      const result = await this.client.auth.signInWithPassword(credentials);
+      this.setCachedSession(result?.data?.session || null);
+      return result;
     },
     async signUp(credentials) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.signUp(credentials);
+      const result = await this.client.auth.signUp(credentials);
+      this.setCachedSession(result?.data?.session || null);
+      return result;
     },
     async resetPasswordForEmail(email, options = {}) {
       if (!this.client) {
@@ -169,21 +243,38 @@
       if (!this.client) {
         return { error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.signOut();
+      const result = await this.client.auth.signOut();
+      this.setCachedSession(null);
+      return result;
     },
     async getSession() {
       if (!this.client) {
         return { data: { session: null }, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.getSession();
+      const result = await this.client.auth.getSession();
+      if (!result?.error) this.setCachedSession(result?.data?.session || null);
+      return result;
     },
     onAuthStateChange(callback) {
       if (!this.client) return { data: { subscription: { unsubscribe() {} } } };
-      return this.client.auth.onAuthStateChange(callback);
+      return this.client.auth.onAuthStateChange((event, session) => {
+        this.setCachedSession(session || null);
+        return callback(event, session);
+      });
     },
     async upsertProject(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (this.getAccessToken()) {
+        const result = await this.restRequest("projects", {
+          method: "POST",
+          query: "on_conflict=id&select=*",
+          body: payload,
+          prefer: "resolution=merge-duplicates,return=representation",
+        });
+        if (Array.isArray(result.data)) result.data = result.data[0] || null;
+        return result;
       }
       return this.client.from("projects").upsert(payload).select().single();
     },
@@ -257,6 +348,9 @@
         detectSessionInUrl: true,
       },
     });
+    bridge.client.auth.getSession()
+      .then(({ data }) => bridge.setCachedSession(data?.session || null))
+      .catch(() => {});
     bridge.mode = "supabase-ready";
     bridge.statusDetail = "Supabase 클라이언트가 준비되었습니다.";
   } catch (error) {
