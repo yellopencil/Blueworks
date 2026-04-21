@@ -4175,135 +4175,148 @@ function getProjectTypeLabel(type) {
 
 async function handleProjectSave(event) {
   event.preventDefault();
-  syncProjectRichEditorValues();
-  const formData = new FormData(event.currentTarget);
-  const title = String(formData.get("title") || "").trim();
-  const client = String(formData.get("client") || "").trim();
-  const startDate = String(formData.get("startDate") || "");
-  const dueDate = String(formData.get("dueDate") || "");
-  if (!title || !client) {
-    openNoticeModal("프로젝트명과 고객사명을 입력해주세요.");
-    return;
-  }
-  if (!startDate || !dueDate) {
-    openNoticeModal("계약일과 1차 시안 마감일을 선택해주세요.");
-    return;
-  }
-  const languageCount = Number(formData.get("languageCount") || 0);
-  const languages = languageCount >= 2
-    ? Array.from({ length: languageCount }, (_, index) => String(formData.get(`language_${index + 1}`) || "").trim()).filter(Boolean)
-    : [];
-  const payload = {
-    id: String(formData.get("id") || crypto.randomUUID()),
-    title,
-    client,
-    projectType: String(formData.get("projectType") || ""),
-    websiteUrl: String(formData.get("websiteUrl") || "").trim(),
-    managerName: String(formData.get("managerName")).trim(),
-    managerPhone: String(formData.get("managerPhone")).trim(),
-    packageType: String(formData.get("packageType")),
-    siteType: String(formData.get("siteType")),
-    languageCount,
-    languages,
-    status: String(formData.get("status")),
-    progressStage: String(formData.get("status")) === "inProgress" ? String(formData.get("progressStage")) : "",
-    startDate,
-    dueDate,
-    timeline: String(formData.get("timeline")).trim(),
-    notes: String(formData.get("notes")).trim(),
-    imwebId: String(formData.get("imwebId")).trim(),
-    imwebPassword: String(formData.get("imwebPassword")).trim(),
-    contractAmount: formatAmount(String(formData.get("contractAmount")).trim()),
-    paybackStatus: String(formData.get("paybackStatus") || "none"),
-    paybackAmount: String(formData.get("paybackStatus")) === "enabled"
-      ? formatAmount(String(formData.get("paybackAmount")).trim())
-      : "",
-    paybackNote: String(formData.get("paybackStatus")) === "enabled"
-      ? String(formData.get("paybackNote") || "").trim()
-      : "",
-    paymentMethod: String(formData.get("paymentMethod")),
-    kmongFee: formData.get("paymentMethod") === "kmong"
-      ? formatAmount(String(formData.get("kmongFee") || "").trim())
-      : "",
-    taxInvoice: ["card", "kmong"].includes(String(formData.get("paymentMethod"))) ? "" : String(formData.get("taxInvoice")),
-  };
-  payload.searchIndex = buildProjectSearchIndex({ ...payload, contracts: [...draftProjectDocuments] });
-
-  const existing = state.projects.find((project) => project.id === payload.id);
-  const previousProject = existing ? structuredClone(existing) : null;
-  const previousDocuments = existing ? structuredClone(existing.contracts || []) : [];
-  if (existing) {
-    Object.assign(existing, payload, { contracts: [...draftProjectDocuments] });
-  } else {
-    state.projects.unshift({ ...payload, contracts: [...draftProjectDocuments] });
+  const submitButton = event.submitter || document.activeElement;
+  const previousButtonText = submitButton?.textContent || "";
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "저장 중...";
   }
 
-  const nextProject = existing || state.projects[0];
-  const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
-  const bridge = getSupabaseBridge();
-  if (bridge?.isReady()) {
-    const result = await bridge.upsertProject(
-      serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
-    );
-    if (result.error) {
-      if (existing && previousProject) {
-        Object.assign(existing, previousProject);
-      } else {
-        state.projects = state.projects.filter((project) => project.id !== payload.id);
-      }
-      const message = `프로젝트 저장 실패: ${result.error.message || "Supabase 오류"}`;
-      openNoticeModal(message);
-      toast(message);
+  try {
+    syncProjectRichEditorValues();
+    const formData = new FormData(event.currentTarget);
+    const getText = (name) => String(formData.get(name) || "").trim();
+    const title = getText("title");
+    const client = getText("client");
+    const startDate = String(formData.get("startDate") || "").trim();
+    const dueDate = String(formData.get("dueDate") || "").trim();
+    if (!title || !client) {
+      openNoticeModal("프로젝트명과 고객사명을 입력해주세요.");
       return;
     }
-    const syncedProject = deserializeProjectFromSupabase(result.data);
-    const documentPayloads = draftProjectDocuments
-      .filter((document) => document.storagePath)
-      .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
-    if (documentPayloads.length) {
-      const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
-      if (documentResult.error) {
+
+    const parsedLanguageCount = Number(formData.get("languageCount") || 0);
+    const languageCount = Number.isFinite(parsedLanguageCount) && parsedLanguageCount > 0 ? parsedLanguageCount : 0;
+    const languages = languageCount >= 2
+      ? Array.from({ length: languageCount }, (_, index) => getText(`language_${index + 1}`)).filter(Boolean)
+      : [];
+    const paymentMethod = String(formData.get("paymentMethod") || "").trim();
+    const paybackStatus = String(formData.get("paybackStatus") || "none").trim() || "none";
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      title,
+      client,
+      projectType: String(formData.get("projectType") || "").trim(),
+      websiteUrl: getText("websiteUrl"),
+      managerName: getText("managerName"),
+      managerPhone: getText("managerPhone"),
+      packageType: String(formData.get("packageType") || "").trim(),
+      siteType: String(formData.get("siteType") || "").trim(),
+      languageCount,
+      languages,
+      status: String(formData.get("status") || "ready").trim() || "ready",
+      progressStage: String(formData.get("status") || "ready") === "inProgress" ? String(formData.get("progressStage") || "").trim() : "",
+      startDate,
+      dueDate,
+      timeline: getText("timeline"),
+      notes: getText("notes"),
+      imwebId: getText("imwebId"),
+      imwebPassword: getText("imwebPassword"),
+      contractAmount: formatAmount(getText("contractAmount")),
+      paybackStatus,
+      paybackAmount: paybackStatus === "enabled" ? formatAmount(getText("paybackAmount")) : "",
+      paybackNote: paybackStatus === "enabled" ? getText("paybackNote") : "",
+      paymentMethod,
+      kmongFee: paymentMethod === "kmong" ? formatAmount(getText("kmongFee")) : "",
+      taxInvoice: ["card", "kmong"].includes(paymentMethod) ? "" : String(formData.get("taxInvoice") || "").trim(),
+    };
+    payload.searchIndex = buildProjectSearchIndex({ ...payload, contracts: [...draftProjectDocuments] });
+
+    const existing = state.projects.find((project) => project.id === payload.id);
+    const previousProject = existing ? structuredClone(existing) : null;
+    const previousDocuments = existing ? structuredClone(existing.contracts || []) : [];
+    if (existing) {
+      Object.assign(existing, payload, { contracts: [...draftProjectDocuments] });
+    } else {
+      state.projects.unshift({ ...payload, contracts: [...draftProjectDocuments] });
+    }
+
+    const nextProject = existing || state.projects[0];
+    const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      const result = await bridge.upsertProject(
+        serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
+      );
+      if (result.error) {
         if (existing && previousProject) {
           Object.assign(existing, previousProject);
-          existing.contracts = previousDocuments;
         } else {
           state.projects = state.projects.filter((project) => project.id !== payload.id);
         }
-        const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}`;
+        const message = `프로젝트 저장 실패: ${result.error.message || "Supabase 오류"}`;
         openNoticeModal(message);
         toast(message);
         return;
       }
-    }
-    const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
-    if (removedDocuments.length) {
-      const removedIds = removedDocuments.map((document) => document.id);
-      const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
-      if (deleteResult.error) {
-        const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
-        openNoticeModal(message);
-        toast(message);
-        return;
-      }
-      removedDocuments
+      const syncedProject = deserializeProjectFromSupabase(result.data);
+      const documentPayloads = draftProjectDocuments
         .filter((document) => document.storagePath)
-        .forEach((document) => bridge.removeProjectDocumentAsset(document.storagePath).catch(() => {}));
+        .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
+      if (documentPayloads.length) {
+        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
+        if (documentResult.error) {
+          if (existing && previousProject) {
+            Object.assign(existing, previousProject);
+            existing.contracts = previousDocuments;
+          } else {
+            state.projects = state.projects.filter((project) => project.id !== payload.id);
+          }
+          const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}`;
+          openNoticeModal(message);
+          toast(message);
+          return;
+        }
+      }
+      const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
+      if (removedDocuments.length) {
+        const removedIds = removedDocuments.map((document) => document.id);
+        const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
+        if (deleteResult.error) {
+          const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
+          openNoticeModal(message);
+          toast(message);
+          return;
+        }
+        removedDocuments
+          .filter((document) => document.storagePath)
+          .forEach((document) => bridge.removeProjectDocumentAsset(document.storagePath).catch(() => {}));
+      }
+      syncedProject.contracts = draftProjectDocuments.map((document) => ({
+        ...document,
+        persisted: true,
+      }));
+      syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
+      const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
+      if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
+      else state.projects.unshift(syncedProject);
     }
-    syncedProject.contracts = draftProjectDocuments.map((document) => ({
-      ...document,
-      persisted: true,
-    }));
-    syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
-    const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
-    if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
-    else state.projects.unshift(syncedProject);
-  }
 
-  state.selectedProjectId = payload.id;
-  saveState();
-  closeProjectModal();
-  openNoticeModal("저장이 완료되었어요!");
-  render();
+    state.selectedProjectId = payload.id;
+    saveState();
+    closeProjectModal();
+    openNoticeModal("저장이 완료되었어요!");
+    render();
+  } catch (error) {
+    const message = `프로젝트 저장 실패: ${error?.message || "알 수 없는 오류"}`;
+    openNoticeModal(message);
+    toast(message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = previousButtonText || "저장";
+    }
+  }
 }
 
 function openMemberModal(memberId = null) {
@@ -5588,6 +5601,8 @@ function syncSchedulesForDateToWorklog(dateKey) {
 
 function carryForwardIncompleteWorklogTasks(dateKey) {
   if (!dateKey) return false;
+  const todayKey = formatDateKey(new Date());
+  if (dateKey !== todayKey) return false;
   state.worklogs = state.worklogs || {};
   const previousDateKey = getAdjacentDateKey(dateKey, -1);
   const previousWorklog = state.worklogs[previousDateKey];
@@ -5600,7 +5615,7 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
 
   let changed = false;
   previousWorklog.tasks
-    .filter((task) => String(task.text || "").trim() && !task.done)
+    .filter((task) => String(task.text || "").trim() && !task.done && !task.carriedFromDate)
     .forEach((task) => {
       const sourceTaskId = task.sourceTaskId || task.id;
       const alreadyExists = currentWorklog.tasks.some((existingTask) => {
