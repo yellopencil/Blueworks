@@ -2577,6 +2577,13 @@ ${escapeHtml(data.memo || "-")}
       pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro));
     }
 
+    pages.forEach((page, index) => {
+      const title = page.querySelector(".qa-pdf-agreement-title");
+      const footerCopy = page.querySelector(".qa-pdf-footer span:first-child");
+      if (index > 0) title?.remove();
+      if (footerCopy && index !== pages.length - 1) footerCopy.textContent = "";
+    });
+
     return pages;
   }
 
