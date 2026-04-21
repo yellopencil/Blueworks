@@ -696,69 +696,6 @@ function serializeProjectDocumentForSupabase(projectId, document) {
   };
 }
 
-async function withTimeout(promise, ms, message) {
-  let timeoutId;
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-async function uploadQueuedProjectDocuments(projectId, queuedDocuments = []) {
-  const bridge = getSupabaseBridge();
-  if (!bridge?.isReady() || !state.sessionUserId || !queuedDocuments.length) {
-    return { uploadedDocuments: [], failedDocumentNames: queuedDocuments.map((document) => document?.name || "문서") };
-  }
-
-  const uploadedDocuments = [];
-  const failedDocumentNames = [];
-
-  for (const document of queuedDocuments) {
-    if (!document?.fileObject) continue;
-    try {
-      const nextStoragePath = buildProjectDocumentObjectPath(projectId, document.name);
-      const uploadResult = await withTimeout(
-        bridge.uploadProjectDocument(document.fileObject, nextStoragePath),
-        20000,
-        "문서 업로드 응답이 지연되고 있어요.",
-      );
-      if (uploadResult?.error) {
-        failedDocumentNames.push(document.name || "문서");
-        continue;
-      }
-
-      uploadedDocuments.push({
-        ...document,
-        storagePath: nextStoragePath,
-        dataUrl: "",
-        fileObject: undefined,
-        persisted: true,
-      });
-    } catch (error) {
-      failedDocumentNames.push(document.name || "문서");
-    }
-  }
-
-  if (uploadedDocuments.length) {
-    const metadataResult = await withTimeout(
-      bridge.upsertProjectDocuments(
-        uploadedDocuments.map((document) => serializeProjectDocumentForSupabase(projectId, document)),
-      ),
-      10000,
-      "문서 메타데이터 저장 응답이 지연되고 있어요.",
-    );
-    if (metadataResult.error) {
-      failedDocumentNames.push("문서 메타데이터");
-      uploadedDocuments.length = 0;
-    }
-  }
-  return { uploadedDocuments, failedDocumentNames };
-}
-
 function deserializeProjectDocumentFromSupabase(row) {
   return {
     id: row.id || crypto.randomUUID(),
@@ -4464,9 +4401,6 @@ async function handleProjectSave(event) {
         return;
       }
       const syncedProject = deserializeProjectFromSupabase(result.data);
-      const queuedDocuments = draftProjectDocuments
-        .filter((document) => !document.storagePath && document.fileObject)
-        .map((document) => ({ ...document }));
       const documentPayloads = draftProjectDocuments
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
@@ -4501,20 +4435,6 @@ async function handleProjectSave(event) {
           fileObject: undefined,
           persisted: true,
         }));
-      if (queuedDocuments.length) {
-        const queuedUploadResult = await uploadQueuedProjectDocuments(payload.id, queuedDocuments);
-        if (queuedUploadResult.uploadedDocuments.length) {
-          syncedProject.contracts = [
-            ...queuedUploadResult.uploadedDocuments,
-            ...syncedProject.contracts,
-          ];
-        }
-        if (queuedUploadResult.failedDocumentNames.length) {
-          const message = `프로젝트는 저장됐지만 일부 문서 업로드가 완료되지 않았어요.\n다시 프로젝트를 열어 아래 문서를 다시 업로드해주세요.\n- ${queuedUploadResult.failedDocumentNames.join("\n- ")}`;
-          openNoticeModal(message);
-          toast("프로젝트는 저장됐지만 문서 업로드 일부가 실패했습니다.");
-        }
-      }
       syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
       const syncedIndex = state.projects.findIndex((project) => project.id === syncedProject.id);
       if (syncedIndex >= 0) state.projects[syncedIndex] = syncedProject;
@@ -5041,12 +4961,16 @@ async function handleDocumentUpload() {
 
   const bridge = getSupabaseBridge();
   const existingProjectId = String(els.projectForm?.elements?.id?.value || "");
+  const projectId = existingProjectId || crypto.randomUUID();
+  if (!existingProjectId && els.projectForm?.elements?.id) {
+    els.projectForm.elements.id.value = projectId;
+  }
   const documentType = els.documentTypeSelect.value || "contract";
   let dataUrl = "";
   let storagePath = "";
 
-  if (bridge?.isReady() && state.sessionUserId && existingProjectId) {
-    storagePath = buildProjectDocumentObjectPath(existingProjectId, file.name);
+  if (bridge?.isReady() && state.sessionUserId) {
+    storagePath = buildProjectDocumentObjectPath(projectId, file.name);
     const uploadResult = await bridge.uploadProjectDocument(file, storagePath);
     if (uploadResult.error) {
       const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
@@ -5067,13 +4991,12 @@ async function handleDocumentUpload() {
     uploadedAt: new Date().toISOString(),
     storagePath,
     dataUrl,
-    fileObject: storagePath ? undefined : file,
     persisted: false,
   });
 
   els.contractFile.value = "";
   renderDocuments();
-  toast(existingProjectId ? "문서가 업로드되었습니다." : "문서가 저장 대기열에 추가되었습니다. 프로젝트 저장 시 함께 업로드됩니다.");
+  toast("문서가 업로드되었습니다.");
 }
 
 function renderDocuments() {
