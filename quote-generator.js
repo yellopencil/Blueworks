@@ -1,75 +1,77 @@
-﻿(function () {
+(function () {
   const doc = document;
   const root = doc.getElementById("quoteApp");
   if (!root) return;
 
-  const TERMS_TEMPLATE = `[??議? 怨꾩빟??- ?뱀궗?댄듃 怨꾩빟?쒕뒗 ?쒖옉 ?붿껌?ш? ?뱀궗?댄듃 ?쒖옉 ?쒕퉬?ㅻ? ?댁슜?섎뒗 ?좎쭨, 湲곌컙, 湲덉븸 ?깆쓣 ?뺤빟?섎뒗 怨꾩빟?쒖엯?덈떎.
-- ?쒖옉 ?붿껌?щ뒗 ?쎄??숈쓽???댁슜???숈??섏뿬 怨꾩빟??寃곗젙?섏??쇰ŉ ?쒓났?섎뒗 ?쒕퉬?ㅺ? ?곷떞 ?댁슜??諛섑븯吏 ?딅뒗 ??蹂??쎄??숈쓽?쒖쓽 ?댁슜??以?⑺빀?덈떎.
+  const TERMS_TEMPLATE = `[제1조] 계약서
+- 웹사이트 계약서는 제작 요청사가 웹사이트 제작 서비스를 이용하는 날짜, 기간, 금액 등을 확약하는 계약서입니다.
+- 제작 요청사는 약관동의서 내용을 숙지하여 계약을 결정하였으며 제공되는 서비스가 상담 내용에 반하지 않는 한 본 약관동의서의 내용을 준용합니다.
 
-[??議? ?뺣낫 ?쒓났 ?숈쓽
-- ?쒖옉?щ뒗 ?먰솢???ъ씠???쒖옉???꾪빐 ?쒖옉 ?붿껌?ъ쓽 ?뺣낫瑜??붽뎄?????덉쑝硫??쒖옉 ?붿껌?щ뒗 ?뺣낫 ?쒓났???숈쓽?⑸땲??
-- ?쒖옉?щ뒗 ?쒓났諛쏆? ?쒖옉 ?붿껌?ъ쓽 ?뺣낫瑜??뱀궗?댄듃 ?쒖옉, 怨꾩빟 ?댁쇅??紐⑹쟻?쇰줈 ?ъ슜?섏? ?딆뒿?덈떎.
+[제2조] 정보 제공 동의
+- 제작사는 원활한 사이트 제작을 위해 제작 요청사의 정보를 요구할 수 있으며 제작 요청사는 정보 제공을 동의합니다.
+- 제작사는 제공받은 제작 요청사의 정보를 웹사이트 제작, 계약 이외의 목적으로 사용하지 않습니다.
 
-[??議? ?쒖옉 ?댁슜
-- ?뱀궗?댄듃 ?쒖옉 ?붾（?섏? ?꾩엫?뱀쓣 ?댁슜?⑸땲??
-- 300留뚯썝 ?댄븯 寃곗젣嫄댁? 100% ?좎엯湲덉씠硫??낃툑???ㅼ쓬?좊????먮즺 以鍮?諛??묒뾽???쒖옉?⑸땲??
-- 1李??쒖옉(PC踰꾩쟾) ?꾨즺?쇱? 怨꾩빟?쒖뿉 湲곗옱??湲고븳?濡?吏꾪뻾?⑸땲??
-- PC 踰꾩쟾 寃???꾨즺 ??紐⑤컮??理쒖쟻???묒뾽???쒖옉?섎ŉ ?곸뾽??湲곗? 理쒕? 5???대궡 ?꾨즺?⑸땲??
-- ?꾨찓??諛??꾩엫???몄뒪?? SSL 蹂댁븞?몄쬆??鍮꾩슜? 蹂꾨룄?낅땲??
+[제3조] 제작 내용
+- 웹사이트 제작 솔루션은 아임웹을 이용합니다.
+- 300만원 이하 결제건은 100% 선입금이며 입금일 다음날부터 자료 준비 및 작업이 시작됩니다.
+- 1차 제작(PC버전) 완료일은 계약서에 기재된 기한대로 진행됩니다.
+- PC 버전 검수 완료 후 모바일 최적화 작업을 시작하며 영업일 기준 최대 5일 이내 완료됩니다.
+- 도메인 및 아임웹 호스팅, SSL 보안인증서 비용은 별도입니다.
 
-[??議? ?쒓났
-- 怨꾩빟?쒖뿉 湲곗옱??湲덉븸? 留욎땄 ?붿옄?? ?뱀궗?댄듃 ?쒖옉, 紐⑤컮??理쒖쟻?? SEO 理쒖쟻?? 諛섏쓳?? A/S瑜??ы븿??湲덉븸?낅땲??
-- ?묒뾽臾쇱쓽 ?ъ슜沅뚭낵 ?뚯쑀沅뚯? 100% ?쒖옉 ?붿껌?ъ뿉 ?덉쑝硫? ??묎텒? ?쒖옉?ъ뿉 ?덉뒿?덈떎.
+[제4조] 제공
+- 계약서에 기재된 금액은 맞춤 디자인, 웹사이트 제작, 모바일 최적화, SEO 최적화, 반응형, A/S를 포함한 금액입니다.
+- 작업물의 사용권과 소유권은 100% 제작 요청사에 있으며, 저작권은 제작사에 있습니다.
 
-[??議? ?먮즺 ?쒓났
-- ?뱀궗?댄듃 ?쒖옉???꾩슂??濡쒓퀬, ?댁슜, ?ъ쭊, ?곸긽 ?깆? ??묎텒踰뺤뿉 ?닿툔?섏? ?딅뒗 ?먮즺濡?蹂대궡二쇱뀛???⑸땲??
-- ?대?吏 以鍮꾧? ?대젮?곗떎 寃쎌슦 ?곸뾽???ъ슜??媛?ν븳 ?ㅽ넚 ?대?吏瑜?理쒕? 10???쒓났?⑸땲??
-- ?묒뾽???꾩슂???먮즺??寃곗젣 ??7???대궡 ?꾨떖?댁＜?붿빞 ?⑸땲??
+[제5조] 자료 제공
+- 웹사이트 제작에 필요한 로고, 내용, 사진, 영상 등은 저작권법에 어긋나지 않는 자료로 보내주셔야 합니다.
+- 이미지 준비가 어려우실 경우 상업적 사용이 가능한 스톡 이미지를 최대 10장 제공합니다.
+- 작업에 필요한 자료는 결제 후 7일 이내 전달해주셔야 합니다.
 
-[??議? ?섏젙
-- PC 1李??쒖옉 ?꾨즺 ??寃??諛??섏젙 ?붿껌??媛?ν빀?덈떎.
-- ?섏젙 ?잛닔??怨꾩빟?쒖뿉 湲곗옱???잛닔 ?댁뿉??媛?ν븯硫??щ윭 ?붿껌????踰덉뿉 臾띠뼱 ?꾨떖?댁＜?쒕㈃ 1?뚮줈 泥섎━?⑸땲??
-- ?묒뾽臾쇱쓽 50% ?댁긽 ?섏젙 ?붿껌 ???쒖옉?щ뒗 ?섏젙 嫄곕? ?먮뒗 異붽? 鍮꾩슜??泥?뎄?????덉뒿?덈떎.
+[제6조] 수정
+- PC 1차 제작 완료 후 검수 및 수정 요청이 가능합니다.
+- 수정 횟수는 계약서에 기재된 횟수 내에서 가능하며 여러 요청을 한 번에 묶어 전달해주시면 1회로 처리됩니다.
+- 작업물의 50% 이상 수정 요청 시 제작사는 수정 거부 또는 추가 비용을 청구할 수 있습니다.
 
-[??議? ?????먮ℓ
-- ?먯씠?꾩떆 諛???됱궗媛 ???먯쓽 ?쒖옉????됲븷 ???덉쑝??李⑥씡 痍⑤뱷???곕Ⅸ 臾몄젣???쒖옉?ъ뿉??梨낆엫吏吏 ?딆뒿?덈떎.
-- ?묒뾽臾쇱쓽 ?붿옄????묎텒? ?쒖옉?ъ뿉 洹?띾맗?덈떎.
+[제7조] 제3자 판매
+- 에이전시 및 대행사가 제3자의 제작을 대행할 수 있으나 차익 취득에 따른 문제는 제작사에서 책임지지 않습니다.
+- 작업물의 디자인 저작권은 제작사에 귀속됩니다.
 
-[??議? ?ы썑 愿由?- ?쒖옉 ?꾨즺 ???덊럹?댁? 愿由ъ뿉 ???梨낆엫? ?쒖옉 ?붿껌?ъ뿉 ?덉뒿?덈떎.
+[제8조] 사후 관리
+- 제작 완료 후 홈페이지 관리에 대한 책임은 제작 요청사에 있습니다.
 
-[??議? 痍⑥냼 諛??섎텋
-- ?쒖옉?ъ쓽 洹梨???100% ?섎텋?⑸땲??
-- ?쒖옉 ?붿껌?щ뒗 ?밸퀎???ъ쑀 ?놁씠 ?쒖옉 以묐룄 痍⑥냼 諛??섎텋??遺덇??⑸땲??
-- 寃곗젣 ???먮즺 以鍮?湲곌컙 以묒씠?쇰룄 ?ъ쟾 ?묒뾽?됱뿉 ?곕씪 遺遺??섎텋留?媛?ν빀?덈떎.
+[제9조] 취소 및 환불
+- 제작사의 귀책 시 100% 환불됩니다.
+- 제작 요청사는 특별한 사유 없이 제작 중도 취소 및 환불이 불가합니다.
+- 결제 후 자료 준비 기간 중이라도 사전 작업량에 따라 부분 환불만 가능합니다.
 
-[??0議? 怨꾩빟???좏슚
-- ?먮줈?쒖뒳??紐⑤뱺 ?곹뭹 怨꾩빟? 蹂??쎄????숈쓽 ??寃곗젣媛 ?꾨즺?섎㈃ 怨꾩빟???깆궗?⑸땲??`;
+[제10조] 계약의 유효
+- 옐로펜슬의 모든 상품 계약은 본 약관에 동의 후 결제가 완료되면 계약이 성사됩니다.`;
 
   const DEFAULT_ROWS = [
-    { name: "援ъ텞 諛??밸뵒?먯씤", desc: "硫붿씤?섏씠吏 1P + ?쒕툕?섏씠吏 6P", qty: 1, unit: 1400000 },
-    { name: "?붿옄??理쒖쟻??, desc: "PC 쨌 MOBILE 理쒖쟻??, qty: 1, unit: 0 },
-    { name: "寃?됱뿏吏?理쒖쟻??, desc: "SEO 쨌 GEO 쨌 AEO ?묒뾽", qty: 1, unit: 0 },
-    { name: "湲고쉷", desc: "UX/UI ?ㅺ퀎 쨌 媛?낆꽦 ?묒뾽", qty: 1, unit: 0 },
-    { name: "鍮꾩＜??肄섑뀗痢?, desc: "?ㅽ넚 ?대?吏 쨌 AI ?앹꽦 鍮꾩＜??肄섑뀗痢??쒓났", qty: 1, unit: 0 },
-    { name: "寃곗젣 紐⑤뱢", desc: "寃곗젣 紐⑤뱢(PG) ?곕룞 諛??명똿", qty: 1, unit: 200000 },
-    { name: "異붽? ?쒕퉬??, desc: "?묒뾽 ?섏씠吏 異붽?", qty: 1, unit: 100000 }
+    { name: "구축 및 웹디자인", desc: "메인페이지 1P + 서브페이지 6P", qty: 1, unit: 1400000 },
+    { name: "디자인 최적화", desc: "PC · MOBILE 최적화", qty: 1, unit: 0 },
+    { name: "검색엔진 최적화", desc: "SEO · GEO · AEO 작업", qty: 1, unit: 0 },
+    { name: "기획", desc: "UX/UI 설계 · 가독성 작업", qty: 1, unit: 0 },
+    { name: "비주얼 콘텐츠", desc: "스톡 이미지 · AI 생성 비주얼 콘텐츠 제공", qty: 1, unit: 0 },
+    { name: "결제 모듈", desc: "결제 모듈(PG) 연동 및 세팅", qty: 1, unit: 200000 },
+    { name: "추가 서비스", desc: "작업 페이지 추가", qty: 1, unit: 100000 }
   ];
 
   const PAYMENT_LINES = {
     normal: [
-      "怨꾩쥖?댁껜 諛??좎슜移대뱶濡?寃곗젣媛 媛?ν빀?덈떎.",
-      "?멸툑怨꾩궛?쒓? ?꾩슂?섏떊 寃쎌슦 ?ъ뾽?먮벑濡앹쬆怨??대찓?쇱쓣 ?꾨떖?댁＜?몄슂.",
-      "移대뱶 寃곗젣 ?붿껌 ??寃곗젣 留곹겕瑜??꾨떖?쒕┰?덈떎.",
-      "怨꾩쥖踰덊샇 : 3333-01-8399628 / 移댁뭅?ㅻ콉?? ?좎듅吏?,
+      "계좌이체 및 신용카드로 결제가 가능합니다.",
+      "세금계산서가 필요하신 경우 사업자등록증과 이메일을 전달해주세요.",
+      "카드 결제 요청 시 결제 링크를 전달드립니다.",
+      "계좌번호 : 3333-01-8399628 / 카카오뱅크, 신승진",
       "",
-      "?곴린 寃ъ쟻? ?붿껌 踰붿쐞 湲곗??쇰줈 ?곗젙?섏뿀?쇰ŉ, 踰붿쐞 蹂寃???湲덉븸??議곗젙?????덉뒿?덈떎.",
-      "?몄뒪?? ?꾨찓?? SSL 鍮꾩슜? 蹂꾨룄?낅땲??"
+      "상기 견적은 요청 범위 기준으로 산정되었으며, 범위 변경 시 금액이 조정될 수 있습니다.",
+      "호스팅, 도메인, SSL 비용은 별도입니다."
     ],
     kmong: [
-      "?щそ ?섎ː?몄쓽 寃쎌슦 ?щそ ?덉떖 寃곗젣濡?吏꾪뻾?⑸땲??",
+      "크몽 의뢰인의 경우 크몽 안심 결제로 진행합니다.",
       "",
-      "?곴린 寃ъ쟻? ?붿껌 踰붿쐞 湲곗??쇰줈 ?곗젙?섏뿀?쇰ŉ, 踰붿쐞 蹂寃???湲덉븸??議곗젙?????덉뒿?덈떎.",
-      "?몄뒪?? ?꾨찓?? SSL 鍮꾩슜? 蹂꾨룄?낅땲??"
+      "상기 견적은 요청 범위 기준으로 산정되었으며, 범위 변경 시 금액이 조정될 수 있습니다.",
+      "호스팅, 도메인, SSL 비용은 별도입니다."
     ]
   };
 
@@ -165,21 +167,21 @@
   }
 
   function getDocTitle(type) {
-    return isContractDoc(type) ? "?덊럹?댁? ?쒖옉 怨꾩빟?? : "?덊럹?댁? ?쒖옉 寃ъ쟻??;
+    return isContractDoc(type) ? "홈페이지 제작 계약서" : "홈페이지 제작 견적서";
   }
 
   function getDocTypeLabel(type) {
     switch (String(type || "")) {
       case "estimate":
-        return "寃ъ쟻??;
+        return "견적서";
       case "contract":
-        return "怨꾩빟??;
+        return "계약서";
       case "estimate_krmong":
-        return "寃ъ쟻???щそ)";
+        return "견적서(크몽)";
       case "contract_krmong":
-        return "怨꾩빟???щそ)";
+        return "계약서(크몽)";
       default:
-        return isContractDoc(type) ? "怨꾩빟?? : "寃ъ쟻??;
+        return isContractDoc(type) ? "계약서" : "견적서";
     }
   }
 
@@ -218,7 +220,7 @@
       if (!raw) return createDefaultQuoteSettings();
       return normalizeQuoteSettings(JSON.parse(raw));
     } catch (error) {
-      console.warn("寃ъ쟻 ?ㅼ젙??遺덈윭?ㅼ? 紐삵뻽?듬땲??", error);
+      console.warn("견적 설정을 불러오지 못했습니다.", error);
       return createDefaultQuoteSettings();
     }
   }
@@ -313,7 +315,7 @@
     if (quoteSettingsSyncPromise) return quoteSettingsSyncPromise;
     quoteSettingsSyncPromise = persistQuoteSettingsToSupabase()
       .catch((error) => {
-        console.warn("寃ъ쟻 ?ㅼ젙??Supabase????ν븯吏 紐삵뻽?듬땲??", error);
+        console.warn("견적 설정을 Supabase에 저장하지 못했습니다.", error);
         return null;
       })
       .finally(() => {
@@ -330,7 +332,7 @@
       return true;
     } catch (error) {
       console.error(error);
-      openNoticeModal(`${failurePrefix}\n${error?.message || "???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎."}`);
+      openNoticeModal(`${failurePrefix}\n${error?.message || "저장 중 오류가 발생했습니다."}`);
       return false;
     }
   }
@@ -346,7 +348,7 @@
       <div class="qa-modal-card" role="dialog" aria-modal="true" aria-labelledby="qaNoticeMessage">
         <h3 id="qaNoticeMessage" class="qa-modal-message"></h3>
         <div class="qa-modal-actions">
-          <button id="qaNoticeConfirmBtn" type="button" class="qa-btn qa-btn-primary">?뺤씤</button>
+          <button id="qaNoticeConfirmBtn" type="button" class="qa-btn qa-btn-primary">확인</button>
         </div>
       </div>
     `;
@@ -376,7 +378,7 @@
     button.id = "historyQuotesBtn";
     button.type = "button";
     button.className = "qa-btn qa-btn-subtle";
-    button.textContent = "吏??寃ъ쟻 쨌 怨꾩빟??;
+    button.textContent = "지난 견적 · 계약서";
     els.downloadPdfBtn.insertAdjacentElement("beforebegin", button);
   }
 
@@ -391,13 +393,13 @@
       <div class="qa-modal-card qa-history-card" role="dialog" aria-modal="true" aria-labelledby="qaHistoryTitle">
         <div class="qa-history-head">
           <div>
-            <h3 id="qaHistoryTitle" class="qa-history-title">吏??寃ъ쟻 쨌 怨꾩빟??/h3>
-            <p class="qa-history-sub">?댁쟾???대낫??PDF ?뚯씪???뺤씤?섍퀬 ?ㅼ떆 ?대젮諛쏄굅??諛붾줈 蹂????덉뒿?덈떎.</p>
+            <h3 id="qaHistoryTitle" class="qa-history-title">지난 견적 · 계약서</h3>
+            <p class="qa-history-sub">이전에 내보낸 PDF 파일을 확인하고 다시 내려받거나 바로 볼 수 있습니다.</p>
           </div>
-          <button id="qaHistoryCloseBtn" type="button" class="qa-btn qa-btn-subtle qa-history-close">?リ린</button>
+          <button id="qaHistoryCloseBtn" type="button" class="qa-btn qa-btn-subtle qa-history-close">닫기</button>
         </div>
         <div class="qa-history-search">
-          <input id="qaHistorySearchInput" type="text" class="qa-input" placeholder="?쒖옉 ?붿껌?? ?대떦?먮챸, ?대떦???곕씫泥섎줈 寃??>
+          <input id="qaHistorySearchInput" type="text" class="qa-input" placeholder="제작 요청사, 담당자명, 담당자 연락처로 검색">
         </div>
         <div class="qa-history-list-wrap">
           <div id="qaHistoryList" class="qa-history-list"></div>
@@ -426,11 +428,11 @@
     modal.innerHTML = `
       <div class="qa-modal-card qa-pdf-viewer-card" role="dialog" aria-modal="true" aria-labelledby="qaPdfViewerTitle">
         <div class="qa-pdf-viewer-head">
-          <h3 id="qaPdfViewerTitle" class="qa-history-title">寃ъ쟻??誘몃━蹂닿린</h3>
-          <button id="qaPdfViewerCloseBtn" type="button" class="qa-btn qa-btn-subtle qa-history-close">?リ린</button>
+          <h3 id="qaPdfViewerTitle" class="qa-history-title">견적서 미리보기</h3>
+          <button id="qaPdfViewerCloseBtn" type="button" class="qa-btn qa-btn-subtle qa-history-close">닫기</button>
         </div>
         <div class="qa-pdf-viewer-body">
-          <iframe id="qaPdfViewerFrame" title="PDF 誘몃━蹂닿린"></iframe>
+          <iframe id="qaPdfViewerFrame" title="PDF 미리보기"></iframe>
         </div>
       </div>
     `;
@@ -452,10 +454,10 @@
     modal.className = "qa-modal-overlay hidden";
     modal.innerHTML = `
       <div class="qa-modal-card qa-confirm-card" role="dialog" aria-modal="true" aria-labelledby="qaDeleteConfirmMessage">
-        <p id="qaDeleteConfirmMessage" class="qa-modal-message qa-modal-message-multiline">?뺣쭚 ??젣?섏떆寃좎뒿?덇퉴?</p>
+        <p id="qaDeleteConfirmMessage" class="qa-modal-message qa-modal-message-multiline">정말 삭제하시겠습니까?</p>
         <div class="qa-confirm-actions">
-          <button id="qaDeleteCancelBtn" type="button" class="qa-btn qa-btn-subtle">痍⑥냼</button>
-          <button id="qaDeleteConfirmBtn" type="button" class="qa-btn qa-btn-primary">??젣</button>
+          <button id="qaDeleteCancelBtn" type="button" class="qa-btn qa-btn-subtle">취소</button>
+          <button id="qaDeleteConfirmBtn" type="button" class="qa-btn qa-btn-primary">삭제</button>
         </div>
       </div>
     `;
@@ -827,8 +829,8 @@
     if (row?.docTypeLabel) return row.docTypeLabel;
     if (row?.docType) return getDocTypeLabel(row.docType);
     const title = String(row?.title || "");
-    if (title.includes("怨꾩빟??)) return "怨꾩빟??;
-    return "寃ъ쟻??;
+    if (title.includes("계약서")) return "계약서";
+    return "견적서";
   }
 
   async function renderPdfHistoryList() {
@@ -837,12 +839,12 @@
     const query = String(modal.querySelector("#qaHistorySearchInput")?.value || "").trim().toLowerCase();
     if (!listEl) return;
 
-    listEl.innerHTML = `<div class="qa-history-empty">遺덈윭?ㅻ뒗 以?..</div>`;
+    listEl.innerHTML = `<div class="qa-history-empty">불러오는 중...</div>`;
     const rows = await getPdfHistoryRecords();
     const filtered = rows.filter((row) => !query || String(row.searchText || "").includes(query));
 
     if (!filtered.length) {
-      listEl.innerHTML = `<div class="qa-history-empty">議곌굔??留욌뒗 寃ъ쟻?쒓? ?놁뒿?덈떎.</div>`;
+      listEl.innerHTML = `<div class="qa-history-empty">조건에 맞는 견적서가 없습니다.</div>`;
       return;
     }
 
@@ -853,17 +855,17 @@
             <div class="qa-history-primary">
               <div class="qa-history-doc-type">${escapeHtml(resolveHistoryDocTypeLabel(row))}</div>
             </div>
-            <div><span class="qa-history-label">?쒖옉 ?붿껌??/span><strong>${escapeHtml(row.clientCompany || "-")}</strong></div>
-            <div><span class="qa-history-label">?대떦?먮챸</span><strong>${escapeHtml(row.clientName || "-")}</strong></div>
-            <div><span class="qa-history-label">?대떦???곕씫泥?/span><strong>${escapeHtml(row.clientPhone || "-")}</strong></div>
-            <div><span class="qa-history-label">寃ъ쟻 湲덉븸</span><strong>${formatKRW(row.total || 0)}??/strong></div>
-            <div><span class="qa-history-label">?묒꽦??/span><strong>${escapeHtml(formatHistoryDate(row.date || row.createdAt))}</strong></div>
+            <div><span class="qa-history-label">제작 요청사</span><strong>${escapeHtml(row.clientCompany || "-")}</strong></div>
+            <div><span class="qa-history-label">담당자명</span><strong>${escapeHtml(row.clientName || "-")}</strong></div>
+            <div><span class="qa-history-label">담당자 연락처</span><strong>${escapeHtml(row.clientPhone || "-")}</strong></div>
+            <div><span class="qa-history-label">견적 금액</span><strong>${formatKRW(row.total || 0)}원</strong></div>
+            <div><span class="qa-history-label">작성일</span><strong>${escapeHtml(formatHistoryDate(row.date || row.createdAt))}</strong></div>
           </div>
         </div>
         <div class="qa-history-item-actions">
-          <button type="button" class="qa-btn qa-btn-subtle qa-history-download">?대젮諛쏄린</button>
-          <button type="button" class="qa-btn qa-btn-primary qa-history-preview">諛붾줈蹂닿린</button>
-          <button type="button" class="qa-btn qa-btn-subtle qa-history-delete">??젣</button>
+          <button type="button" class="qa-btn qa-btn-subtle qa-history-download">내려받기</button>
+          <button type="button" class="qa-btn qa-btn-primary qa-history-preview">바로보기</button>
+          <button type="button" class="qa-btn qa-btn-subtle qa-history-delete">삭제</button>
         </div>
       </article>
     `).join("");
@@ -923,7 +925,7 @@
     let current = null;
     lines.forEach((line) => {
       if (!line.text && !line.html) return;
-      if (/^\[\s*??\s*\d+議?]/.test(line.text)) {
+      if (/^\[\s*제?\s*\d+조\]/.test(line.text)) {
         current = { heading: line, lines: [] };
         sections.push(current);
         return;
@@ -978,11 +980,11 @@
     const page = doc.createElement("section");
     page.className = "qa-pdf-page";
     page.innerHTML = `
-      <h2 class="qa-pdf-agreement-title">?쎄??숈쓽??/h2>
-      ${includeIntro ? '<p class="qa-pdf-agreement-sub">?꾨옒 ?쎄??숈쓽???댁슜??異⑸텇???쎌뼱二쇱꽭?? 怨꾩빟 ?댁슜 誘몄닕吏濡?諛쒖깮??臾몄젣??梨낆엫吏吏 ?딆뒿?덈떎.</p>' : ""}
+      <h2 class="qa-pdf-agreement-title">약관동의서</h2>
+      ${includeIntro ? '<p class="qa-pdf-agreement-sub">아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
       ${contentHtml}
       <div class="qa-pdf-footer">
-        <span>Copyright ???먮줈?쒖뒳 All Rights Reserved.</span>
+        <span>Copyright ⓒ 옐로펜슬 All Rights Reserved.</span>
         <span data-page-number></span>
       </div>
     `;
@@ -1042,8 +1044,8 @@
     });
     els.docTitle.textContent = getDocTitle(type);
     els.signNote.textContent = isContractDoc(type)
-      ? "蹂?臾몄꽌???꾩옄臾몄꽌濡? 蹂꾨룄??吏곸씤/?쒕챸 ?놁씠 寃곗젣 ??怨꾩빟??泥닿껐?⑸땲??"
-      : "蹂?臾몄꽌 ?좏슚湲곌컙? 諛쒗뻾?쇰줈遺??7?쇱엯?덈떎.";
+      ? "본 문서는 전자문서로, 별도의 직인/서명 없이 결제 시 계약이 체결됩니다."
+      : "본 문서 유효기간은 발행일로부터 7일입니다.";
     renderTerms();
   }
 
@@ -1082,28 +1084,28 @@
       tr.querySelector('[data-role="amount"]').value = formatKRW(Math.max(0, qty * unit));
     });
 
-    els.baseSubtotalTxt.textContent = `${formatKRW(baseSubtotal)}??;
-    els.langRowLabel.textContent = `?ㅺ뎅??異붽?(30% 횞 ${langCount})`;
-    els.langAddonTxt.textContent = `${formatKRW(langFee)}??;
+    els.baseSubtotalTxt.textContent = `${formatKRW(baseSubtotal)}원`;
+    els.langRowLabel.textContent = `다국어 추가(30% × ${langCount})`;
+    els.langAddonTxt.textContent = `${formatKRW(langFee)}원`;
     els.langRateTxt.textContent = `${Math.round(langRate * 100)}%`;
-    els.langFeeTxt.textContent = `${formatKRW(langFee)}??;
-    els.subtotalTxt.textContent = `${formatKRW(subtotal)}??;
-    els.vatTxt.textContent = `${formatKRW(vat)}??;
-    els.totalTxt.textContent = `${formatKRW(total)}??;
+    els.langFeeTxt.textContent = `${formatKRW(langFee)}원`;
+    els.subtotalTxt.textContent = `${formatKRW(subtotal)}원`;
+    els.vatTxt.textContent = `${formatKRW(vat)}원`;
+    els.totalTxt.textContent = `${formatKRW(total)}원`;
   }
 
   function createRow(data = {}) {
     const tr = doc.createElement("tr");
     tr.innerHTML = `
-      <td><input class="qa-cell" data-role="name" value="${escapeHtml(data.name || "")}" placeholder="?? 援ъ텞 諛??밸뵒?먯씤"></td>
-      <td><input class="qa-cell" data-role="desc" value="${escapeHtml(data.desc || "")}" placeholder="?? 硫붿씤?섏씠吏 1P + ?쒕툕?섏씠吏 6P"></td>
+      <td><input class="qa-cell" data-role="name" value="${escapeHtml(data.name || "")}" placeholder="예: 구축 및 웹디자인"></td>
+      <td><input class="qa-cell" data-role="desc" value="${escapeHtml(data.desc || "")}" placeholder="예: 메인페이지 1P + 서브페이지 6P"></td>
       <td class="num"><input class="qa-cell num" data-role="qty" value="${data.qty ?? 1}" inputmode="numeric"></td>
       <td class="num"><input class="qa-cell num" data-role="unit" value="${formatKRW(data.unit || 0)}" inputmode="numeric"></td>
       <td class="num"><input class="qa-cell num" data-role="amount" value="0" readonly></td>
       <td class="no-print">
         <div class="qa-row-actions">
-          <button class="qa-drag" type="button" title="?쒕옒洹명빐???쒖꽌 蹂寃?>??떘</button>
-          <button class="qa-del" type="button" title="??젣">??/button>
+          <button class="qa-drag" type="button" title="드래그해서 순서 변경">⋮⋮</button>
+          <button class="qa-del" type="button" title="삭제">✕</button>
         </div>
       </td>
     `;
@@ -1139,17 +1141,17 @@
   function saveRowPreset() {
     const rows = getRows();
     if (!rows.length) {
-      openNoticeModal("??ν븷 寃ъ쟻 ??ぉ???놁뒿?덈떎.");
+      openNoticeModal("저장할 견적 항목이 없습니다.");
       return;
     }
     localStorage.setItem(ROW_PRESET_STORAGE_KEY, JSON.stringify(rows));
-    openNoticeModal("寃ъ쟻 ??ぉ????λ릺?덉뒿?덈떎.");
+    openNoticeModal("견적 항목이 저장되었습니다.");
   }
 
   function loadRowPreset() {
     const raw = localStorage.getItem(ROW_PRESET_STORAGE_KEY);
     if (!raw) {
-      openNoticeModal("??λ맂 寃ъ쟻 ??ぉ???놁뒿?덈떎.");
+      openNoticeModal("저장된 견적 항목이 없습니다.");
       return;
     }
     try {
@@ -1157,10 +1159,10 @@
       els.itemsBody.innerHTML = "";
       rows.forEach(addRow);
       calc();
-      openNoticeModal("??λ맂 寃ъ쟻 ??ぉ??遺덈윭?붿뒿?덈떎.");
+      openNoticeModal("저장된 견적 항목을 불러왔습니다.");
     } catch (error) {
       console.error(error);
-      openNoticeModal("??ぉ??遺덈윭?ㅻ뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.");
+      openNoticeModal("항목을 불러오는 중 문제가 발생했습니다.");
     }
   }
 
@@ -1259,7 +1261,7 @@
   function buildPageOne(data) {
     const paymentLinesText = data.paymentLines
       .filter((line) => String(line || "").trim())
-      .map((line) => `쨌 ${String(line).replace(/^[쨌??-\s]+/, "")}`)
+      .map((line) => `· ${String(line).replace(/^[·•\-\s]+/, "")}`)
       .join("\n");
 
     const page = doc.createElement("section");
@@ -1267,28 +1269,28 @@
     page.innerHTML = `
       <div class="qa-pdf-header">
         <div class="qa-pdf-brand">
-          <img class="qa-pdf-logo" src="${PDF_LOGO_URL}" alt="?먮줈?쒖뒳 濡쒓퀬" crossorigin="anonymous" referrerpolicy="no-referrer">
+          <img class="qa-pdf-logo" src="${PDF_LOGO_URL}" alt="옐로펜슬 로고" crossorigin="anonymous" referrerpolicy="no-referrer">
           <h1 class="qa-pdf-title">${escapeHtml(data.title)}</h1>
         </div>
-        <div class="qa-pdf-date">?묒꽦??: ${escapeHtml(data.date || "-")}</div>
+        <div class="qa-pdf-date">작성일 : ${escapeHtml(data.date || "-")}</div>
       </div>
 
       <div class="qa-pdf-meta">
         <div class="qa-pdf-box">
-          <h4>?쒖옉???뺣낫</h4>
+          <h4>제작사 정보</h4>
           <div class="qa-pdf-kv">
-            <div class="k">?곹샇紐?/div><div class="v">?먮줈?쒖뒳</div>
-            <div class="k">?ъ뾽?먮쾲??/div><div class="v">276-06-02233</div>
-            <div class="k">???/div><div class="v">李⑤??? ?좎듅吏?/div>
-            <div class="k">?곕씫泥?/div><div class="v">010-7368-7241</div>
+            <div class="k">상호명</div><div class="v">옐로펜슬</div>
+            <div class="k">사업자번호</div><div class="v">276-06-02233</div>
+            <div class="k">대표</div><div class="v">차민석, 신승진</div>
+            <div class="k">연락처</div><div class="v">010-7368-7241</div>
           </div>
         </div>
         <div class="qa-pdf-box">
-          <h4>?쒖옉 ?붿껌???뺣낫</h4>
+          <h4>제작 요청사 정보</h4>
           <div class="qa-pdf-kv">
-            <div class="k">?쒖옉 ?붿껌??/div><div class="v">${escapeHtml(data.clientCompany || "-")}</div>
-            <div class="k">?대떦?먮챸</div><div class="v">${escapeHtml(data.clientName || "-")}</div>
-            <div class="k">?대떦???곕씫泥?/div><div class="v">${escapeHtml(data.clientPhone || "-")}</div>
+            <div class="k">제작 요청사</div><div class="v">${escapeHtml(data.clientCompany || "-")}</div>
+            <div class="k">담당자명</div><div class="v">${escapeHtml(data.clientName || "-")}</div>
+            <div class="k">담당자 연락처</div><div class="v">${escapeHtml(data.clientPhone || "-")}</div>
           </div>
         </div>
       </div>
@@ -1303,11 +1305,11 @@
         </colgroup>
         <thead>
           <tr>
-            <th>??ぉ</th>
-            <th>?ㅻ챸</th>
-            <th class="qa-pdf-num">?섎웾</th>
-            <th class="qa-pdf-num">?④?</th>
-            <th class="qa-pdf-num">湲덉븸</th>
+            <th>항목</th>
+            <th>설명</th>
+            <th class="qa-pdf-num">수량</th>
+            <th class="qa-pdf-num">단가</th>
+            <th class="qa-pdf-num">금액</th>
           </tr>
         </thead>
         <tbody>
@@ -1316,31 +1318,32 @@
               <td>${escapeHtml(row.name)}</td>
               <td>${escapeHtml(row.desc)}</td>
               <td class="qa-pdf-num">${row.qty}</td>
-              <td class="qa-pdf-num">${formatKRW(row.unit)}??/td>
-              <td class="qa-pdf-num">${formatKRW(row.amount)}??/td>
+              <td class="qa-pdf-num">${formatKRW(row.unit)}원</td>
+              <td class="qa-pdf-num">${formatKRW(row.amount)}원</td>
             </tr>
           `).join("")}
         </tbody>
       </table>
 
       <div class="qa-pdf-subgrid">
-        <div class="qa-pdf-note"><strong>?묒뾽 ?쇱젙</strong>
-1李??묒뾽 湲곌컙 : ${escapeHtml(data.workPeriod || "-")}
-?섏젙 ?잛닔 : ${escapeHtml(data.revCount || "-")}??
-<strong>鍮꾧퀬</strong>
+        <div class="qa-pdf-note"><strong>작업 일정</strong>
+1차 작업 기간 : ${escapeHtml(data.workPeriod || "-")}
+수정 횟수 : ${escapeHtml(data.revCount || "-")}회
+
+<strong>비고</strong>
 ${escapeHtml(data.memo || "-")}
 
-<strong>寃곗젣 諛⑸쾿</strong>
+<strong>결제 방법</strong>
 <span class="qa-pdf-payment-lines">${escapeHtml(paymentLinesText || "-")}</span></div>
         <div class="qa-pdf-side">
           <div class="qa-pdf-totals">
-            <div class="qa-pdf-total-row"><span>湲곕낯 寃ъ쟻</span><strong>${formatKRW(data.baseSubtotal)}??/strong></div>
-            <div class="qa-pdf-total-row"><span>?ㅺ뎅??異붽?(30% 횞 ${data.langCount})</span><strong>${formatKRW(data.langFee)}??/strong></div>
+            <div class="qa-pdf-total-row"><span>기본 견적</span><strong>${formatKRW(data.baseSubtotal)}원</strong></div>
+            <div class="qa-pdf-total-row"><span>다국어 추가(30% × ${data.langCount})</span><strong>${formatKRW(data.langFee)}원</strong></div>
             <div class="qa-pdf-total-divider"></div>
-            <div class="qa-pdf-total-row"><span>怨듦툒媛??/span><strong>${formatKRW(data.subtotal)}??/strong></div>
-            <div class="qa-pdf-total-row"><span>遺媛??VAT 10%)</span><strong>${formatKRW(data.vat)}??/strong></div>
+            <div class="qa-pdf-total-row"><span>공급가액</span><strong>${formatKRW(data.subtotal)}원</strong></div>
+            <div class="qa-pdf-total-row"><span>부가세(VAT 10%)</span><strong>${formatKRW(data.vat)}원</strong></div>
             <div class="qa-pdf-total-divider"></div>
-            <div class="qa-pdf-total-row qa-pdf-total-row-grand"><span>珥??⑷퀎</span><strong>${formatKRW(data.total)}??/strong></div>
+            <div class="qa-pdf-total-row qa-pdf-total-row-grand"><span>총 합계</span><strong>${formatKRW(data.total)}원</strong></div>
           </div>
         </div>
       </div>
@@ -1348,383 +1351,12 @@ ${escapeHtml(data.memo || "-")}
       <div class="qa-pdf-sign qa-pdf-sign-compact">
         <div class="qa-pdf-sign-note">${escapeHtml(data.signNote || "")}</div>
         <div class="qa-pdf-sign-name">
-          ?먮줈?쒖뒳 ???李⑤???(??
-          <img src="${PDF_STAMP_URL}" alt="吏곸씤" crossorigin="anonymous" referrerpolicy="no-referrer">
+          옐로펜슬 대표 차민석 (인)
+          <img src="${PDF_STAMP_URL}" alt="직인" crossorigin="anonymous" referrerpolicy="no-referrer">
         </div>
       </div>
     `;
     return page;
-  }
-
-  function buildPrintRowsHtml(data) {
-    return data.rows.map((row) => `
-      <tr>
-        <td>${escapeHtml(row.name)}</td>
-        <td>${escapeHtml(row.desc)}</td>
-        <td class="num">${row.qty}</td>
-        <td class="num">${formatKRW(row.unit)}??/td>
-        <td class="num">${formatKRW(row.amount)}??/td>
-      </tr>
-    `).join("");
-  }
-
-  function buildPaymentLinesHtml(lines) {
-    return lines
-      .filter((line) => String(line || "").trim())
-      .map((line) => `<li>${escapeHtml(String(line).replace(/^[??-\s]+/, ""))}</li>`)
-      .join("");
-  }
-
-  function buildPrintableDocumentHtml(data) {
-    return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(createPdfFilename(data))}</title>
-  <style>
-    @page {
-      size: A4;
-      margin: 18mm 16mm;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      color: #0f172a;
-      font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .doc-page {
-      page-break-after: always;
-    }
-    .doc-page:last-child {
-      page-break-after: auto;
-    }
-    .cover-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .brand {
-      display: grid;
-      gap: 8px;
-    }
-    .logo {
-      width: 84px;
-      height: auto;
-      display: block;
-    }
-    h1 {
-      margin: 0;
-      font-size: 20px;
-      line-height: 1.25;
-      font-weight: 800;
-    }
-    .doc-date {
-      font-size: 11px;
-      font-weight: 700;
-      color: #475569;
-      white-space: nowrap;
-    }
-    .meta-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .box {
-      border: 1px solid #dbe3f0;
-      border-radius: 10px;
-      padding: 12px;
-    }
-    .box h3 {
-      margin: 0 0 8px;
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .kv {
-      display: grid;
-      grid-template-columns: 78px 1fr;
-      gap: 6px 8px;
-      font-size: 11px;
-      line-height: 1.5;
-    }
-    .kv-label {
-      color: #64748b;
-      font-weight: 700;
-    }
-    .kv-value {
-      font-weight: 700;
-      word-break: break-word;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 11px;
-    }
-    th, td {
-      border: 1px solid #dbe3f0;
-      padding: 8px 9px;
-      vertical-align: top;
-      line-height: 1.45;
-      word-break: break-word;
-    }
-    th {
-      background: #f8faff;
-      text-align: left;
-      font-weight: 800;
-      color: #475569;
-    }
-    td.num, th.num {
-      text-align: right;
-      white-space: nowrap;
-    }
-    .summary-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 12px;
-      margin-top: 12px;
-      align-items: start;
-    }
-    .note-box {
-      border: 1px solid #dbe3f0;
-      border-radius: 10px;
-      padding: 12px;
-      font-size: 11px;
-      line-height: 1.65;
-      white-space: pre-line;
-    }
-    .note-box strong {
-      color: #0f172a;
-    }
-    .payment-list {
-      margin: 6px 0 0 18px;
-      padding: 0;
-    }
-    .payment-list li {
-      margin: 0 0 4px;
-    }
-    .totals {
-      border: 1px solid #dbe3f0;
-      border-radius: 10px;
-      padding: 10px 12px;
-    }
-    .total-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 6px 0;
-      font-size: 11px;
-      font-weight: 700;
-    }
-    .total-row strong {
-      white-space: nowrap;
-    }
-    .total-divider {
-      height: 1px;
-      background: #dbe3f0;
-      margin: 8px 0;
-    }
-    .total-grand {
-      font-size: 13px;
-    }
-    .sign {
-      margin-top: 18px;
-      padding-top: 12px;
-      border-top: 1px solid #dbe3f0;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: end;
-    }
-    .sign-note {
-      font-size: 11px;
-      line-height: 1.55;
-      font-weight: 700;
-      color: #334155;
-    }
-    .sign-name {
-      position: relative;
-      min-width: 180px;
-      text-align: right;
-      font-size: 12px;
-      font-weight: 800;
-      padding-right: 12px;
-    }
-    .stamp {
-      position: absolute;
-      right: -2px;
-      top: -28px;
-      width: 58px;
-      opacity: 0.92;
-    }
-    .agreement-wrap {
-      page-break-inside: auto;
-    }
-    .agreement-title {
-      margin: 0 0 8px;
-      font-size: 17px;
-      font-weight: 800;
-    }
-    .agreement-sub {
-      margin: 0 0 18px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #dbe3f0;
-      font-size: 11px;
-      line-height: 1.6;
-      color: #475569;
-      font-weight: 700;
-    }
-    .agreement-html {
-      font-size: 11px;
-      line-height: 1.72;
-      color: #334155;
-    }
-    .agreement-html > *:first-child {
-      margin-top: 0;
-    }
-    .agreement-html > div,
-    .agreement-html > p,
-    .agreement-html > section,
-    .agreement-html > article,
-    .agreement-html > blockquote,
-    .agreement-html > pre,
-    .agreement-html > ul,
-    .agreement-html > ol {
-      margin: 0 0 8px;
-      page-break-inside: avoid;
-    }
-    .agreement-html ul,
-    .agreement-html ol {
-      padding-left: 18px;
-    }
-    .agreement-html li {
-      margin: 4px 0;
-    }
-    .agreement-html a {
-      color: #1d4ed8;
-      text-decoration: underline;
-    }
-    .agreement-footer {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid #e5e7eb;
-      color: #94a3b8;
-      font-size: 10px;
-      font-weight: 700;
-      text-align: right;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <section class="doc-page">
-      <div class="cover-head">
-        <div class="brand">
-          <img class="logo" src="${PDF_LOGO_URL}" alt="?먮줈?쒖뒳 濡쒓퀬">
-          <h1>${escapeHtml(data.title)}</h1>
-        </div>
-        <div class="doc-date">?묒꽦?? ${escapeHtml(data.date || "-")}</div>
-      </div>
-
-      <div class="meta-grid">
-        <section class="box">
-          <h3>?쒓났???뺣낫</h3>
-          <div class="kv">
-            <div class="kv-label">?곹샇紐?/div><div class="kv-value">?먮줈?쒖뒳</div>
-            <div class="kv-label">?ъ뾽?먮쾲??/div><div class="kv-value">276-06-02233</div>
-            <div class="kv-label">???/div><div class="kv-value">李⑤???/div>
-            <div class="kv-label">?곕씫泥?/div><div class="kv-value">010-7368-7241</div>
-          </div>
-        </section>
-        <section class="box">
-          <h3>怨좉컼 ?뺣낫</h3>
-          <div class="kv">
-            <div class="kv-label">?섎ː ?낆껜</div><div class="kv-value">${escapeHtml(data.clientCompany || "-")}</div>
-            <div class="kv-label">?대떦?먮챸</div><div class="kv-value">${escapeHtml(data.clientName || "-")}</div>
-            <div class="kv-label">?곕씫泥?/div><div class="kv-value">${escapeHtml(data.clientPhone || "-")}</div>
-          </div>
-        </section>
-      </div>
-
-      <table>
-        <colgroup>
-          <col style="width:24%">
-          <col style="width:36%">
-          <col style="width:8%">
-          <col style="width:16%">
-          <col style="width:16%">
-        </colgroup>
-        <thead>
-          <tr>
-            <th>??ぉ</th>
-            <th>?ㅻ챸</th>
-            <th class="num">?섎웾</th>
-            <th class="num">?④?</th>
-            <th class="num">湲덉븸</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${buildPrintRowsHtml(data)}
-        </tbody>
-      </table>
-
-      <div class="summary-grid">
-        <section class="note-box"><strong>?묒뾽 ?쇱젙</strong>
-1李??묒뾽 湲곌컙 : ${escapeHtml(data.workPeriod || "-")}
-?섏젙 ?잛닔 : ${escapeHtml(data.revCount || "-")}
-<strong>鍮꾧퀬</strong>
-${escapeHtml(data.memo || "-")}
-
-<strong>寃곗젣 諛⑸쾿</strong>
-<ul class="payment-list">${buildPaymentLinesHtml(data.paymentLines)}</ul></section>
-
-        <section class="totals">
-          <div class="total-row"><span>湲곕낯 寃ъ쟻</span><strong>${formatKRW(data.baseSubtotal)}??/strong></div>
-          <div class="total-row"><span>?ㅺ뎅??異붽?(30% 횞 ${data.langCount})</span><strong>${formatKRW(data.langFee)}??/strong></div>
-          <div class="total-divider"></div>
-          <div class="total-row"><span>怨듦툒媛??/span><strong>${formatKRW(data.subtotal)}??/strong></div>
-          <div class="total-row"><span>遺媛??VAT 10%)</span><strong>${formatKRW(data.vat)}??/strong></div>
-          <div class="total-divider"></div>
-          <div class="total-row total-grand"><span>珥??⑷퀎</span><strong>${formatKRW(data.total)}??/strong></div>
-        </section>
-      </div>
-
-      <section class="sign">
-        <div class="sign-note">${escapeHtml(data.signNote || "")}</div>
-        <div class="sign-name">
-          ?먮줈?쒖뒳 ???李⑤???(??
-          <img class="stamp" src="${PDF_STAMP_URL}" alt="?꾩옣">
-        </div>
-      </section>
-    </section>
-
-    <section class="agreement-wrap">
-      <h2 class="agreement-title">?쎄??숈쓽??/h2>
-      <p class="agreement-sub">?꾨옒 ?쎄??숈쓽???댁슜??異⑸텇???쎌뼱二쇱꽭?? 怨꾩빟 ?댁슜 誘몄닕吏濡?諛쒖깮??臾몄젣??梨낆엫吏吏 ?딆뒿?덈떎.</p>
-      <div class="agreement-html">${data.agreementHtml}</div>
-      <div class="agreement-footer">Copyright ???먮줈?쒖뒳 All Rights Reserved.</div>
-    </section>
-  </main>
-  <script>
-    window.addEventListener("load", () => {
-      const tryPrint = () => {
-        window.focus();
-        window.print();
-      };
-      if (document.fonts?.ready) {
-        document.fonts.ready.then(tryPrint).catch(tryPrint);
-      } else {
-        setTimeout(tryPrint, 250);
-      }
-    });
-  </script>
-</body>
-</html>`;
   }
 
   function buildAgreementPages(data) {
@@ -1759,11 +1391,11 @@ ${escapeHtml(data.memo || "-")}
       const page = doc.createElement("section");
       page.className = "qa-pdf-page";
       page.innerHTML = `
-        <h2 class="qa-pdf-agreement-title">?쎄??숈쓽??/h2>
-        ${index === 0 ? '<p class="qa-pdf-agreement-sub">?쎄??숈쓽???댁슜??瑗쇨세???쎌뼱二쇱꽭?? 怨꾩빟 ?댁슜 誘몄닕吏濡?諛쒖깮??臾몄젣??梨낆엫吏吏 ?딆뒿?덈떎.</p>' : ""}
+        <h2 class="qa-pdf-agreement-title">약관동의서</h2>
+        ${index === 0 ? '<p class="qa-pdf-agreement-sub">약관동의서 내용을 꼼꼼히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
         ${content}
         <div class="qa-pdf-footer">
-          <span>Copyright ???먮줈?쒖뒳 All Rights Reserved.</span>
+          <span>Copyright ⓒ 옐로펜슬 All Rights Reserved.</span>
           <span data-page-number></span>
         </div>
       `;
@@ -1848,29 +1480,64 @@ ${escapeHtml(data.memo || "-")}
 
   async function exportPdf() {
     if (!validateRequired()) {
-      openNoticeModal("시작 요청서의 담당자명, 담당자 연락처를 입력해주세요.");
+      openNoticeModal("제작 요청사, 담당자명, 담당자 연락처를 입력해주세요.");
+      return;
+    }
+    if (!window.html2canvas || !window.jspdf?.jsPDF) {
+      openNoticeModal("PDF 라이브러리를 불러오지 못했습니다.");
       return;
     }
 
     const data = collectPdfData();
+    const rootEl = els.pdfTemplateRoot;
+    if (!rootEl) {
+      openNoticeModal("PDF 템플릿 영역을 찾지 못했습니다.");
+      return;
+    }
+
     const prevLabel = els.downloadPdfBtn.textContent;
     els.downloadPdfBtn.disabled = true;
-    els.downloadPdfBtn.textContent = "PDF 인쇄 준비 중...";
+    els.downloadPdfBtn.textContent = "PDF 준비 중...";
 
     try {
-      const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
-      if (!printWindow) {
-        openNoticeModal("팝업이 차단되어 인쇄 창을 열지 못했습니다. 이 사이트의 팝업을 허용한 뒤 다시 시도해주세요.");
-        return;
+      rootEl.classList.remove("hidden");
+      rootEl.innerHTML = "";
+      const pages = [buildPageOne(data), ...buildAgreementPages(data, rootEl)];
+      pages.forEach((page, index) => {
+        const pageNo = page.querySelector("[data-page-number]");
+        if (pageNo) pageNo.textContent = `${index + 1} / ${pages.length}`;
+      });
+      pages.forEach((page) => rootEl.appendChild(page));
+
+      await waitForPdfAssets(rootEl);
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
+
+      for (let index = 0; index < pages.length; index += 1) {
+        els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${pages.length}`;
+        const canvas = await window.html2canvas(pages[index], {
+          scale: 1.4,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#ffffff",
+          logging: false
+        });
+        const imageData = canvas.toDataURL("image/jpeg", 0.82);
+        if (index > 0) pdf.addPage();
+        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
       }
 
-      printWindow.document.open();
-      printWindow.document.write(buildPrintableDocumentHtml(data));
-      printWindow.document.close();
+      const fileName = createPdfFilename(data);
+      const pdfBlob = pdf.output("blob");
+      await savePdfHistoryRecord(makePdfHistoryRecord(data, pdfBlob));
+      triggerBlobDownload(pdfBlob, fileName);
     } catch (error) {
       console.error(error);
-      openNoticeModal("PDF 인쇄용 문서를 만드는 중 문제가 발생했습니다.");
+      openNoticeModal("PDF를 내보내는 중 문제가 발생했습니다.");
     } finally {
+      rootEl.innerHTML = "";
+      rootEl.classList.add("hidden");
       els.downloadPdfBtn.disabled = false;
       els.downloadPdfBtn.textContent = prevLabel;
     }
@@ -1903,7 +1570,7 @@ ${escapeHtml(data.memo || "-")}
 
     els.agreementSaveBtn.addEventListener("click", async () => {
       quoteSettings.agreementHtml = getAgreementHtml();
-      const saved = await persistQuoteSettingsWithFeedback("??μ씠 ?꾨즺?섏뿀?듬땲??", "?쎄??숈쓽????μ뿉 ?ㅽ뙣?덉뒿?덈떎.");
+      const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "약관동의서 저장에 실패했습니다.");
       if (!saved) return;
       agreementEditable = false;
       syncAgreementEditor();
@@ -1922,7 +1589,7 @@ ${escapeHtml(data.memo || "-")}
     els.termsSaveBtn.addEventListener("click", async () => {
       const key = isKrmongDoc(currentDocType) ? "kmong" : "normal";
       quoteSettings.paymentLines[key] = els.termsEditor.value.split("\n");
-      const saved = await persistQuoteSettingsWithFeedback("??μ씠 ?꾨즺?섏뿀?듬땲??", "寃곗젣 諛⑸쾿 ??μ뿉 ?ㅽ뙣?덉뒿?덈떎.");
+      const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "결제 방법 저장에 실패했습니다.");
       if (!saved) return;
       termsEditable = false;
       renderTerms();
@@ -1974,13 +1641,13 @@ ${escapeHtml(data.memo || "-")}
     validateRequired();
     pruneOldPdfHistory().catch((error) => console.error(error));
     loadQuoteSettingsFromSupabase().catch((error) => {
-      console.warn("寃ъ쟻 ?ㅼ젙??Supabase?먯꽌 遺덈윭?ㅼ? 紐삵뻽?듬땲??", error);
+      console.warn("견적 설정을 Supabase에서 불러오지 못했습니다.", error);
     });
     const bridge = getSupabaseBridge();
     bridge?.onAuthStateChange?.((event, session) => {
       if (session) {
         loadQuoteSettingsFromSupabase().catch((error) => {
-          console.warn("濡쒓렇????寃ъ쟻 ?ㅼ젙???ㅼ떆 遺덈윭?ㅼ? 紐삵뻽?듬땲??", error);
+          console.warn("로그인 후 견적 설정을 다시 불러오지 못했습니다.", error);
         });
       }
     });
@@ -1988,4 +1655,3 @@ ${escapeHtml(data.memo || "-")}
 
   init();
 })();
-
