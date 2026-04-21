@@ -4141,12 +4141,63 @@ function plainTextToRichHtml(value) {
   return escapeHtml(raw).replace(/\n/g, "<br>");
 }
 
+function sanitizeRichEditorHtml(value) {
+  const container = document.createElement("div");
+  container.innerHTML = String(value || "");
+
+  const renderNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return escapeHtml(node.textContent || "");
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+    const tag = node.tagName.toLowerCase();
+    const inner = Array.from(node.childNodes).map(renderNode).join("");
+
+    switch (tag) {
+      case "br":
+        return "<br>";
+      case "strong":
+      case "b":
+        return inner ? `<strong>${inner}</strong>` : "";
+      case "em":
+      case "i":
+        return inner ? `<em>${inner}</em>` : "";
+      case "u":
+        return inner ? `<u>${inner}</u>` : "";
+      case "a": {
+        const rawHref = String(node.getAttribute("href") || "").trim();
+        if (!rawHref || !inner) return inner;
+        const safeHref = /^(https?:)?\/\//i.test(rawHref) ? rawHref : `https://${rawHref}`;
+        return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+      }
+      case "div":
+      case "p":
+      case "section":
+      case "article":
+      case "li":
+        return inner ? `${inner}<br>` : "";
+      default:
+        return inner;
+    }
+  };
+
+  const html = Array.from(container.childNodes)
+    .map(renderNode)
+    .join("")
+    .replace(/(?:<br>\s*){3,}/gi, "<br><br>")
+    .replace(/^(<br>\s*)+|(<br>\s*)+$/gi, "")
+    .trim();
+
+  return html === "<br>" ? "" : html;
+}
+
 function normalizeRichEditorHtml(value) {
-  const html = String(value || "")
+  const html = sanitizeRichEditorHtml(String(value || "")
     .replace(/<div><br><\/div>/gi, "<br>")
     .replace(/<div>/gi, "<br>")
     .replace(/<\/div>/gi, "")
-    .trim();
+    .trim());
   return html === "<br>" ? "" : html;
 }
 
