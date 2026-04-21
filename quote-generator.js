@@ -82,6 +82,8 @@
   const PDF_HISTORY_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
   const PDF_LOGO_URL = "https://cdn.imweb.me/upload/S20210903c0421227bca81/11e1f4c49fda7.png";
   const PDF_STAMP_URL = "https://cdn.imweb.me/upload/S20210903c0421227bca81/8f10c47f62d80.png";
+  const PDF_FONT_REGULAR_URL = "https://cdn.jsdelivr.net/gh/jhaemin/noto-sans-kr/NotoSansKR-Regular.otf";
+  const PDF_FONT_BOLD_URL = "https://cdn.jsdelivr.net/gh/jhaemin/noto-sans-kr/NotoSansKR-Bold.otf";
 
   const els = {
     itemsBody: doc.getElementById("itemsBody"),
@@ -818,21 +820,8 @@
     return asText ? asset : asset.slice();
   }
 
-  function extractGoogleFontUrl(cssText) {
-    const match = String(cssText || "").match(/url\(([^)]+)\)\s*format\(['"]?(woff2|woff|truetype|opentype)['"]?\)/i) ||
-      String(cssText || "").match(/url\(([^)]+)\)/i);
-    if (!match) return "";
-    return String(match[1] || "").replace(/^['"]|['"]$/g, "").trim();
-  }
-
-  async function fetchGoogleFontSubset(weight, textSeed) {
-    const uniqueChars = uniqueTextCharacters(textSeed);
-    const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@${weight}&display=swap&text=${encodeURIComponent(uniqueChars)}`;
-    const cssText = await fetchBinaryAsset(cssUrl, true);
-    const fontUrl = extractGoogleFontUrl(cssText);
-    if (!fontUrl) {
-      throw new Error("한글 PDF 폰트 주소를 찾지 못했습니다.");
-    }
+  async function fetchPdfFontSource(weight) {
+    const fontUrl = weight >= 700 ? PDF_FONT_BOLD_URL : PDF_FONT_REGULAR_URL;
     return fetchBinaryAsset(fontUrl, false);
   }
 
@@ -1187,10 +1176,9 @@
       throw new Error("PDF 폰트 엔진을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
     }
     pdfDoc.registerFontkit(window.fontkit);
-    const fontSeed = buildPdfFontSeed(data);
     const [regularBytes, boldBytes] = await Promise.all([
-      fetchGoogleFontSubset(400, fontSeed),
-      fetchGoogleFontSubset(700, fontSeed),
+      fetchPdfFontSource(400),
+      fetchPdfFontSource(700),
     ]);
     const [regular, bold] = await Promise.all([
       pdfDoc.embedFont(regularBytes, { subset: true }),
