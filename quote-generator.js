@@ -684,6 +684,737 @@
     return `${sanitizeFilename(data.title)}_${sanitizeFilename(data.clientCompany || "client")}_${sanitizeFilename(data.date || getTodayIso())}.pdf`;
   }
 
+  const PDF_PAGE_SIZE = { width: 595.28, height: 841.89 };
+  const PDF_MARGIN = { top: 42, right: 42, bottom: 40, left: 42 };
+  const PDF_ASSET_CACHE = new Map();
+
+  function uniqueTextCharacters(value) {
+    return Array.from(new Set(Array.from(String(value || "")))).join("");
+  }
+
+  function stripHtmlText(value) {
+    const temp = doc.createElement("div");
+    temp.innerHTML = String(value || "");
+    return temp.textContent || "";
+  }
+
+  function collectAgreementPdfBlocks(html) {
+    const temp = doc.createElement("div");
+    temp.innerHTML = html || "";
+    const blocks = [];
+
+    Array.from(temp.childNodes).forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        String(node.textContent || "")
+          .replace(/\r\n?/g, "\n")
+          .split("\n")
+          .forEach((line) => {
+            const text = line.trim();
+            if (text) {
+              blocks.push({ text, kind: /^\[\s*제\s*\d+조\]/.test(text) ? "heading" : "body" });
+            } else {
+              blocks.push({ text: "", kind: "spacer" });
+            }
+          });
+        return;
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tagName = node.tagName.toUpperCase();
+
+      if (["UL", "OL"].includes(tagName)) {
+        Array.from(node.children).forEach((child, index) => {
+          const bulletText = stripHtmlText(child.innerHTML).trim();
+          if (!bulletText) return;
+          const prefix = tagName === "OL" ? `${index + 1}. ` : "- ";
+          blocks.push({ text: `${prefix}${bulletText}`, kind: "body" });
+        });
+        blocks.push({ text: "", kind: "spacer" });
+        return;
+      }
+
+      const text = stripHtmlText(node.innerHTML).trim();
+      if (!text) {
+        blocks.push({ text: "", kind: "spacer" });
+        return;
+      }
+      blocks.push({ text, kind: /^\[\s*제\s*\d+조\]/.test(text) ? "heading" : "body" });
+    });
+
+    return blocks;
+  }
+
+  function buildPdfFontSeed(data) {
+    const staticText = [
+      "옐로펜슬",
+      "웹사이트 제작 견적서",
+      "웹사이트 제작 계약서",
+      "작성일",
+      "시작자 정보",
+      "시작 요청자 정보",
+      "상호명",
+      "사업자번호",
+      "대표",
+      "연락처",
+      "담당자명",
+      "작업 일정",
+      "수정 횟수",
+      "비고",
+      "결제 방법",
+      "기본 견적",
+      "다국어 추가",
+      "공급가액",
+      "부가세",
+      "총 합계",
+      "약관동의서",
+      "아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.",
+      "Copyright ⓒ 옐로펜슬 All Rights Reserved.",
+    ].join("\n");
+
+    const dynamicText = [
+      data.title,
+      data.date,
+      data.clientCompany,
+      data.clientName,
+      data.clientPhone,
+      data.workPeriod,
+      data.revCount,
+      data.memo,
+      data.signNote,
+      ...data.paymentLines,
+      ...data.rows.flatMap((row) => [
+        row.name,
+        row.desc,
+        String(row.qty),
+        formatKRW(row.unit),
+        formatKRW(row.amount),
+      ]),
+      ...collectAgreementPdfBlocks(data.agreementHtml).map((block) => block.text),
+      `${formatKRW(data.baseSubtotal)}원`,
+      `${formatKRW(data.langFee)}원`,
+      `${formatKRW(data.subtotal)}원`,
+      `${formatKRW(data.vat)}원`,
+      `${formatKRW(data.total)}원`,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 [](){}<>-_=+/*%:;,.?&@#'\"!~|\\",
+    ].join("\n");
+
+    return uniqueTextCharacters(`${staticText}\n${dynamicText}`);
+  }
+
+  async function fetchBinaryAsset(url, asText = false) {
+    if (!url) throw new Error("요청할 자산 주소가 없습니다.");
+    const cacheKey = `${asText ? "text" : "bin"}:${url}`;
+    if (!PDF_ASSET_CACHE.has(cacheKey)) {
+      PDF_ASSET_CACHE.set(cacheKey, (async () => {
+        const response = await fetch(url, { cache: "force-cache", mode: "cors" });
+        if (!response.ok) {
+          throw new Error(`자산을 불러오지 못했습니다. (${response.status})`);
+        }
+        if (asText) return response.text();
+        return new Uint8Array(await response.arrayBuffer());
+      })());
+    }
+    const asset = await PDF_ASSET_CACHE.get(cacheKey);
+    return asText ? asset : asset.slice();
+  }
+
+  function extractGoogleFontUrl(cssText) {
+    const match = String(cssText || "").match(/url\(([^)]+)\)\s*format\(['"]?(woff2|woff|truetype|opentype)['"]?\)/i) ||
+      String(cssText || "").match(/url\(([^)]+)\)/i);
+    if (!match) return "";
+    return String(match[1] || "").replace(/^['"]|['"]$/g, "").trim();
+  }
+
+  async function fetchGoogleFontSubset(weight, textSeed) {
+    const uniqueChars = uniqueTextCharacters(textSeed);
+    const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@${weight}&display=swap&text=${encodeURIComponent(uniqueChars)}`;
+    const cssText = await fetchBinaryAsset(cssUrl, true);
+    const fontUrl = extractGoogleFontUrl(cssText);
+    if (!fontUrl) {
+      throw new Error("한글 PDF 폰트 주소를 찾지 못했습니다.");
+    }
+    return fetchBinaryAsset(fontUrl, false);
+  }
+
+  function wrapPdfText(text, font, size, maxWidth) {
+    const paragraphs = String(text ?? "").replace(/\r\n?/g, "\n").split("\n");
+    const lines = [];
+
+    paragraphs.forEach((paragraph, paragraphIndex) => {
+      const normalized = paragraph.replace(/\t/g, "    ");
+      if (!normalized) {
+        lines.push("");
+        return;
+      }
+
+      let current = "";
+      Array.from(normalized).forEach((char) => {
+        const candidate = current + char;
+        if (!current || font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+          current = candidate;
+          return;
+        }
+        lines.push(current);
+        current = char;
+      });
+      if (current) lines.push(current);
+      if (paragraphIndex < paragraphs.length - 1 && !paragraphs[paragraphIndex + 1]) {
+        lines.push("");
+      }
+    });
+
+    return lines.length ? lines : [""];
+  }
+
+  function drawWrappedPdfText(page, text, x, topY, options) {
+    const {
+      font,
+      size,
+      maxWidth,
+      lineHeight = size * 1.5,
+      color,
+    } = options;
+    const lines = wrapPdfText(text, font, size, maxWidth);
+    let y = topY;
+    lines.forEach((line) => {
+      if (line) {
+        page.drawText(line, { x, y, font, size, color });
+      }
+      y -= lineHeight;
+    });
+    return {
+      bottomY: y,
+      renderedHeight: lines.length * lineHeight,
+      lines,
+      lineHeight,
+    };
+  }
+
+  function drawPdfRect(page, x, yTop, width, height, style) {
+    page.drawRectangle({
+      x,
+      y: yTop - height,
+      width,
+      height,
+      borderWidth: style.borderWidth || 1,
+      borderColor: style.borderColor,
+      color: style.fillColor,
+      opacity: style.opacity ?? 1,
+      borderOpacity: style.borderOpacity ?? 1,
+    });
+  }
+
+  function drawPdfInfoBox(page, title, rows, x, yTop, width, fonts, palette) {
+    const titleHeight = 16;
+    const rowGap = 4;
+    const bodyLineHeight = 13;
+    const labelWidth = 70;
+    const innerX = x + 12;
+    const innerWidth = width - 24;
+    const valueWidth = innerWidth - labelWidth - 8;
+
+    const measuredRows = rows.map((row) => {
+      const valueLines = wrapPdfText(row.value || "-", fonts.regular, 10, valueWidth);
+      return { ...row, valueLines, height: Math.max(bodyLineHeight, valueLines.length * bodyLineHeight) };
+    });
+
+    const boxHeight = 16 + titleHeight + measuredRows.reduce((sum, row) => sum + row.height, 0) + rowGap * Math.max(0, measuredRows.length - 1) + 12;
+    drawPdfRect(page, x, yTop, width, boxHeight, {
+      borderColor: palette.border,
+      fillColor: palette.white,
+      borderWidth: 1,
+    });
+
+    page.drawText(title, {
+      x: innerX,
+      y: yTop - 16,
+      font: fonts.bold,
+      size: 11,
+      color: palette.text,
+    });
+
+    let currentY = yTop - 34;
+    measuredRows.forEach((row) => {
+      page.drawText(row.label, {
+        x: innerX,
+        y: currentY,
+        font: fonts.bold,
+        size: 9.5,
+        color: palette.muted,
+      });
+
+      drawWrappedPdfText(page, row.value || "-", innerX + labelWidth + 8, currentY, {
+        font: fonts.regular,
+        size: 10,
+        maxWidth: valueWidth,
+        lineHeight: bodyLineHeight,
+        color: palette.text,
+      });
+      currentY -= row.height + rowGap;
+    });
+
+    return yTop - boxHeight;
+  }
+
+  function drawPdfTable(page, data, startY, fonts, palette) {
+    const x = PDF_MARGIN.left;
+    const widths = [120, 175, 42, 82, 94];
+    const headerHeight = 24;
+    const rowPaddingY = 7;
+    const cellPaddingX = 7;
+    const bodyLineHeight = 12;
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+
+    drawPdfRect(page, x, startY, totalWidth, headerHeight, {
+      borderColor: palette.border,
+      fillColor: palette.headerFill,
+      borderWidth: 1,
+    });
+
+    const headers = ["항목", "설명", "수량", "단가", "금액"];
+    let cursorX = x;
+    headers.forEach((header, index) => {
+      if (index > 0) {
+        page.drawLine({
+          start: { x: cursorX, y: startY },
+          end: { x: cursorX, y: startY - headerHeight },
+          thickness: 1,
+          color: palette.border,
+        });
+      }
+      page.drawText(header, {
+        x: cursorX + cellPaddingX,
+        y: startY - 16,
+        font: fonts.bold,
+        size: 10,
+        color: palette.text,
+      });
+      cursorX += widths[index];
+    });
+
+    let currentY = startY - headerHeight;
+    data.rows.forEach((row) => {
+      const rowLines = [
+        wrapPdfText(row.name, fonts.regular, 10, widths[0] - cellPaddingX * 2),
+        wrapPdfText(row.desc, fonts.regular, 10, widths[1] - cellPaddingX * 2),
+        wrapPdfText(String(row.qty), fonts.regular, 10, widths[2] - cellPaddingX * 2),
+        wrapPdfText(formatKRW(row.unit), fonts.regular, 10, widths[3] - cellPaddingX * 2),
+        wrapPdfText(`${formatKRW(row.amount)}원`, fonts.regular, 10, widths[4] - cellPaddingX * 2),
+      ];
+      const maxLines = Math.max(...rowLines.map((lines) => lines.length));
+      const rowHeight = maxLines * bodyLineHeight + rowPaddingY * 2;
+
+      drawPdfRect(page, x, currentY, totalWidth, rowHeight, {
+        borderColor: palette.border,
+        fillColor: palette.white,
+        borderWidth: 1,
+      });
+
+      let rowX = x;
+      rowLines.forEach((lines, columnIndex) => {
+        if (columnIndex > 0) {
+          page.drawLine({
+            start: { x: rowX, y: currentY },
+            end: { x: rowX, y: currentY - rowHeight },
+            thickness: 1,
+            color: palette.border,
+          });
+        }
+
+        const isNumeric = columnIndex >= 2;
+        const alignedX = isNumeric ? rowX + widths[columnIndex] - cellPaddingX : rowX + cellPaddingX;
+        const blockY = currentY - rowPaddingY - 10;
+
+        lines.forEach((line, lineIndex) => {
+          const lineWidth = fonts.regular.widthOfTextAtSize(line || "", 10);
+          page.drawText(line || "", {
+            x: isNumeric ? alignedX - lineWidth : alignedX,
+            y: blockY - lineIndex * bodyLineHeight,
+            font: fonts.regular,
+            size: 10,
+            color: palette.text,
+          });
+        });
+
+        rowX += widths[columnIndex];
+      });
+
+      currentY -= rowHeight;
+    });
+
+    return currentY;
+  }
+
+  function buildPdfSummaryBlocks(data) {
+    return [
+      { label: "작업 일정", value: data.workPeriod || "-" },
+      { label: "수정 횟수", value: data.revCount || "-" },
+      { label: "비고", value: data.memo || "-" },
+      { label: "결제 방법", value: data.paymentLines.filter((line) => String(line || "").trim()).join("\n") || "-" },
+    ];
+  }
+
+  function drawPdfSummaryBox(page, title, blocks, x, yTop, width, fonts, palette) {
+    const innerX = x + 12;
+    const innerWidth = width - 24;
+    const titleHeight = 14;
+    const sectionGap = 8;
+    let bodyHeight = 0;
+
+    const measured = blocks.map((block) => {
+      const labelHeight = 12;
+      const valueLines = wrapPdfText(block.value || "-", fonts.regular, 10, innerWidth);
+      const valueHeight = Math.max(12, valueLines.length * 13);
+      const height = labelHeight + 2 + valueHeight;
+      bodyHeight += height;
+      return { ...block, valueLines, height };
+    });
+
+    bodyHeight += sectionGap * Math.max(0, measured.length - 1);
+    const boxHeight = 16 + titleHeight + bodyHeight + 12;
+
+    drawPdfRect(page, x, yTop, width, boxHeight, {
+      borderColor: palette.border,
+      fillColor: palette.white,
+      borderWidth: 1,
+    });
+
+    page.drawText(title, {
+      x: innerX,
+      y: yTop - 16,
+      font: fonts.bold,
+      size: 11,
+      color: palette.text,
+    });
+
+    let currentY = yTop - 34;
+    measured.forEach((block, index) => {
+      page.drawText(block.label, {
+        x: innerX,
+        y: currentY,
+        font: fonts.bold,
+        size: 9.5,
+        color: palette.muted,
+      });
+      currentY -= 14;
+      block.valueLines.forEach((line) => {
+        if (line) {
+          page.drawText(line, {
+            x: innerX,
+            y: currentY,
+            font: fonts.regular,
+            size: 10,
+            color: palette.text,
+          });
+        }
+        currentY -= 13;
+      });
+      if (index < measured.length - 1) currentY -= sectionGap;
+    });
+
+    return yTop - boxHeight;
+  }
+
+  function drawPdfTotalsBox(page, data, x, yTop, width, fonts, palette) {
+    const rows = [
+      { label: "기본 견적", value: `${formatKRW(data.baseSubtotal)}원` },
+      { label: `다국어 추가 (${data.langCount}개)`, value: `${formatKRW(data.langFee)}원` },
+      { label: "공급가액", value: `${formatKRW(data.subtotal)}원`, strong: true },
+      { label: "부가세 (VAT 10%)", value: `${formatKRW(data.vat)}원`, strong: true },
+      { label: "총 합계", value: `${formatKRW(data.total)}원`, strong: true, grand: true },
+    ];
+
+    const boxHeight = 16 + rows.length * 22 + 10;
+    drawPdfRect(page, x, yTop, width, boxHeight, {
+      borderColor: palette.border,
+      fillColor: palette.white,
+      borderWidth: 1,
+    });
+
+    page.drawText("합계", {
+      x: x + 12,
+      y: yTop - 16,
+      font: fonts.bold,
+      size: 11,
+      color: palette.text,
+    });
+
+    let currentY = yTop - 40;
+    rows.forEach((row, index) => {
+      const font = row.strong ? fonts.bold : fonts.regular;
+      const size = row.grand ? 13 : 10.5;
+      const valueWidth = font.widthOfTextAtSize(row.value, size);
+      page.drawText(row.label, {
+        x: x + 12,
+        y: currentY,
+        font,
+        size,
+        color: row.grand ? palette.accent : palette.text,
+      });
+      page.drawText(row.value, {
+        x: x + width - 12 - valueWidth,
+        y: currentY,
+        font,
+        size,
+        color: row.grand ? palette.accent : palette.text,
+      });
+      currentY -= 20;
+      if (index === 1 || index === 3) {
+        page.drawLine({
+          start: { x: x + 12, y: currentY + 6 },
+          end: { x: x + width - 12, y: currentY + 6 },
+          thickness: 1,
+          color: palette.border,
+        });
+      }
+    });
+
+    return yTop - boxHeight;
+  }
+
+  async function embedPdfPng(pdfDoc, url) {
+    try {
+      const bytes = await fetchBinaryAsset(url, false);
+      return await pdfDoc.embedPng(bytes);
+    } catch (error) {
+      console.warn("PDF 이미지 자산을 불러오지 못했습니다.", url, error);
+      return null;
+    }
+  }
+
+  async function loadPdfFonts(pdfDoc, data) {
+    if (!window.fontkit) {
+      throw new Error("PDF 폰트 엔진을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+    pdfDoc.registerFontkit(window.fontkit);
+    const fontSeed = buildPdfFontSeed(data);
+    const [regularBytes, boldBytes] = await Promise.all([
+      fetchGoogleFontSubset(400, fontSeed),
+      fetchGoogleFontSubset(700, fontSeed),
+    ]);
+    const [regular, bold] = await Promise.all([
+      pdfDoc.embedFont(regularBytes, { subset: true }),
+      pdfDoc.embedFont(boldBytes, { subset: true }),
+    ]);
+    return { regular, bold };
+  }
+
+  function addPdfFooters(pdfDoc, fonts, palette) {
+    const pages = pdfDoc.getPages();
+    pages.forEach((page, index) => {
+      const text = `${index + 1} / ${pages.length}`;
+      const size = 9;
+      const width = fonts.regular.widthOfTextAtSize(text, size);
+      page.drawText(text, {
+        x: PDF_PAGE_SIZE.width - PDF_MARGIN.right - width,
+        y: 18,
+        font: fonts.regular,
+        size,
+        color: palette.muted,
+      });
+      page.drawText("Copyright ⓒ 옐로펜슬 All Rights Reserved.", {
+        x: PDF_MARGIN.left,
+        y: 18,
+        font: fonts.regular,
+        size: 8.5,
+        color: palette.muted,
+      });
+    });
+  }
+
+  function createPdfPalette(rgb) {
+    return {
+      text: rgb(0.07, 0.09, 0.16),
+      muted: rgb(0.39, 0.45, 0.56),
+      border: rgb(0.86, 0.89, 0.94),
+      headerFill: rgb(0.96, 0.97, 0.99),
+      white: rgb(1, 1, 1),
+      accent: rgb(0.14, 0.35, 0.86),
+    };
+  }
+
+  function drawPdfAgreementPages(pdfDoc, data, fonts, palette) {
+    const blocks = collectAgreementPdfBlocks(data.agreementHtml);
+    if (!blocks.length) return;
+
+    let page = pdfDoc.addPage([PDF_PAGE_SIZE.width, PDF_PAGE_SIZE.height]);
+    let y = PDF_PAGE_SIZE.height - PDF_MARGIN.top;
+    const contentWidth = PDF_PAGE_SIZE.width - PDF_MARGIN.left - PDF_MARGIN.right;
+
+    const startAgreementPage = (isFirstPage) => {
+      page.drawText("약관동의서", {
+        x: PDF_MARGIN.left,
+        y,
+        font: fonts.bold,
+        size: 18,
+        color: palette.text,
+      });
+      y -= 24;
+      if (isFirstPage) {
+        const intro = "아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.";
+        const introBlock = drawWrappedPdfText(page, intro, PDF_MARGIN.left, y, {
+          font: fonts.regular,
+          size: 10.5,
+          maxWidth: contentWidth,
+          lineHeight: 15,
+          color: palette.muted,
+        });
+        y = introBlock.bottomY - 10;
+      } else {
+        y -= 4;
+      }
+    };
+
+    startAgreementPage(true);
+
+    blocks.forEach((block) => {
+      const isHeading = block.kind === "heading";
+      const isSpacer = block.kind === "spacer";
+      if (isSpacer) {
+        y -= 8;
+        if (y < PDF_MARGIN.bottom + 32) {
+          page = pdfDoc.addPage([PDF_PAGE_SIZE.width, PDF_PAGE_SIZE.height]);
+          y = PDF_PAGE_SIZE.height - PDF_MARGIN.top;
+          startAgreementPage(false);
+        }
+        return;
+      }
+
+      const font = isHeading ? fonts.bold : fonts.regular;
+      const size = isHeading ? 11.5 : 10.5;
+      const lineHeight = isHeading ? 16 : 15;
+      const lines = wrapPdfText(block.text, font, size, contentWidth);
+      const blockHeight = lines.length * lineHeight;
+      if (y - blockHeight < PDF_MARGIN.bottom + 18) {
+        page = pdfDoc.addPage([PDF_PAGE_SIZE.width, PDF_PAGE_SIZE.height]);
+        y = PDF_PAGE_SIZE.height - PDF_MARGIN.top;
+        startAgreementPage(false);
+      }
+
+      const rendered = drawWrappedPdfText(page, block.text, PDF_MARGIN.left, y, {
+        font,
+        size,
+        maxWidth: contentWidth,
+        lineHeight,
+        color: palette.text,
+      });
+      y = rendered.bottomY - (isHeading ? 8 : 4);
+    });
+  }
+
+  async function buildDownloadablePdfBlob(data) {
+    if (!window.PDFLib?.PDFDocument) {
+      throw new Error("PDF 생성 엔진을 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    const { PDFDocument, rgb } = window.PDFLib;
+    const pdfDoc = await PDFDocument.create();
+    const palette = createPdfPalette(rgb);
+    const fonts = await loadPdfFonts(pdfDoc, data);
+    const [logoImage, stampImage] = await Promise.all([
+      embedPdfPng(pdfDoc, PDF_LOGO_URL),
+      embedPdfPng(pdfDoc, PDF_STAMP_URL),
+    ]);
+
+    const page = pdfDoc.addPage([PDF_PAGE_SIZE.width, PDF_PAGE_SIZE.height]);
+    const contentWidth = PDF_PAGE_SIZE.width - PDF_MARGIN.left - PDF_MARGIN.right;
+    let y = PDF_PAGE_SIZE.height - PDF_MARGIN.top;
+
+    if (logoImage) {
+      const logoWidth = 82;
+      const scale = logoWidth / logoImage.width;
+      const logoHeight = logoImage.height * scale;
+      page.drawImage(logoImage, {
+        x: PDF_MARGIN.left,
+        y: y - logoHeight + 4,
+        width: logoWidth,
+        height: logoHeight,
+      });
+      y -= logoHeight + 10;
+    }
+
+    page.drawText(data.title, {
+      x: PDF_MARGIN.left,
+      y,
+      font: fonts.bold,
+      size: 20,
+      color: palette.text,
+    });
+    const dateText = `작성일 : ${data.date || "-"}`;
+    const dateSize = 10.5;
+    const dateWidth = fonts.bold.widthOfTextAtSize(dateText, dateSize);
+    page.drawText(dateText, {
+      x: PDF_PAGE_SIZE.width - PDF_MARGIN.right - dateWidth,
+      y: y + 2,
+      font: fonts.bold,
+      size: dateSize,
+      color: palette.muted,
+    });
+    y -= 26;
+
+    const infoTop = y;
+    const boxGap = 12;
+    const boxWidth = (contentWidth - boxGap) / 2;
+    const companyBottom = drawPdfInfoBox(page, "시작자 정보", [
+      { label: "상호명", value: "옐로펜슬" },
+      { label: "사업자번호", value: "276-06-02233" },
+      { label: "대표", value: "차민석" },
+      { label: "연락처", value: "010-7368-7241" },
+    ], PDF_MARGIN.left, infoTop, boxWidth, fonts, palette);
+    const clientBottom = drawPdfInfoBox(page, "시작 요청자 정보", [
+      { label: "시작 요청자", value: data.clientCompany || "-" },
+      { label: "담당자명", value: data.clientName || "-" },
+      { label: "담당자 연락처", value: data.clientPhone || "-" },
+    ], PDF_MARGIN.left + boxWidth + boxGap, infoTop, boxWidth, fonts, palette);
+    y = Math.min(companyBottom, clientBottom) - 16;
+
+    y = drawPdfTable(page, data, y, fonts, palette) - 16;
+
+    const summaryWidth = contentWidth * 0.58;
+    const totalsWidth = contentWidth - summaryWidth - boxGap;
+    const summaryBottom = drawPdfSummaryBox(page, "작업 정보", buildPdfSummaryBlocks(data), PDF_MARGIN.left, y, summaryWidth, fonts, palette);
+    const totalsBottom = drawPdfTotalsBox(page, data, PDF_MARGIN.left + summaryWidth + boxGap, y, totalsWidth, fonts, palette);
+    y = Math.min(summaryBottom, totalsBottom) - 16;
+
+    page.drawText(data.signNote || "", {
+      x: PDF_MARGIN.left,
+      y,
+      font: fonts.regular,
+      size: 10.5,
+      color: palette.text,
+    });
+    y -= 18;
+    const signText = "옐로펜슬 대표 차민석 (인)";
+    page.drawText(signText, {
+      x: PDF_MARGIN.left,
+      y,
+      font: fonts.bold,
+      size: 12,
+      color: palette.text,
+    });
+    if (stampImage) {
+      const stampWidth = 64;
+      const scale = stampWidth / stampImage.width;
+      const stampHeight = stampImage.height * scale;
+      page.drawImage(stampImage, {
+        x: PDF_MARGIN.left + fonts.bold.widthOfTextAtSize(signText, 12) + 10,
+        y: y - stampHeight / 2 + 6,
+        width: stampWidth,
+        height: stampHeight,
+      });
+    }
+
+    drawPdfAgreementPages(pdfDoc, data, fonts, palette);
+    addPdfFooters(pdfDoc, fonts, palette);
+
+    const pdfBytes = await pdfDoc.save({
+      useObjectStreams: true,
+      addDefaultPage: false,
+      updateFieldAppearances: false,
+    });
+    return new Blob([pdfBytes], { type: "application/pdf" });
+  }
+
   function openPdfHistoryDb() {
     return new Promise((resolve, reject) => {
       const request = window.indexedDB.open(PDF_HISTORY_DB_NAME, 1);
@@ -1877,27 +2608,23 @@ ${escapeHtml(data.memo || "-")}
 
   async function exportPdf() {
     if (!validateRequired()) {
-      openNoticeModal("제작 요청사, 담당자명, 담당자 연락처를 입력해주세요.");
+      openNoticeModal("시작 요청자, 담당자명, 담당자 연락처를 입력해주세요.");
       return;
     }
 
     const data = collectPdfData();
     const prevLabel = els.downloadPdfBtn.textContent;
     els.downloadPdfBtn.disabled = true;
-    els.downloadPdfBtn.textContent = "PDF 인쇄 준비 중...";
+    els.downloadPdfBtn.textContent = "PDF 생성 중...";
 
     try {
-      const printWindow = window.open("", "_blank", "width=1100,height=900");
-      if (!printWindow) {
-        openNoticeModal("팝업이 차단되어 인쇄 창을 열지 못했습니다. 이 사이트의 팝업을 허용한 뒤 다시 시도해주세요.");
-        return;
-      }
-      printWindow.document.open();
-      printWindow.document.write(buildPrintableDocumentHtml(data));
-      printWindow.document.close();
+      const blob = await buildDownloadablePdfBlob(data);
+      const record = makePdfHistoryRecord(data, blob);
+      await savePdfHistoryRecord(record);
+      triggerBlobDownload(blob, record.filename || createPdfFilename(data));
     } catch (error) {
       console.error(error);
-      openNoticeModal("PDF 인쇄용 문서를 준비하는 중 문제가 발생했습니다.");
+      openNoticeModal(`PDF를 생성하지 못했습니다.\n${error?.message || "알 수 없는 오류가 발생했습니다."}`);
     } finally {
       els.downloadPdfBtn.disabled = false;
       els.downloadPdfBtn.textContent = prevLabel;
