@@ -23,11 +23,13 @@
     setCachedSession(session) {
       this.cachedSession = session || null;
     },
-    getAccessToken() {
-      return this.cachedSession?.access_token || "";
+    async getAccessToken() {
+      if (this.cachedSession?.access_token) return this.cachedSession.access_token;
+      const sessionResult = await this.getSession();
+      return sessionResult?.data?.session?.access_token || "";
     },
     async restRequest(path, options = {}) {
-      const accessToken = this.getAccessToken();
+      const accessToken = await this.getAccessToken();
       if (!accessToken) {
         return { data: null, error: new Error("Supabase session token is not ready.") };
       }
@@ -67,6 +69,48 @@
             parsed?.details ||
             response.statusText ||
             "Request failed.";
+          return { data: null, error: new Error(message) };
+        }
+        return { data: parsed, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    async storageUploadRequest(bucket, objectPath, file) {
+      const accessToken = await this.getAccessToken();
+      if (!accessToken) {
+        return { data: null, error: new Error("Supabase session token is not ready.") };
+      }
+      const requestUrl = `${this.url}/storage/v1/object/${bucket}/${objectPath}`;
+      try {
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            apikey: this.publishableKey,
+            Authorization: `Bearer ${accessToken}`,
+            "x-upsert": "true",
+            "content-type": file?.type || "application/octet-stream",
+          },
+          body: file,
+        });
+        const text = await response.text();
+        let parsed = null;
+        if (text) {
+          try {
+            parsed = JSON.parse(text);
+          } catch (error) {
+            parsed = text;
+          }
+        }
+        if (!response.ok) {
+          const message =
+            parsed?.message ||
+            parsed?.error ||
+            parsed?.error_description ||
+            parsed?.hint ||
+            parsed?.details ||
+            response.statusText ||
+            "Storage upload failed.";
           return { data: null, error: new Error(message) };
         }
         return { data: parsed, error: null };
@@ -193,10 +237,7 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.storage.from(this.projectDocumentBucket).upload(objectPath, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+      return this.storageUploadRequest(this.projectDocumentBucket, objectPath, file);
     },
     async removeProjectDocumentAsset(path) {
       if (!this.client) {

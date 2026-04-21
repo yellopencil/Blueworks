@@ -709,6 +709,18 @@ function deserializeProjectDocumentFromSupabase(row) {
   };
 }
 
+async function withTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function serializeScheduleForSupabase(schedule) {
   return {
     id: schedule.id,
@@ -4968,35 +4980,61 @@ async function handleDocumentUpload() {
   const documentType = els.documentTypeSelect.value || "contract";
   let dataUrl = "";
   let storagePath = "";
+  const previousButtonText = els.uploadContractBtn?.textContent || "";
 
-  if (bridge?.isReady() && state.sessionUserId) {
-    storagePath = buildProjectDocumentObjectPath(projectId, file.name);
-    const uploadResult = await bridge.uploadProjectDocument(file, storagePath);
-    if (uploadResult.error) {
-      const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
-      toast(message);
-      openNoticeModal(message);
-      return;
-    }
-  } else {
-    dataUrl = "";
+  if (els.uploadContractBtn) {
+    els.uploadContractBtn.disabled = true;
+    els.uploadContractBtn.textContent = "업로드 중...";
   }
+  if (els.contractFile) els.contractFile.disabled = true;
+  if (els.documentTypeSelect) els.documentTypeSelect.disabled = true;
 
-  draftProjectDocuments.unshift({
-    id: crypto.randomUUID(),
-    type: documentType,
-    name: file.name,
-    mimeType: file.type || guessMimeType(file.name),
-    size: file.size,
-    uploadedAt: new Date().toISOString(),
-    storagePath,
-    dataUrl,
-    persisted: false,
-  });
+  try {
+    if (bridge?.isReady() && state.sessionUserId) {
+      storagePath = buildProjectDocumentObjectPath(projectId, file.name);
+      const uploadResult = await withTimeout(
+        bridge.uploadProjectDocument(file, storagePath),
+        20000,
+        "문서 업로드 응답이 늦어지고 있어요. 다시 시도해주세요.",
+      );
+      if (uploadResult.error) {
+        const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
+        toast(message);
+        openNoticeModal(message);
+        return;
+      }
+    } else {
+      dataUrl = "";
+    }
 
-  els.contractFile.value = "";
-  renderDocuments();
-  toast("문서가 업로드되었습니다.");
+    draftProjectDocuments.unshift({
+      id: crypto.randomUUID(),
+      type: documentType,
+      name: file.name,
+      mimeType: file.type || guessMimeType(file.name),
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+      storagePath,
+      dataUrl,
+      persisted: false,
+    });
+
+    els.contractFile.value = "";
+    renderDocuments();
+    toast("문서가 업로드되었습니다.");
+  } catch (error) {
+    const message = `문서 업로드 실패: ${error?.message || "알 수 없는 오류"}`;
+    toast(message);
+    openNoticeModal(message);
+  } finally {
+    if (els.uploadContractBtn) {
+      els.uploadContractBtn.disabled = false;
+      els.uploadContractBtn.textContent = previousButtonText || "문서 업로드";
+    }
+    if (els.contractFile) els.contractFile.disabled = false;
+    if (els.documentTypeSelect) els.documentTypeSelect.disabled = false;
+    refreshCustomSelect(els.documentTypeSelect);
+  }
 }
 
 function renderDocuments() {
