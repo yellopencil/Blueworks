@@ -601,6 +601,18 @@ function amountFromSupabase(value) {
 }
 
 function serializeProjectForSupabase(project, index = 0) {
+  const serializedContracts = Array.isArray(project.contracts)
+    ? project.contracts.map((document) => ({
+        id: document.id,
+        type: document.type || "contract",
+        name: document.name || "",
+        mimeType: document.mimeType || "",
+        size: Number(document.size || 0),
+        uploadedAt: document.uploadedAt || new Date().toISOString(),
+        storagePath: document.storagePath || "",
+        persisted: Boolean(document.persisted),
+      }))
+    : [];
   return {
     id: project.id,
     title: project.title || "",
@@ -629,7 +641,7 @@ function serializeProjectForSupabase(project, index = 0) {
     project_type: project.projectType || "",
     website_url: project.websiteUrl || "",
     languages: Array.isArray(project.languages) ? project.languages : [],
-    contracts_json: Array.isArray(project.contracts) ? project.contracts : [],
+    contracts_json: serializedContracts,
     created_at: project.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -4389,6 +4401,25 @@ async function handleProjectSave(event) {
         return;
       }
       const syncedProject = deserializeProjectFromSupabase(result.data);
+      for (const document of draftProjectDocuments) {
+        if (document.storagePath || !document.fileObject) continue;
+        const nextStoragePath = buildProjectDocumentObjectPath(payload.id, document.name);
+        const uploadResult = await bridge.uploadProjectDocument(document.fileObject, nextStoragePath);
+        if (uploadResult.error) {
+          if (existing && previousProject) {
+            Object.assign(existing, previousProject);
+            existing.contracts = previousDocuments;
+          } else {
+            state.projects = state.projects.filter((project) => project.id !== payload.id);
+          }
+          const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}\n새 프로젝트에서는 문서를 저장 단계에서 함께 업로드하고 있어요. 파일 상태를 다시 확인해주세요.`;
+          openNoticeModal(message);
+          toast(message);
+          return;
+        }
+        document.storagePath = nextStoragePath;
+      }
+
       const documentPayloads = draftProjectDocuments
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
@@ -4423,6 +4454,8 @@ async function handleProjectSave(event) {
       }
       syncedProject.contracts = draftProjectDocuments.map((document) => ({
         ...document,
+        dataUrl: document.storagePath ? "" : document.dataUrl,
+        fileObject: undefined,
         persisted: true,
       }));
       syncedProject.searchIndex = buildProjectSearchIndex(syncedProject);
@@ -4951,16 +4984,12 @@ async function handleDocumentUpload() {
 
   const bridge = getSupabaseBridge();
   const existingProjectId = String(els.projectForm?.elements?.id?.value || "");
-  const projectId = existingProjectId || crypto.randomUUID();
-  if (!existingProjectId && els.projectForm?.elements?.id) {
-    els.projectForm.elements.id.value = projectId;
-  }
   const documentType = els.documentTypeSelect.value || "contract";
   let dataUrl = "";
   let storagePath = "";
 
-  if (bridge?.isReady() && state.sessionUserId) {
-    storagePath = buildProjectDocumentObjectPath(projectId, file.name);
+  if (bridge?.isReady() && state.sessionUserId && existingProjectId) {
+    storagePath = buildProjectDocumentObjectPath(existingProjectId, file.name);
     const uploadResult = await bridge.uploadProjectDocument(file, storagePath);
     if (uploadResult.error) {
       const message = `문서 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
@@ -4981,12 +5010,13 @@ async function handleDocumentUpload() {
     uploadedAt: new Date().toISOString(),
     storagePath,
     dataUrl,
+    fileObject: storagePath ? undefined : file,
     persisted: false,
   });
 
   els.contractFile.value = "";
   renderDocuments();
-  toast("문서가 업로드되었습니다.");
+  toast(existingProjectId ? "문서가 업로드되었습니다." : "문서가 저장 대기열에 추가되었습니다. 프로젝트 저장 시 함께 업로드됩니다.");
 }
 
 function renderDocuments() {
