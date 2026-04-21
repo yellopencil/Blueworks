@@ -707,6 +707,7 @@ function deserializeProjectDocumentFromSupabase(row) {
     size: Number(row.size_bytes || 0),
     uploadedAt: row.created_at || new Date().toISOString(),
     storagePath: row.storage_path || "",
+    localObjectUrl: "",
     persisted: true,
   };
 }
@@ -736,12 +737,23 @@ async function refreshProjectDocumentsInBackground(projectId) {
     if (refreshedDocumentsResult.error || !Array.isArray(refreshedDocumentsResult.data)) return;
     const project = state.projects.find((item) => item.id === projectId);
     if (!project) return;
+    (project.contracts || []).forEach((document) => {
+      if (!document?.localObjectUrl) return;
+      try {
+        URL.revokeObjectURL(document.localObjectUrl);
+      } catch (error) {
+        // Ignore cleanup failures for temporary object URLs.
+      }
+    });
     project.contracts = refreshedDocumentsResult.data
       .filter((row) => row.project_id === projectId)
       .map(deserializeProjectDocumentFromSupabase);
     project.searchIndex = buildProjectSearchIndex(project);
     if (state.selectedProjectId === projectId) {
       draftProjectDocuments = [...project.contracts];
+      if (!els.projectModal.classList.contains("hidden")) {
+        renderDocuments();
+      }
     }
     saveState();
     render();
@@ -4490,6 +4502,7 @@ async function handleProjectSave(event) {
           ...document,
           projectId: payload.id,
           dataUrl: document.storagePath ? "" : document.dataUrl,
+          localObjectUrl: document.localObjectUrl || "",
           fileObject: undefined,
           persisted: true,
         }));
@@ -5066,6 +5079,7 @@ async function handleDocumentUpload() {
       uploadedAt: new Date().toISOString(),
       storagePath,
       dataUrl,
+      localObjectUrl: URL.createObjectURL(file),
       persisted: false,
     });
 
@@ -5132,7 +5146,7 @@ async function previewOrDownloadDocument(documentId, options = {}) {
   const file = draftProjectDocuments.find((item) => item.id === documentId);
   if (!file) return;
   const bridge = getSupabaseBridge();
-  let accessibleUrl = file.dataUrl || "";
+  let accessibleUrl = file.localObjectUrl || file.dataUrl || "";
 
   if (!accessibleUrl && file.storagePath && bridge?.isReady()) {
     const signedResult = await withTimeout(
