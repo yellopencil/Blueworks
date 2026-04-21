@@ -3049,16 +3049,16 @@ body[data-theme="dark"] .archive-code-input {
 
 .worklog-tasks {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .worklog-task {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 14px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface);
 }
@@ -3089,6 +3089,7 @@ body[data-theme="dark"] .archive-code-input {
   background: transparent;
   color: var(--muted);
   padding: 0;
+  font-size: 0.92rem;
   cursor: grab;
   touch-action: none;
 }
@@ -3096,12 +3097,15 @@ body[data-theme="dark"] .archive-code-input {
 .worklog-order {
   min-width: 18px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
 .worklog-task-input {
   min-width: 0;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  padding-block: 4px;
 }
 
 .worklog-task.is-done .worklog-task-input {
@@ -3111,6 +3115,13 @@ body[data-theme="dark"] .archive-code-input {
 
 .worklog-actions {
   justify-content: flex-end;
+  gap: 4px;
+}
+
+.worklog-actions button {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
 }
 
 .worklog-actions .ghost.is-active {
