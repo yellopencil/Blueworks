@@ -2290,9 +2290,16 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
 
 .annual-goal-column-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.annual-goal-column-head > div {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
 }
 
 .annual-goal-column-head span {
@@ -2307,6 +2314,7 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
 .annual-goal-modal-grid h4 {
   margin: 0;
   font-size: 0.98rem;
+  line-height: 1.25;
   letter-spacing: -0.02em;
 }
 
