@@ -203,7 +203,20 @@
         normal: [...PAYMENT_LINES.normal],
         kmong: [...PAYMENT_LINES.kmong],
       },
+      rowPreset: [],
     };
+  }
+
+  function normalizeRowPresetRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .map((row) => ({
+        name: String(row?.name ?? "").trim(),
+        desc: String(row?.desc ?? "").trim(),
+        qty: Math.max(0, parseNumber(row?.qty)),
+        unit: Math.max(0, parseNumber(row?.unit)),
+      }))
+      .filter((row) => row.name || row.desc || row.qty || row.unit);
   }
 
   function normalizeQuoteSettings(raw) {
@@ -216,14 +229,22 @@
         normal: Array.isArray(paymentLines.normal) ? paymentLines.normal.map((line) => String(line ?? "")) : fallback.paymentLines.normal,
         kmong: Array.isArray(paymentLines.kmong) ? paymentLines.kmong.map((line) => String(line ?? "")) : fallback.paymentLines.kmong,
       },
+      rowPreset: normalizeRowPresetRows(raw?.rowPreset ?? fallback.rowPreset),
     };
   }
 
   function loadQuoteSettings() {
     try {
       const raw = localStorage.getItem(QUOTE_SETTINGS_STORAGE_KEY);
-      if (!raw) return createDefaultQuoteSettings();
-      return normalizeQuoteSettings(JSON.parse(raw));
+      const parsed = raw ? JSON.parse(raw) : createDefaultQuoteSettings();
+      if (!parsed.rowPreset) {
+        try {
+          parsed.rowPreset = normalizeRowPresetRows(JSON.parse(localStorage.getItem(ROW_PRESET_STORAGE_KEY) || "[]"));
+        } catch (legacyError) {
+          console.warn("견적 항목 프리셋을 불러오지 못했습니다.", legacyError);
+        }
+      }
+      return normalizeQuoteSettings(parsed);
     } catch (error) {
       console.warn("견적 설정을 불러오지 못했습니다.", error);
       return createDefaultQuoteSettings();
@@ -233,6 +254,11 @@
   function saveQuoteSettings() {
     quoteSettings = normalizeQuoteSettings(quoteSettings);
     localStorage.setItem(QUOTE_SETTINGS_STORAGE_KEY, JSON.stringify(quoteSettings));
+    if (quoteSettings.rowPreset.length) {
+      localStorage.setItem(ROW_PRESET_STORAGE_KEY, JSON.stringify(quoteSettings.rowPreset));
+    } else {
+      localStorage.removeItem(ROW_PRESET_STORAGE_KEY);
+    }
   }
 
   function getDefaultQuoteSettingsSerialized() {
@@ -248,7 +274,8 @@
     const agreement = String(record.agreement_html || "").trim();
     const normal = Array.isArray(record.payment_lines_normal) ? record.payment_lines_normal : [];
     const kmong = Array.isArray(record.payment_lines_kmong) ? record.payment_lines_kmong : [];
-    return !agreement && !normal.length && !kmong.length;
+    const rowPreset = Array.isArray(record.row_preset) ? record.row_preset : [];
+    return !agreement && !normal.length && !kmong.length && !rowPreset.length;
   }
 
   function getSupabaseBridge() {
@@ -279,6 +306,7 @@
       agreement_html: quoteSettings.agreementHtml,
       payment_lines_normal: quoteSettings.paymentLines.normal,
       payment_lines_kmong: quoteSettings.paymentLines.kmong,
+      row_preset: quoteSettings.rowPreset,
       updated_at: new Date().toISOString(),
     };
   }
@@ -291,6 +319,7 @@
         normal: Array.isArray(record.payment_lines_normal) ? record.payment_lines_normal : undefined,
         kmong: Array.isArray(record.payment_lines_kmong) ? record.payment_lines_kmong : undefined,
       },
+      rowPreset: Array.isArray(record.row_preset) ? record.row_preset : undefined,
     });
     saveQuoteSettings();
     els.agreementContent.innerHTML = quoteSettings.agreementHtml || agreementTextToHtml(TERMS_TEMPLATE);
@@ -2103,28 +2132,27 @@
     calc();
   }
 
-  function saveRowPreset() {
-    const rows = getRows();
+  async function saveRowPreset() {
+    const rows = normalizeRowPresetRows(getRows());
     if (!rows.length) {
       openNoticeModal("저장할 견적 항목이 없습니다.");
       return;
     }
-    localStorage.setItem(ROW_PRESET_STORAGE_KEY, JSON.stringify(rows));
-    openNoticeModal("견적 항목이 저장되었습니다.");
+    quoteSettings.rowPreset = rows;
+    return persistQuoteSettingsWithFeedback("견적 항목이 저장되었습니다.", "견적 항목 저장에 실패했습니다.");
   }
 
   function loadRowPreset() {
-    const raw = localStorage.getItem(ROW_PRESET_STORAGE_KEY);
-    if (!raw) {
-      openNoticeModal("저장된 견적 항목이 없습니다.");
+    const rows = normalizeRowPresetRows(quoteSettings.rowPreset);
+    if (!rows.length) {
+      openNoticeModal("저장한 견적 항목이 없습니다.");
       return;
     }
     try {
-      const rows = JSON.parse(raw);
       els.itemsBody.innerHTML = "";
       rows.forEach(addRow);
       calc();
-      openNoticeModal("저장된 견적 항목을 불러왔습니다.");
+      openNoticeModal("저장한 견적 항목을 불러왔습니다.");
     } catch (error) {
       console.error(error);
       openNoticeModal("항목을 불러오는 중 문제가 발생했습니다.");

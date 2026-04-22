@@ -3,6 +3,7 @@ create table if not exists public.quote_settings (
   agreement_html text not null default '',
   payment_lines_normal jsonb not null default '[]'::jsonb,
   payment_lines_kmong jsonb not null default '[]'::jsonb,
+  row_preset jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
