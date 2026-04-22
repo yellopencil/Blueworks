@@ -132,6 +132,7 @@
   let pointerOffsetY = 0;
   let currentPdfPreviewUrl = null;
   let pendingPdfHistoryDelete = null;
+  let pdfHistorySyncPromise = null;
   let quoteSettings = loadQuoteSettings();
   let quoteSettingsSyncPromise = null;
 
@@ -1458,6 +1459,22 @@
     });
   }
 
+  async function withAsyncTimeout(promise, timeoutMs, fallbackMessage) {
+    let timeoutId = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(new Error(fallbackMessage));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  }
+
   async function getLocalPdfHistoryRecords() {
     const db = await openPdfHistoryDb();
     return new Promise((resolve) => {
@@ -1578,6 +1595,8 @@
   }
 
   async function syncLocalPdfHistoryToSupabase() {
+    if (pdfHistorySyncPromise) return pdfHistorySyncPromise;
+    pdfHistorySyncPromise = (async () => {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return;
 
@@ -1602,6 +1621,11 @@
       await savePdfHistoryRecordToSupabase(row);
       await deleteLocalPdfHistoryRecordById(row.id);
     }
+    })()
+      .finally(() => {
+        pdfHistorySyncPromise = null;
+      });
+    return pdfHistorySyncPromise;
   }
 
   async function savePdfHistoryRecordToSupabase(record) {
@@ -1647,14 +1671,23 @@
   async function getPdfHistoryRecords() {
     await pruneOldPdfHistory();
     if (canUseServerPdfHistory() && (await hasAuthenticatedSession())) {
-      await syncLocalPdfHistoryToSupabase();
-      await pruneServerPdfHistory();
       const bridge = getSupabaseBridge();
-      const result = await bridge.fetchQuotePdfHistory();
-      if (result?.error) throw result.error;
-      return (Array.isArray(result?.data) ? result.data : [])
-        .map(normalizeServerPdfHistoryRecord)
-        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      syncLocalPdfHistoryToSupabase().catch((error) => {
+        console.warn("견적 PDF 기록 서버 동기화가 지연되었습니다.", error);
+      });
+      try {
+        const result = await withAsyncTimeout(
+          bridge.fetchQuotePdfHistory(),
+          6000,
+          "견적 PDF 기록을 불러오는 응답이 지연되었습니다."
+        );
+        if (result?.error) throw result.error;
+        return (Array.isArray(result?.data) ? result.data : [])
+          .map(normalizeServerPdfHistoryRecord)
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      } catch (error) {
+        console.warn("서버 견적 PDF 기록을 바로 불러오지 못해 로컬 기록으로 대체합니다.", error);
+      }
     }
     const db = await openPdfHistoryDb();
     return new Promise((resolve) => {

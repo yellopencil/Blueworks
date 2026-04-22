@@ -290,6 +290,12 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
+      if (this.cachedSession?.access_token) {
+        return this.restRequest("quote_pdf_history", {
+          method: "GET",
+          query: "select=*&order=created_at.desc",
+        });
+      }
       return this.client
         .from("quote_pdf_history")
         .select("*")
@@ -316,6 +322,14 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      if (this.cachedSession?.access_token) {
+        const quotedIds = ids.map((id) => `"${String(id).replace(/"/g, '""')}"`).join(",");
+        return this.restRequest("quote_pdf_history", {
+          method: "DELETE",
+          query: `id=in.(${quotedIds})`,
+          prefer: "return=representation",
+        });
+      }
       return this.client.from("quote_pdf_history").delete().in("id", ids);
     },
     async uploadQuotePdf(file, objectPath) {
