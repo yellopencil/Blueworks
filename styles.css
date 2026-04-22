@@ -2274,7 +2274,7 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
 .annual-goal-board {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 10px;
 }
 
 .annual-goal-column {
