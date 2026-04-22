@@ -455,7 +455,20 @@ function normalizeState(source) {
       kmongFee: project.kmongFee || "",
     })),
     schedules: source.schedules || [],
-    worklogs: source.worklogs || {},
+    worklogs: Object.fromEntries(
+      Object.entries(source.worklogs || {}).map(([dateKey, worklog]) => {
+        const normalizedTasks = Array.isArray(worklog?.tasks)
+          ? worklog.tasks
+            .map((task) => createWorklogTask(task))
+            .filter((task) => task.text.trim() || task.scheduleId)
+          : [];
+        return [dateKey, {
+          date: worklog?.date || dateKey,
+          tasks: normalizedTasks,
+          notes: String(worklog?.notes || ""),
+        }];
+      }),
+    ),
     yearGoals: (source.yearGoals || []).map((goal) => ({
       id: goal.id || crypto.randomUUID(),
       year: Number(goal.year || new Date().getFullYear()),
@@ -785,6 +798,79 @@ function deserializeScheduleFromSupabase(row) {
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
   };
+}
+
+function serializeWorklogForSupabase(worklog) {
+  return {
+    worklog_date: worklog.date || null,
+    notes: worklog.notes || "",
+    created_by: state.sessionUserId || null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function serializeWorklogTaskForSupabase(task, worklogId, sortOrder = 0) {
+  return {
+    id: task.id,
+    worklog_id: worklogId,
+    task_text: task.text || "",
+    done: Boolean(task.done),
+    schedule_id: task.scheduleId || null,
+    auto: Boolean(task.auto),
+    source_task_id: task.sourceTaskId || null,
+    carried_from_date: task.carriedFromDate || null,
+    sort_order: sortOrder,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function deserializeWorklogFromSupabase(row) {
+  const tasks = Array.isArray(row?.worklog_tasks)
+    ? row.worklog_tasks
+      .slice()
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
+      .map((task) => createWorklogTask({
+        id: task.id,
+        text: task.task_text || "",
+        done: Boolean(task.done),
+        scheduleId: task.schedule_id || "",
+        auto: Boolean(task.auto),
+        sourceTaskId: task.source_task_id || "",
+        carriedFromDate: task.carried_from_date || "",
+      }))
+      .filter((task) => task.text.trim() || task.scheduleId)
+    : [];
+  return {
+    date: row.worklog_date || "",
+    tasks,
+    notes: row.notes || "",
+  };
+}
+
+function sanitizeWorklogForPersistence(worklog, dateKey = "") {
+  const normalizedDate = worklog?.date || dateKey || "";
+  const tasks = Array.isArray(worklog?.tasks)
+    ? worklog.tasks
+      .map((task) => createWorklogTask(task))
+      .map((task) => ({
+        ...task,
+        text: String(task.text || "").trim(),
+      }))
+      .filter((task) => task.text || task.scheduleId)
+    : [];
+  return {
+    date: normalizedDate,
+    tasks,
+    notes: String(worklog?.notes || "").trim(),
+  };
+}
+
+function buildWorklogStateMap(worklogs = []) {
+  return Object.fromEntries(
+    worklogs
+      .filter((worklog) => worklog?.date)
+      .map((worklog) => [worklog.date, sanitizeWorklogForPersistence(worklog, worklog.date)]),
+  );
 }
 
 function serializeYearGoalForSupabase(goal) {
@@ -1190,6 +1276,109 @@ async function syncYearGoalsFromSupabase() {
   saveState({ history: false });
   renderAnnualGoals();
   renderAnnualGoalArchiveLists();
+  return { ok: true };
+}
+
+async function syncWorklogsStateToSupabase(previousWorklogs = null) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
+
+  const remoteResult = await bridge.fetchWorklogs();
+  if (remoteResult.error) {
+    if (previousWorklogs) {
+      state.worklogs = previousWorklogs;
+      saveState({ history: false });
+      renderCalendar();
+    }
+    return { ok: false, error: remoteResult.error };
+  }
+
+  const remoteRows = remoteResult.data || [];
+  const localWorklogs = Object.entries(state.worklogs || {})
+    .map(([dateKey, worklog]) => sanitizeWorklogForPersistence(worklog, dateKey))
+    .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
+
+  for (const worklog of localWorklogs) {
+    const upsertResult = await bridge.upsertWorklog(serializeWorklogForSupabase(worklog));
+    if (upsertResult.error || !upsertResult.data?.id) {
+      if (previousWorklogs) {
+        state.worklogs = previousWorklogs;
+        saveState({ history: false });
+        renderCalendar();
+      }
+      return { ok: false, error: upsertResult.error || new Error("업무일지 저장 응답을 확인하지 못했습니다.") };
+    }
+
+    const worklogId = upsertResult.data.id;
+    const clearTasksResult = await bridge.deleteWorklogTasksByWorklogId(worklogId);
+    if (clearTasksResult.error) {
+      if (previousWorklogs) {
+        state.worklogs = previousWorklogs;
+        saveState({ history: false });
+        renderCalendar();
+      }
+      return { ok: false, error: clearTasksResult.error };
+    }
+
+    if (worklog.tasks.length) {
+      const taskPayloads = worklog.tasks.map((task, index) => serializeWorklogTaskForSupabase(task, worklogId, index));
+      const taskInsertResult = await bridge.insertWorklogTasks(taskPayloads);
+      if (taskInsertResult.error) {
+        if (previousWorklogs) {
+          state.worklogs = previousWorklogs;
+          saveState({ history: false });
+          renderCalendar();
+        }
+        return { ok: false, error: taskInsertResult.error };
+      }
+    }
+  }
+
+  const localDates = new Set(localWorklogs.map((worklog) => worklog.date));
+  const staleIds = remoteRows
+    .filter((row) => !localDates.has(row.worklog_date))
+    .map((row) => row.id)
+    .filter(Boolean);
+  if (staleIds.length) {
+    const deleteResult = await bridge.deleteWorklogsByIds(staleIds);
+    if (deleteResult.error) {
+      if (previousWorklogs) {
+        state.worklogs = previousWorklogs;
+        saveState({ history: false });
+        renderCalendar();
+      }
+      return { ok: false, error: deleteResult.error };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function syncWorklogsFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  const result = await bridge.fetchWorklogs();
+  if (result.error) return { ok: false, error: result.error };
+
+  const remoteWorklogs = (result.data || [])
+    .map(deserializeWorklogFromSupabase)
+    .filter((worklog) => worklog.date);
+  const hasRemoteData = remoteWorklogs.length > 0;
+  const localWorklogs = Object.entries(state.worklogs || {})
+    .map(([dateKey, worklog]) => sanitizeWorklogForPersistence(worklog, dateKey))
+    .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
+  const hasLocalData = localWorklogs.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncWorklogsStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    return { ok: true };
+  }
+
+  state.worklogs = buildWorklogStateMap(remoteWorklogs);
+  saveState({ history: false });
+  renderCalendar();
   return { ok: true };
 }
 
@@ -1651,6 +1840,12 @@ async function applyAuthSession(session, options = {}) {
   const yearGoalSyncResult = await syncYearGoalsFromSupabase();
   if (!yearGoalSyncResult.ok) {
     const message = yearGoalSyncResult.error?.message || "연간 목표를 불러오지 못했습니다.";
+    if (!options.silent) toast(message);
+  }
+
+  const worklogSyncResult = await syncWorklogsFromSupabase();
+  if (!worklogSyncResult.ok) {
+    const message = worklogSyncResult.error?.message || "업무일지를 불러오지 못했습니다.";
     if (!options.silent) toast(message);
   }
 
@@ -5528,8 +5723,10 @@ function deleteSchedule(scheduleId) {
       }
     }
     state.schedules = state.schedules.filter((item) => item.id !== scheduleId);
+    const previousWorklogs = structuredClone(state.worklogs || {});
     removeScheduleFromWorklog(scheduleId, schedule?.date || "");
     saveState();
+    syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
     renderSchedules();
     renderCalendar();
   }, schedule ? `[${schedule.title}] 일정을 삭제할까요?` : "일정을 삭제할까요?");
@@ -6285,24 +6482,30 @@ function renderWorklogTasks() {
   els.worklogProgressFill.style.width = `${progress}%`;
 }
 
-function handleWorklogSave(event) {
+async function handleWorklogSave(event) {
   event.preventDefault();
   ensureWorklogDraft();
+  const previousWorklogs = structuredClone(state.worklogs || {});
   currentWorklogDraft.notes = String(els.worklogForm.elements.notes.value || "").trim();
-  state.worklogs[currentWorklogDate] = {
+  const sanitizedWorklog = sanitizeWorklogForPersistence({
     date: currentWorklogDate,
-    tasks: currentWorklogDraft.tasks.map((task) => ({
-      id: task.id,
-      text: task.text.trim(),
-      done: Boolean(task.done),
-      scheduleId: task.scheduleId || "",
-      auto: Boolean(task.auto),
-      sourceTaskId: task.sourceTaskId || "",
-      carriedFromDate: task.carriedFromDate || "",
-    })),
+    tasks: currentWorklogDraft.tasks,
     notes: currentWorklogDraft.notes,
-  };
+  }, currentWorklogDate);
+
+  if (sanitizedWorklog.notes || sanitizedWorklog.tasks.length) {
+    state.worklogs[currentWorklogDate] = sanitizedWorklog;
+  } else {
+    delete state.worklogs[currentWorklogDate];
+  }
   saveState();
+  const syncResult = await syncWorklogsStateToSupabase(previousWorklogs);
+  if (!syncResult.ok) {
+    const message = `업무일지 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+    openNoticeModal(message);
+    toast(message);
+    return;
+  }
   renderCalendar();
   closeWorklogModal();
   openNoticeModal("저장이 완료되었어요!");
@@ -6372,6 +6575,7 @@ async function handleScheduleSave(event) {
 
   const existing = state.schedules.find((schedule) => schedule.id === payload.id);
   const previousSchedule = existing ? { ...existing } : null;
+  const previousWorklogs = structuredClone(state.worklogs || {});
   if (existing) Object.assign(existing, payload);
   else state.schedules.push(payload);
 
@@ -6397,6 +6601,7 @@ async function handleScheduleSave(event) {
   syncScheduleToWorklog(payload, previousSchedule);
 
   saveState();
+  syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
   closeScheduleEditorModal();
   renderSchedules();
   renderCalendar();

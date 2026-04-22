@@ -132,6 +132,15 @@
       }
       return this.client.from("schedules").select("*").order("date", { ascending: true });
     },
+    async fetchWorklogs() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client
+        .from("worklogs")
+        .select("*, worklog_tasks(*)")
+        .order("worklog_date", { ascending: false });
+    },
     async fetchYearGoals() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -196,6 +205,37 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.from("year_goals").upsert(payload).select();
+    },
+    async upsertWorklog(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client
+        .from("worklogs")
+        .upsert(payload, { onConflict: "worklog_date" })
+        .select()
+        .single();
+    },
+    async insertWorklogTasks(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(payload) || !payload.length) return { data: [], error: null };
+      return this.client.from("worklog_tasks").insert(payload).select();
+    },
+    async deleteWorklogTasksByWorklogId(worklogId) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!worklogId) return { data: [], error: null };
+      return this.client.from("worklog_tasks").delete().eq("worklog_id", worklogId);
+    },
+    async deleteWorklogsByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("worklogs").delete().in("id", ids);
     },
     async deleteYearGoalsByIds(ids) {
       if (!this.client) {

@@ -102,6 +102,8 @@ create table if not exists public.worklog_tasks (
   done boolean not null default false,
   schedule_id uuid references public.schedules(id) on delete set null,
   auto boolean not null default false,
+  source_task_id uuid,
+  carried_from_date date,
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
@@ -164,6 +166,7 @@ create table if not exists public.archive_codes (
 create index if not exists idx_projects_status on public.projects(status);
 create index if not exists idx_projects_start_date on public.projects(start_date);
 create index if not exists idx_schedules_date on public.schedules(date);
+create index if not exists idx_worklog_tasks_worklog_sort on public.worklog_tasks(worklog_id, sort_order);
 create index if not exists idx_year_goals_year_half on public.year_goals(year, half, kind);
 create index if not exists idx_archive_notes_sort_order on public.archive_notes(sort_order);
 create index if not exists idx_archive_codes_sort_order on public.archive_codes(sort_order);
