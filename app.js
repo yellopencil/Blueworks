@@ -5447,7 +5447,7 @@ function getAnnualGoalPeriodLabel(period) {
 }
 
 function getAnnualGoalKindLabel(kind) {
-  return kind === "planned" ? "작성 예정" : "목표";
+  return kind === "planned" ? "작성 예정 칼럼" : "목표";
 }
 
 function ensureAnnualGoalKindField() {
@@ -5489,7 +5489,7 @@ function renderAnnualGoals() {
           </div>
         </li>
       `).join("")
-      : `<li class="annual-goal-empty muted small">등록된 ${kind === "planned" ? "작성 예정" : "목표"}가 없습니다.</li>`;
+      : `<li class="annual-goal-empty muted small">등록된 ${kind === "planned" ? "작성 예정 칼럼" : "목표"}가 없습니다.</li>`;
   };
 
   els.annualGoalBoard.innerHTML = `
@@ -5502,13 +5502,13 @@ function renderAnnualGoals() {
       </div>
       <ul class="annual-goal-list">${renderColumnList("goal")}</ul>
     </article>
-    <article class="annual-goal-column is-current" data-annual-period="${currentPeriod.year}-${currentPeriod.half}-planned">
-      <div class="annual-goal-column-head">
-        <div>
-          <h4>${currentPeriod.year}년 ${currentPeriod.half === "first" ? "상반기" : "하반기"} 작성 예정</h4>
+      <article class="annual-goal-column is-current" data-annual-period="${currentPeriod.year}-${currentPeriod.half}-planned">
+        <div class="annual-goal-column-head">
+          <div>
+            <h4>${currentPeriod.year}년 ${currentPeriod.half === "first" ? "상반기" : "하반기"} 작성 예정 칼럼</h4>
+          </div>
+          <button type="button" class="ghost" data-annual-goal-add="planned">추가</button>
         </div>
-        <button type="button" class="ghost" data-annual-goal-add="planned">추가</button>
-      </div>
       <ul class="annual-goal-list">${renderColumnList("planned")}</ul>
     </article>
   `;
