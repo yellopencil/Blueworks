@@ -2948,11 +2948,17 @@ ${escapeHtml(data.memo || "-")}
         modal.classList.add("hidden");
         return;
       }
-      await deletePdfHistoryRecord(pendingPdfHistoryDelete || targetId);
-      pendingPdfHistoryDelete = null;
-      delete modal.dataset.targetId;
-      modal.classList.add("hidden");
-      await renderPdfHistoryList();
+      try {
+        await deletePdfHistoryRecord(pendingPdfHistoryDelete || targetId);
+        await renderPdfHistoryList();
+      } catch (error) {
+        console.error("PDF history delete failed:", error);
+        openNoticeModal(error?.message || "파일 삭제 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.");
+      } finally {
+        pendingPdfHistoryDelete = null;
+        delete modal.dataset.targetId;
+        modal.classList.add("hidden");
+      }
     });
     els.addRowBtn.addEventListener("click", () => addRow({ qty: 1, unit: 0 }));
     els.saveRowPresetBtn?.addEventListener("click", saveRowPreset);

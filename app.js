@@ -6529,8 +6529,16 @@ function closeConfirmModal() {
 }
 
 async function runConfirmedAction() {
-  if (pendingConfirmAction) await pendingConfirmAction();
-  closeConfirmModal();
+  try {
+    if (pendingConfirmAction) await pendingConfirmAction();
+  } catch (error) {
+    console.error("Confirmed action failed:", error);
+    const message = error?.message || "처리 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.";
+    toast(message);
+    openNoticeModal(message);
+  } finally {
+    closeConfirmModal();
+  }
 }
 
 function openScheduleModal(scheduleId) {

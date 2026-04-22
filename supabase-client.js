@@ -4,6 +4,8 @@
   const SITE_ASSET_BUCKET = "site-assets";
   const PROJECT_DOCUMENT_BUCKET = "project-documents";
   const QUOTE_PDF_BUCKET = "quote-pdf-history";
+  const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
+  const AUTH_REQUEST_TIMEOUT_MS = 15000;
 
   const bridge = {
     url: SUPABASE_URL,
@@ -21,6 +23,26 @@
     },
     isReady() {
       return Boolean(this.client);
+    },
+    withTimeout(promise, timeoutMs, fallbackMessage) {
+      let timeoutId = null;
+      return Promise.race([
+        Promise.resolve(promise),
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(new Error(fallbackMessage));
+          }, timeoutMs);
+        }),
+      ]).finally(() => {
+        if (timeoutId) window.clearTimeout(timeoutId);
+      });
+    },
+    async runClientQuery(promise, fallbackMessage, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+      try {
+        return await this.withTimeout(promise, timeoutMs, fallbackMessage);
+      } catch (error) {
+        return { data: null, error };
+      }
     },
     setCachedSession(session) {
       this.cachedSession = session || null;
@@ -40,6 +62,8 @@
         query = "",
         body,
         prefer = "",
+        timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+        timeoutMessage = "Supabase 요청 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       } = options;
       const requestUrl = `${this.url}/rest/v1/${path}${query ? `?${query}` : ""}`;
       const headers = {
@@ -48,11 +72,16 @@
       };
       if (body !== undefined) headers["Content-Type"] = "application/json";
       if (prefer) headers.Prefer = prefer;
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), timeoutMs)
+        : null;
       try {
         const response = await fetch(requestUrl, {
           method,
           headers,
           body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller?.signal,
         });
         const text = await response.text();
         let parsed = null;
@@ -75,7 +104,10 @@
         }
         return { data: parsed, error: null };
       } catch (error) {
-        return { data: null, error };
+        const nextError = error?.name === "AbortError" ? new Error(timeoutMessage) : error;
+        return { data: null, error: nextError };
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
     },
     async storageUploadRequest(bucket, objectPath, file) {
@@ -84,6 +116,11 @@
         return { data: null, error: new Error("Supabase session token is not ready.") };
       }
       const requestUrl = `${this.url}/storage/v1/object/${bucket}/${objectPath}`;
+      const timeoutMessage = "파일 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.";
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), 20000)
+        : null;
       try {
         const response = await fetch(requestUrl, {
           method: "POST",
@@ -94,6 +131,7 @@
             "content-type": file?.type || "application/octet-stream",
           },
           body: file,
+          signal: controller?.signal,
         });
         const text = await response.text();
         let parsed = null;
@@ -117,132 +155,189 @@
         }
         return { data: parsed, error: null };
       } catch (error) {
-        return { data: null, error };
+        const nextError = error?.name === "AbortError" ? new Error(timeoutMessage) : error;
+        return { data: null, error: nextError };
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
     },
     async fetchProjects() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("projects").select("*").order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client.from("projects").select("*").order("created_at", { ascending: false }),
+        "프로젝트 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchSchedules() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("schedules").select("*").order("date", { ascending: true });
+      return this.runClientQuery(
+        this.client.from("schedules").select("*").order("date", { ascending: true }),
+        "일정 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchWorklogs() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client
-        .from("worklogs")
-        .select("*, worklog_tasks(*)")
-        .order("worklog_date", { ascending: false });
+      return this.runClientQuery(
+        this.client
+          .from("worklogs")
+          .select("*, worklog_tasks(*)")
+          .order("worklog_date", { ascending: false }),
+        "업무일지 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchYearGoals() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client
-        .from("year_goals")
-        .select("*")
-        .order("year", { ascending: false })
-        .order("half", { ascending: true })
-        .order("created_at", { ascending: true });
+      return this.runClientQuery(
+        this.client
+          .from("year_goals")
+          .select("*")
+          .order("year", { ascending: false })
+          .order("half", { ascending: true })
+          .order("created_at", { ascending: true }),
+        "연간 목표 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchArchiveNotes() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_notes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client.from("archive_notes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+        "메모 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchArchiveCodeCategories() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_code_categories").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+      return this.runClientQuery(
+        this.client.from("archive_code_categories").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
+        "카테고리 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchArchiveCodes() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_codes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client.from("archive_codes").select("*").order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+        "코드 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchProfiles() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("profiles").select("*").order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client.from("profiles").select("*").order("created_at", { ascending: false }),
+        "멤버 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchSiteSettings() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("site_settings").select("*").order("updated_at", { ascending: false }).limit(1);
+      return this.runClientQuery(
+        this.client.from("site_settings").select("*").order("updated_at", { ascending: false }).limit(1),
+        "사이트 설정 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchCurrentProfile(userId) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("profiles").select("*").eq("id", userId).maybeSingle();
+      return this.runClientQuery(
+        this.client.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        "계정 정보 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertProfile(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("profiles").upsert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("profiles").upsert(payload).select().single(),
+        "멤버 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertSiteSettings(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("site_settings").upsert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("site_settings").upsert(payload).select().single(),
+        "사이트 설정 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertYearGoals(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("year_goals").upsert(payload).select();
+      return this.runClientQuery(
+        this.client.from("year_goals").upsert(payload).select(),
+        "연간 목표 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertWorklog(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client
-        .from("worklogs")
-        .upsert(payload, { onConflict: "worklog_date" })
-        .select()
-        .single();
+      return this.runClientQuery(
+        this.client
+          .from("worklogs")
+          .upsert(payload, { onConflict: "worklog_date" })
+          .select()
+          .single(),
+        "업무일지 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async insertWorklogTasks(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(payload) || !payload.length) return { data: [], error: null };
-      return this.client.from("worklog_tasks").insert(payload).select();
+      return this.runClientQuery(
+        this.client.from("worklog_tasks").insert(payload).select(),
+        "업무 항목 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteWorklogTasksByWorklogId(worklogId) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!worklogId) return { data: [], error: null };
-      return this.client.from("worklog_tasks").delete().eq("worklog_id", worklogId);
+      return this.runClientQuery(
+        this.client.from("worklog_tasks").delete().eq("worklog_id", worklogId),
+        "업무 항목 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteWorklogsByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      return this.client.from("worklogs").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("worklogs").delete().in("id", ids),
+        "업무일지 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteYearGoalsByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      return this.client.from("year_goals").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("year_goals").delete().in("id", ids),
+        "연간 목표 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchQuoteSettings() {
       if (!this.client) {
@@ -257,7 +352,10 @@
           error: result?.error || null,
         }));
       }
-      return this.client.from("quote_settings").select("*").eq("id", "global").maybeSingle();
+      return this.runClientQuery(
+        this.client.from("quote_settings").select("*").eq("id", "global").maybeSingle(),
+        "견적 설정 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertQuoteSettings(payload) {
       if (!this.client) {
@@ -274,19 +372,25 @@
           error: result?.error || null,
         }));
       }
-      return this.client.from("quote_settings").upsert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("quote_settings").upsert(payload).select().single(),
+        "견적 설정 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchProjectDocuments() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("project_documents").select("*").order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client.from("project_documents").select("*").order("created_at", { ascending: false }),
+        "문서 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertProjectDocuments(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      if (this.getAccessToken()) {
+      if (this.cachedSession?.access_token) {
         return this.restRequest("project_documents", {
           method: "POST",
           query: "on_conflict=id&select=*",
@@ -294,21 +398,27 @@
           prefer: "resolution=merge-duplicates,return=representation",
         });
       }
-      return this.client.from("project_documents").upsert(payload).select();
+      return this.runClientQuery(
+        this.client.from("project_documents").upsert(payload).select(),
+        "문서 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteProjectDocumentsByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      if (this.getAccessToken()) {
+      if (this.cachedSession?.access_token) {
         const encodedIds = ids.map((id) => encodeURIComponent(id)).join(",");
         return this.restRequest("project_documents", {
           method: "DELETE",
           query: `id=in.(${encodedIds})`,
         });
       }
-      return this.client.from("project_documents").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("project_documents").delete().in("id", ids),
+        "문서 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     getSiteAssetPublicUrl(path) {
       if (!this.client || !path) return "";
@@ -319,17 +429,24 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.storage.from(this.siteAssetBucket).upload(objectPath, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+      return this.runClientQuery(
+        this.client.storage.from(this.siteAssetBucket).upload(objectPath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        }),
+        "사이트 자산 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        20000,
+      );
     },
     async removeSiteAsset(path) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!path) return { data: [], error: null };
-      return this.client.storage.from(this.siteAssetBucket).remove([path]);
+      return this.runClientQuery(
+        this.client.storage.from(this.siteAssetBucket).remove([path]),
+        "사이트 자산 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async uploadProjectDocument(file, objectPath) {
       if (!this.client) {
@@ -342,13 +459,19 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!path) return { data: [], error: null };
-      return this.client.storage.from(this.projectDocumentBucket).remove([path]);
+      return this.runClientQuery(
+        this.client.storage.from(this.projectDocumentBucket).remove([path]),
+        "문서 파일 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async createProjectDocumentSignedUrl(path, expiresIn = 3600) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.storage.from(this.projectDocumentBucket).createSignedUrl(path, expiresIn);
+      return this.runClientQuery(
+        this.client.storage.from(this.projectDocumentBucket).createSignedUrl(path, expiresIn),
+        "문서 링크 생성 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async fetchQuotePdfHistory() {
       if (!this.client) {
@@ -360,10 +483,13 @@
           query: "select=*&order=created_at.desc",
         });
       }
-      return this.client
-        .from("quote_pdf_history")
-        .select("*")
-        .order("created_at", { ascending: false });
+      return this.runClientQuery(
+        this.client
+          .from("quote_pdf_history")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        "견적 PDF 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async insertQuotePdfHistory(payload) {
       if (!this.client) {
@@ -379,7 +505,10 @@
         if (Array.isArray(result?.data)) result.data = result.data[0] || null;
         return result;
       }
-      return this.client.from("quote_pdf_history").insert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("quote_pdf_history").insert(payload).select().single(),
+        "견적 PDF 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteQuotePdfHistoryByIds(ids) {
       if (!this.client) {
@@ -394,7 +523,10 @@
           prefer: "return=representation",
         });
       }
-      return this.client.from("quote_pdf_history").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("quote_pdf_history").delete().in("id", ids),
+        "견적 PDF 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async uploadQuotePdf(file, objectPath) {
       if (!this.client) {
@@ -407,19 +539,29 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!path) return { data: [], error: null };
-      return this.client.storage.from(this.quotePdfBucket).remove([path]);
+      return this.runClientQuery(
+        this.client.storage.from(this.quotePdfBucket).remove([path]),
+        "견적 PDF 파일 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async createQuotePdfSignedUrl(path, expiresIn = 3600) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.storage.from(this.quotePdfBucket).createSignedUrl(path, expiresIn);
+      return this.runClientQuery(
+        this.client.storage.from(this.quotePdfBucket).createSignedUrl(path, expiresIn),
+        "견적 PDF 링크 생성 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async signInWithPassword(credentials) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      const result = await this.client.auth.signInWithPassword(credentials);
+      const result = await this.runClientQuery(
+        this.client.auth.signInWithPassword(credentials),
+        "로그인 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
       this.setCachedSession(result?.data?.session || null);
       return result;
     },
@@ -427,7 +569,11 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      const result = await this.client.auth.signUp(credentials);
+      const result = await this.runClientQuery(
+        this.client.auth.signUp(credentials),
+        "회원가입 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
       this.setCachedSession(result?.data?.session || null);
       return result;
     },
@@ -435,19 +581,31 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.resetPasswordForEmail(email, options);
+      return this.runClientQuery(
+        this.client.auth.resetPasswordForEmail(email, options),
+        "비밀번호 재설정 메일 발송 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
     },
     async updateUserPassword(password) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.auth.updateUser({ password });
+      return this.runClientQuery(
+        this.client.auth.updateUser({ password }),
+        "비밀번호 변경 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
     },
     async signOut() {
       if (!this.client) {
         return { error: new Error("Supabase client is not ready.") };
       }
-      const result = await this.client.auth.signOut();
+      const result = await this.runClientQuery(
+        this.client.auth.signOut(),
+        "로그아웃 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
       this.setCachedSession(null);
       return result;
     },
@@ -455,7 +613,11 @@
       if (!this.client) {
         return { data: { session: null }, error: new Error("Supabase client is not ready.") };
       }
-      const result = await this.client.auth.getSession();
+      const result = await this.runClientQuery(
+        this.client.auth.getSession(),
+        "로그인 상태 확인 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
       if (!result?.error) this.setCachedSession(result?.data?.session || null);
       return result;
     },
@@ -470,7 +632,7 @@
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      if (this.getAccessToken()) {
+      if (this.cachedSession?.access_token) {
         const result = await this.restRequest("projects", {
           method: "POST",
           query: "on_conflict=id&select=*",
@@ -480,64 +642,94 @@
         if (Array.isArray(result.data)) result.data = result.data[0] || null;
         return result;
       }
-      return this.client.from("projects").upsert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("projects").upsert(payload).select().single(),
+        "프로젝트 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteProject(projectId) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("projects").delete().eq("id", projectId);
+      return this.runClientQuery(
+        this.client.from("projects").delete().eq("id", projectId),
+        "프로젝트 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertSchedule(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("schedules").upsert(payload).select().single();
+      return this.runClientQuery(
+        this.client.from("schedules").upsert(payload).select().single(),
+        "일정 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteSchedule(scheduleId) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("schedules").delete().eq("id", scheduleId);
+      return this.runClientQuery(
+        this.client.from("schedules").delete().eq("id", scheduleId),
+        "일정 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertArchiveNotes(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_notes").upsert(payload).select();
+      return this.runClientQuery(
+        this.client.from("archive_notes").upsert(payload).select(),
+        "메모 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteArchiveNotesByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      return this.client.from("archive_notes").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("archive_notes").delete().in("id", ids),
+        "메모 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertArchiveCodeCategories(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_code_categories").upsert(payload).select();
+      return this.runClientQuery(
+        this.client.from("archive_code_categories").upsert(payload).select(),
+        "카테고리 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteArchiveCodeCategoriesByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      return this.client.from("archive_code_categories").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("archive_code_categories").delete().in("id", ids),
+        "카테고리 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async upsertArchiveCodes(payload) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
-      return this.client.from("archive_codes").upsert(payload).select();
+      return this.runClientQuery(
+        this.client.from("archive_codes").upsert(payload).select(),
+        "코드 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
     async deleteArchiveCodesByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
-      return this.client.from("archive_codes").delete().in("id", ids);
+      return this.runClientQuery(
+        this.client.from("archive_codes").delete().in("id", ids),
+        "코드 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
     },
   };
 
