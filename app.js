@@ -4037,15 +4037,15 @@ function renderSales() {
   const currentMonthKey = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
   if (!yearlyTotals.has(currentYear)) yearlyTotals.set(currentYear, 0);
 
-  const monthlyEntries = Array.from(monthlyTotals.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  const yearlyEntries = Array.from(yearlyTotals.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const monthlyEntries = Array.from(monthlyTotals.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  const yearlyEntries = Array.from(yearlyTotals.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   const totalSales = yearlyEntries.reduce((sum, [, value]) => sum + value, 0);
-  const fallbackYear = yearlyEntries[yearlyEntries.length - 1]?.[0] || currentYear;
+  const fallbackYear = yearlyEntries[0]?.[0] || currentYear;
   if (!yearlyEntries.some(([year]) => year === currentSalesYear)) {
     currentSalesYear = fallbackYear;
   }
   const filteredMonthlyEntries = monthlyEntries.filter(([month]) => month.startsWith(currentSalesYear));
-  const fallbackMonth = filteredMonthlyEntries[filteredMonthlyEntries.length - 1]?.[0] || `${currentSalesYear}-01`;
+  const fallbackMonth = filteredMonthlyEntries[0]?.[0] || `${currentSalesYear}-01`;
   if (!filteredMonthlyEntries.some(([month]) => month === currentSalesMonthKey)) {
     currentSalesMonthKey = fallbackMonth;
   }
