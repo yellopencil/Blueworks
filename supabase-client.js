@@ -132,6 +132,17 @@
       }
       return this.client.from("schedules").select("*").order("date", { ascending: true });
     },
+    async fetchYearGoals() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client
+        .from("year_goals")
+        .select("*")
+        .order("year", { ascending: false })
+        .order("half", { ascending: true })
+        .order("created_at", { ascending: true });
+    },
     async fetchArchiveNotes() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -179,6 +190,19 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.from("site_settings").upsert(payload).select().single();
+    },
+    async upsertYearGoals(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.from("year_goals").upsert(payload).select();
+    },
+    async deleteYearGoalsByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("year_goals").delete().in("id", ids);
     },
     async fetchQuoteSettings() {
       if (!this.client) {

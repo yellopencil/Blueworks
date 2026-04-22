@@ -787,6 +787,34 @@ function deserializeScheduleFromSupabase(row) {
   };
 }
 
+function serializeYearGoalForSupabase(goal) {
+  return {
+    id: goal.id,
+    year: Number(goal.year || new Date().getFullYear()),
+    half: goal.half === "second" ? "second" : "first",
+    kind: goal.kind === "planned" ? "planned" : "goal",
+    text: goal.text || "",
+    done: Boolean(goal.done),
+    completed_at: goal.done ? (goal.completedAt || new Date().toISOString()) : null,
+    created_by: state.sessionUserId || null,
+    created_at: goal.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeYearGoalFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    year: Number(row.year || new Date().getFullYear()),
+    half: row.half === "second" ? "second" : "first",
+    kind: row.kind === "planned" ? "planned" : "goal",
+    text: row.text || "",
+    done: Boolean(row.done),
+    createdAt: row.created_at || new Date().toISOString(),
+    completedAt: row.completed_at || "",
+  };
+}
+
 function serializeArchiveNoteForSupabase(note, index = 0) {
   return {
     id: note.id,
@@ -1091,6 +1119,77 @@ async function syncArchiveStateToSupabase() {
     if (deleteCategoriesResult.error) return { ok: false, error: deleteCategoriesResult.error };
   }
 
+  return { ok: true };
+}
+
+async function syncYearGoalsStateToSupabase(previousGoals = null) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
+
+  const remoteResult = await bridge.fetchYearGoals();
+  if (remoteResult.error) {
+    if (previousGoals) {
+      state.yearGoals = previousGoals;
+      saveState({ history: false });
+      renderAnnualGoals();
+      renderAnnualGoalArchiveLists();
+    }
+    return { ok: false, error: remoteResult.error };
+  }
+
+  const payloads = state.yearGoals.map((goal) => serializeYearGoalForSupabase(goal));
+  if (payloads.length) {
+    const upsertResult = await bridge.upsertYearGoals(payloads);
+    if (upsertResult.error) {
+      if (previousGoals) {
+        state.yearGoals = previousGoals;
+        saveState({ history: false });
+        renderAnnualGoals();
+        renderAnnualGoalArchiveLists();
+      }
+      return { ok: false, error: upsertResult.error };
+    }
+  }
+
+  const localIds = new Set(state.yearGoals.map((goal) => goal.id));
+  const staleIds = (remoteResult.data || []).map((row) => row.id).filter((id) => !localIds.has(id));
+  if (staleIds.length) {
+    const deleteResult = await bridge.deleteYearGoalsByIds(staleIds);
+    if (deleteResult.error) {
+      if (previousGoals) {
+        state.yearGoals = previousGoals;
+        saveState({ history: false });
+        renderAnnualGoals();
+        renderAnnualGoalArchiveLists();
+      }
+      return { ok: false, error: deleteResult.error };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function syncYearGoalsFromSupabase() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
+
+  const result = await bridge.fetchYearGoals();
+  if (result.error) return { ok: false, error: result.error };
+
+  const remoteGoals = (result.data || []).map(deserializeYearGoalFromSupabase);
+  const hasRemoteData = remoteGoals.length > 0;
+  const hasLocalData = state.yearGoals.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncYearGoalsStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    return { ok: true };
+  }
+
+  state.yearGoals = remoteGoals;
+  saveState({ history: false });
+  renderAnnualGoals();
+  renderAnnualGoalArchiveLists();
   return { ok: true };
 }
 
@@ -1546,6 +1645,12 @@ async function applyAuthSession(session, options = {}) {
   const archiveSyncResult = await syncArchivesFromSupabase();
   if (!archiveSyncResult.ok) {
     const message = archiveSyncResult.error?.message || "아카이브 정보를 불러오지 못했습니다.";
+    if (!options.silent) toast(message);
+  }
+
+  const yearGoalSyncResult = await syncYearGoalsFromSupabase();
+  if (!yearGoalSyncResult.ok) {
+    const message = yearGoalSyncResult.error?.message || "연간 목표를 불러오지 못했습니다.";
     if (!options.silent) toast(message);
   }
 
@@ -5573,12 +5678,13 @@ function closeAnnualGoalAddModal() {
   els.annualGoalAddModal?.classList.add("hidden");
 }
 
-function handleAnnualGoalAdd(event) {
+async function handleAnnualGoalAdd(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const text = normalizeGoalText(new FormData(form).get("goal"));
   const kind = String(new FormData(form).get("kind") || "goal") === "planned" ? "planned" : "goal";
   if (!text) return;
+  const previousGoals = structuredClone(state.yearGoals);
   if (currentAnnualGoalEditId) {
     const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
     if (!goal) return;
@@ -5601,28 +5707,49 @@ function handleAnnualGoalAdd(event) {
   saveState();
   renderAnnualGoals();
   renderAnnualGoalArchiveLists();
+  const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+  if (!syncResult.ok) {
+    const message = `연간 목표 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+    openNoticeModal(message);
+    toast(message);
+    return;
+  }
   closeAnnualGoalAddModal();
   openNoticeModal("저장이 완료되었어요!");
 }
 
-function toggleAnnualGoal(goalId) {
+async function toggleAnnualGoal(goalId) {
   const goal = state.yearGoals.find((item) => item.id === goalId);
   if (!goal) return;
+  const previousGoals = structuredClone(state.yearGoals);
   goal.done = !goal.done;
   goal.completedAt = goal.done ? new Date().toISOString() : "";
   saveState();
   renderAnnualGoals();
   renderAnnualGoalArchiveLists();
+  const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+  if (!syncResult.ok) {
+    const message = `연간 목표 상태 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+    openNoticeModal(message);
+    toast(message);
+  }
 }
 
 function deleteAnnualGoal(goalId) {
   const goal = state.yearGoals.find((item) => item.id === goalId);
   if (!goal) return;
-  openConfirmModal(() => {
+  openConfirmModal(async () => {
+    const previousGoals = structuredClone(state.yearGoals);
     state.yearGoals = state.yearGoals.filter((item) => item.id !== goalId);
     saveState();
     renderAnnualGoals();
     renderAnnualGoalArchiveLists();
+    const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+    if (!syncResult.ok) {
+      const message = `연간 목표 삭제 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast(message);
+    }
   }, "선택한 연간 목표를 삭제할까요?");
 }
 

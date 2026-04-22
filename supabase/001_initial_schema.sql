@@ -110,6 +110,7 @@ create table if not exists public.year_goals (
   id uuid primary key default gen_random_uuid(),
   year integer not null,
   half text not null check (half in ('first', 'second')),
+  kind text not null default 'goal' check (kind in ('goal', 'planned')),
   text text not null,
   done boolean not null default false,
   completed_at timestamptz,
@@ -163,7 +164,7 @@ create table if not exists public.archive_codes (
 create index if not exists idx_projects_status on public.projects(status);
 create index if not exists idx_projects_start_date on public.projects(start_date);
 create index if not exists idx_schedules_date on public.schedules(date);
-create index if not exists idx_year_goals_year_half on public.year_goals(year, half);
+create index if not exists idx_year_goals_year_half on public.year_goals(year, half, kind);
 create index if not exists idx_archive_notes_sort_order on public.archive_notes(sort_order);
 create index if not exists idx_archive_codes_sort_order on public.archive_codes(sort_order);
 
