@@ -3,12 +3,14 @@
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zJqlCjId8XiTq6W05l_JSA_8VHISJ3-";
   const SITE_ASSET_BUCKET = "site-assets";
   const PROJECT_DOCUMENT_BUCKET = "project-documents";
+  const QUOTE_PDF_BUCKET = "quote-pdf-history";
 
   const bridge = {
     url: SUPABASE_URL,
     publishableKey: SUPABASE_PUBLISHABLE_KEY,
     siteAssetBucket: SITE_ASSET_BUCKET,
     projectDocumentBucket: PROJECT_DOCUMENT_BUCKET,
+    quotePdfBucket: QUOTE_PDF_BUCKET,
     client: null,
     cachedSession: null,
     mode: "supabase-pending",
@@ -283,6 +285,57 @@
         return { data: null, error: new Error("Supabase client is not ready.") };
       }
       return this.client.storage.from(this.projectDocumentBucket).createSignedUrl(path, expiresIn);
+    },
+    async fetchQuotePdfHistory() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client
+        .from("quote_pdf_history")
+        .select("*")
+        .order("created_at", { ascending: false });
+    },
+    async insertQuotePdfHistory(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (this.cachedSession?.access_token) {
+        const result = await this.restRequest("quote_pdf_history", {
+          method: "POST",
+          query: "select=*",
+          body: payload,
+          prefer: "return=representation",
+        });
+        if (Array.isArray(result?.data)) result.data = result.data[0] || null;
+        return result;
+      }
+      return this.client.from("quote_pdf_history").insert(payload).select().single();
+    },
+    async deleteQuotePdfHistoryByIds(ids) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(ids) || !ids.length) return { data: [], error: null };
+      return this.client.from("quote_pdf_history").delete().in("id", ids);
+    },
+    async uploadQuotePdf(file, objectPath) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.storageUploadRequest(this.quotePdfBucket, objectPath, file);
+    },
+    async removeQuotePdfAsset(path) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!path) return { data: [], error: null };
+      return this.client.storage.from(this.quotePdfBucket).remove([path]);
+    },
+    async createQuotePdfSignedUrl(path, expiresIn = 3600) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.client.storage.from(this.quotePdfBucket).createSignedUrl(path, expiresIn);
     },
     async signInWithPassword(credentials) {
       if (!this.client) {

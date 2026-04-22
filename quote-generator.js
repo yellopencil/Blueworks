@@ -131,6 +131,7 @@
   let pointerOffsetX = 0;
   let pointerOffsetY = 0;
   let currentPdfPreviewUrl = null;
+  let pendingPdfHistoryDelete = null;
   let quoteSettings = loadQuoteSettings();
   let quoteSettingsSyncPromise = null;
 
@@ -253,12 +254,21 @@
     return window.BLUEWORKS_SUPABASE || null;
   }
 
+  function getCurrentBridgeUserId() {
+    return getSupabaseBridge()?.cachedSession?.user?.id || "";
+  }
+
   async function hasAuthenticatedSession() {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return false;
     if (bridge.cachedSession?.access_token) return true;
     const sessionResult = await bridge.getSession();
     return Boolean(sessionResult?.data?.session);
+  }
+
+  function canUseServerPdfHistory() {
+    const bridge = getSupabaseBridge();
+    return Boolean(bridge && bridge.isReady?.());
   }
 
   function buildQuoteSettingsPayload() {
@@ -398,7 +408,7 @@
         <div class="qa-history-head">
           <div>
             <h3 id="qaHistoryTitle" class="qa-history-title">지난 견적 · 계약서</h3>
-            <p class="qa-history-sub">이전에 내보낸 PDF 파일을 확인하고 다시 내려받거나 바로 볼 수 있습니다.</p>
+            <p class="qa-history-sub">견적 · 계약서를 다시 내려받거나 바로 볼 수 있습니다. 1년이 지난 파일은 자동으로 삭제됩니다.</p>
           </div>
           <button id="qaHistoryCloseBtn" type="button" class="qa-btn qa-btn-subtle qa-history-close">닫기</button>
         </div>
@@ -473,6 +483,7 @@
     modal.querySelector("#qaDeleteCancelBtn")?.addEventListener("click", () => {
       modal.classList.add("hidden");
       delete modal.dataset.targetId;
+      pendingPdfHistoryDelete = null;
     });
     return modal;
   }
@@ -481,7 +492,7 @@
     const modal = doc.getElementById("qaPdfViewerModal");
     const frame = doc.getElementById("qaPdfViewerFrame");
     if (frame) frame.removeAttribute("src");
-    if (currentPdfPreviewUrl) {
+    if (currentPdfPreviewUrl && String(currentPdfPreviewUrl).startsWith("blob:")) {
       URL.revokeObjectURL(currentPdfPreviewUrl);
       currentPdfPreviewUrl = null;
     }
@@ -1447,6 +1458,44 @@
     });
   }
 
+  async function getLocalPdfHistoryRecords() {
+    const db = await openPdfHistoryDb();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(PDF_HISTORY_STORE_NAME, "readonly");
+      const store = transaction.objectStore(PDF_HISTORY_STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        resolve(Array.isArray(request.result) ? request.result : []);
+      };
+      request.onerror = () => resolve([]);
+      transaction.oncomplete = () => db.close();
+      transaction.onerror = () => db.close();
+      transaction.onabort = () => db.close();
+    });
+  }
+
+  async function deleteLocalPdfHistoryRecordById(id) {
+    if (!id) return;
+    const db = await openPdfHistoryDb();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(PDF_HISTORY_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(PDF_HISTORY_STORE_NAME);
+      store.delete(id);
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+      transaction.onabort = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+  }
+
   function makePdfHistoryRecord(data, blob) {
     const createdAt = Date.now();
     return {
@@ -1466,8 +1515,115 @@
     };
   }
 
+  function buildQuotePdfStoragePath(record) {
+    const userId = getCurrentBridgeUserId() || "anonymous";
+    return `${userId}/${record.id}.pdf`;
+  }
+
+  function buildServerPdfHistoryPayload(record, storagePath) {
+    return {
+      id: record.id,
+      quote_date: record.date || getTodayIso(),
+      title: record.title || "",
+      client_company: record.clientCompany || "",
+      client_name: record.clientName || "",
+      client_phone: record.clientPhone || "",
+      total: Number(record.total || 0),
+      doc_type: record.docType || currentDocType,
+      doc_type_label: record.docTypeLabel || getDocTypeLabel(record.docType || currentDocType),
+      filename: record.filename || createPdfFilename(record),
+      search_text: String(record.searchText || "").toLowerCase(),
+      storage_path: storagePath,
+      size_bytes: Number(record.blob?.size || 0),
+      created_by: getCurrentBridgeUserId() || null,
+    };
+  }
+
+  function normalizeServerPdfHistoryRecord(row) {
+    return {
+      id: row.id,
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
+      date: row.quote_date || "",
+      title: row.title || "",
+      clientCompany: row.client_company || "",
+      clientName: row.client_name || "",
+      clientPhone: row.client_phone || "",
+      total: Number(row.total || 0),
+      docType: row.doc_type || "",
+      docTypeLabel: row.doc_type_label || getDocTypeLabel(row.doc_type || currentDocType),
+      filename: row.filename || "",
+      searchText: String(row.search_text || "").toLowerCase(),
+      storagePath: row.storage_path || "",
+      sizeBytes: Number(row.size_bytes || 0),
+      createdBy: row.created_by || null,
+    };
+  }
+
+  async function pruneServerPdfHistory() {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return;
+    const result = await bridge.fetchQuotePdfHistory();
+    if (result?.error) throw result.error;
+    const rows = Array.isArray(result?.data) ? result.data : [];
+    const threshold = Date.now() - PDF_HISTORY_MAX_AGE;
+    const expired = rows.filter((row) => {
+      const createdAt = row?.created_at ? new Date(row.created_at).getTime() : 0;
+      return createdAt && createdAt < threshold;
+    });
+    if (!expired.length) return;
+
+    await Promise.allSettled(expired.map((row) => bridge.removeQuotePdfAsset(row.storage_path)));
+    const deleteResult = await bridge.deleteQuotePdfHistoryByIds(expired.map((row) => row.id));
+    if (deleteResult?.error) throw deleteResult.error;
+  }
+
+  async function syncLocalPdfHistoryToSupabase() {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return;
+
+    await pruneOldPdfHistory();
+    await pruneServerPdfHistory();
+
+    const [localRows, serverResult] = await Promise.all([
+      getLocalPdfHistoryRecords(),
+      bridge.fetchQuotePdfHistory(),
+    ]);
+    if (serverResult?.error) throw serverResult.error;
+
+    const existingIds = new Set(
+      (Array.isArray(serverResult?.data) ? serverResult.data : []).map((row) => String(row?.id || ""))
+    );
+    const threshold = Date.now() - PDF_HISTORY_MAX_AGE;
+    const candidates = localRows
+      .filter((row) => row?.id && row?.blob instanceof Blob && (row?.createdAt || 0) >= threshold)
+      .filter((row) => !existingIds.has(String(row.id)));
+
+    for (const row of candidates) {
+      await savePdfHistoryRecordToSupabase(row);
+      await deleteLocalPdfHistoryRecordById(row.id);
+    }
+  }
+
+  async function savePdfHistoryRecordToSupabase(record) {
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return null;
+    await pruneServerPdfHistory();
+    const storagePath = buildQuotePdfStoragePath(record);
+    const uploadResult = await bridge.uploadQuotePdf(record.blob, storagePath);
+    if (uploadResult?.error) throw uploadResult.error;
+    const insertResult = await bridge.insertQuotePdfHistory(buildServerPdfHistoryPayload(record, storagePath));
+    if (insertResult?.error) {
+      await bridge.removeQuotePdfAsset(storagePath);
+      throw insertResult.error;
+    }
+    return normalizeServerPdfHistoryRecord(insertResult.data || {});
+  }
+
   async function savePdfHistoryRecord(record) {
     await pruneOldPdfHistory();
+    if (canUseServerPdfHistory() && (await hasAuthenticatedSession())) {
+      return savePdfHistoryRecordToSupabase(record);
+    }
     const db = await openPdfHistoryDb();
     await new Promise((resolve, reject) => {
       const transaction = db.transaction(PDF_HISTORY_STORE_NAME, "readwrite");
@@ -1490,6 +1646,16 @@
 
   async function getPdfHistoryRecords() {
     await pruneOldPdfHistory();
+    if (canUseServerPdfHistory() && (await hasAuthenticatedSession())) {
+      await syncLocalPdfHistoryToSupabase();
+      await pruneServerPdfHistory();
+      const bridge = getSupabaseBridge();
+      const result = await bridge.fetchQuotePdfHistory();
+      if (result?.error) throw result.error;
+      return (Array.isArray(result?.data) ? result.data : [])
+        .map(normalizeServerPdfHistoryRecord)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
     const db = await openPdfHistoryDb();
     return new Promise((resolve) => {
       const transaction = db.transaction(PDF_HISTORY_STORE_NAME, "readonly");
@@ -1506,13 +1672,21 @@
     });
   }
 
-  async function deletePdfHistoryRecord(id) {
-    if (!id) return;
+  async function deletePdfHistoryRecord(target) {
+    if (!target) return;
+    const row = typeof target === "string" ? { id: target } : target;
+    if (row?.storagePath && canUseServerPdfHistory() && (await hasAuthenticatedSession())) {
+      const bridge = getSupabaseBridge();
+      await bridge.removeQuotePdfAsset(row.storagePath);
+      const result = await bridge.deleteQuotePdfHistoryByIds([row.id]);
+      if (result?.error) throw result.error;
+      return;
+    }
     const db = await openPdfHistoryDb();
     await new Promise((resolve, reject) => {
       const transaction = db.transaction(PDF_HISTORY_STORE_NAME, "readwrite");
       const store = transaction.objectStore(PDF_HISTORY_STORE_NAME);
-      store.delete(id);
+      store.delete(row.id);
       transaction.oncomplete = () => {
         db.close();
         resolve();
@@ -1546,6 +1720,24 @@
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  async function getQuotePdfSignedUrl(row, expiresIn = 600) {
+    if (!row?.storagePath) return "";
+    const bridge = getSupabaseBridge();
+    if (!bridge || !bridge.isReady?.()) return "";
+    const result = await bridge.createQuotePdfSignedUrl(row.storagePath, expiresIn);
+    if (result?.error) throw result.error;
+    return result?.data?.signedUrl || "";
+  }
+
+  async function getQuotePdfBlob(row) {
+    if (row?.blob instanceof Blob) return row.blob;
+    const signedUrl = await getQuotePdfSignedUrl(row, 600);
+    if (!signedUrl) throw new Error("PDF 파일 주소를 가져오지 못했습니다.");
+    const response = await fetch(signedUrl);
+    if (!response.ok) throw new Error("PDF 파일을 불러오지 못했습니다.");
+    return response.blob();
+  }
+
   function resolveHistoryDocTypeLabel(row) {
     if (row?.docTypeLabel) return row.docTypeLabel;
     if (row?.docType) return getDocTypeLabel(row.docType);
@@ -1561,7 +1753,14 @@
     if (!listEl) return;
 
     listEl.innerHTML = `<div class="qa-history-empty">불러오는 중...</div>`;
-    const rows = await getPdfHistoryRecords();
+    let rows = [];
+    try {
+      rows = await getPdfHistoryRecords();
+    } catch (error) {
+      console.error(error);
+      listEl.innerHTML = `<div class="qa-history-empty">목록을 불러오지 못했습니다.</div>`;
+      return;
+    }
     const filtered = rows.filter((row) => !query || String(row.searchText || "").includes(query));
 
     if (!filtered.length) {
@@ -1595,19 +1794,31 @@
       const id = item.getAttribute("data-id");
       const row = filtered.find((entry) => entry.id === id);
       if (!row) return;
-      item.querySelector(".qa-history-download")?.addEventListener("click", () => {
-        triggerBlobDownload(row.blob, row.filename || createPdfFilename(row));
+      item.querySelector(".qa-history-download")?.addEventListener("click", async () => {
+        try {
+          const blob = await getQuotePdfBlob(row);
+          triggerBlobDownload(blob, row.filename || createPdfFilename(row));
+        } catch (error) {
+          console.error(error);
+          openNoticeModal(`견적 · 계약서를 내려받지 못했습니다.\n${error?.message || "알 수 없는 오류가 발생했습니다."}`);
+        }
       });
-      item.querySelector(".qa-history-preview")?.addEventListener("click", () => {
-        const viewer = ensurePdfViewerModal();
-        const frame = viewer.querySelector("#qaPdfViewerFrame");
-        closePdfViewerModal();
-        currentPdfPreviewUrl = URL.createObjectURL(row.blob);
-        if (frame) frame.src = currentPdfPreviewUrl;
-        viewer.classList.remove("hidden");
+      item.querySelector(".qa-history-preview")?.addEventListener("click", async () => {
+        try {
+          const viewer = ensurePdfViewerModal();
+          const frame = viewer.querySelector("#qaPdfViewerFrame");
+          closePdfViewerModal();
+          currentPdfPreviewUrl = row?.storagePath ? await getQuotePdfSignedUrl(row, 600) : URL.createObjectURL(await getQuotePdfBlob(row));
+          if (frame) frame.src = currentPdfPreviewUrl;
+          viewer.classList.remove("hidden");
+        } catch (error) {
+          console.error(error);
+          openNoticeModal(`견적 · 계약서를 미리 보지 못했습니다.\n${error?.message || "알 수 없는 오류가 발생했습니다."}`);
+        }
       });
       item.querySelector(".qa-history-delete")?.addEventListener("click", () => {
         const confirmModal = ensureDeleteConfirmModal();
+        pendingPdfHistoryDelete = row;
         confirmModal.dataset.targetId = row.id;
         confirmModal.classList.remove("hidden");
       });
@@ -2676,7 +2887,8 @@ ${escapeHtml(data.memo || "-")}
         modal.classList.add("hidden");
         return;
       }
-      await deletePdfHistoryRecord(targetId);
+      await deletePdfHistoryRecord(pendingPdfHistoryDelete || targetId);
+      pendingPdfHistoryDelete = null;
       delete modal.dataset.targetId;
       modal.classList.add("hidden");
       await renderPdfHistoryList();
@@ -2764,12 +2976,18 @@ ${escapeHtml(data.memo || "-")}
     calc();
     validateRequired();
     pruneOldPdfHistory().catch((error) => console.error(error));
+    syncLocalPdfHistoryToSupabase().catch((error) => {
+      console.warn("견적 PDF 기록을 서버와 동기화하지 못했습니다.", error);
+    });
     loadQuoteSettingsFromSupabase().catch((error) => {
       console.warn("견적 설정을 Supabase에서 불러오지 못했습니다.", error);
     });
     const bridge = getSupabaseBridge();
     bridge?.onAuthStateChange?.((event, session) => {
       if (session) {
+        syncLocalPdfHistoryToSupabase().catch((error) => {
+          console.warn("로그인 후 견적 PDF 기록을 동기화하지 못했습니다.", error);
+        });
         loadQuoteSettingsFromSupabase().catch((error) => {
           console.warn("로그인 후 견적 설정을 다시 불러오지 못했습니다.", error);
         });
