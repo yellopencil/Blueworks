@@ -460,6 +460,7 @@ function normalizeState(source) {
       id: goal.id || crypto.randomUUID(),
       year: Number(goal.year || new Date().getFullYear()),
       half: goal.half === "second" ? "second" : "first",
+      kind: goal.kind === "planned" ? "planned" : "goal",
       text: goal.text || "",
       done: Boolean(goal.done),
       createdAt: goal.createdAt || new Date().toISOString(),
@@ -3146,7 +3147,16 @@ function renderSummary() {
   els.progressStageSummary.innerHTML = stageCounts || '<span class="summary-stage-chip">세부 단계 없음</span>';
 }
 function renderBoard() {
-  const readyProjects = state.projects.filter((project) => project.status === "ready");
+  const readyProjects = state.projects
+    .filter((project) => project.status === "ready")
+    .sort((a, b) => {
+      const aDate = String(a.startDate || a.createdAt || "");
+      const bDate = String(b.startDate || b.createdAt || "");
+      if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
+      if (aDate && !bDate) return -1;
+      if (!aDate && bDate) return 1;
+      return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    });
   const progressSections = Object.entries(PROGRESS_STAGE_META).map(([key, label]) => {
     const projects = state.projects.filter((project) => project.status === "inProgress" && project.progressStage === key);
     const cards = projects.map((project) => `
@@ -4018,6 +4028,7 @@ function openProjectModal(projectId = null) {
   els.topDeleteProjectBtn.disabled = !project;
   els.topDeleteProjectBtn.classList.toggle("hidden", !project);
   els.projectForm.reset();
+  ensureProjectPaymentMethodOptionOrder();
 
   els.projectForm.elements.id.value = project?.id || "";
   els.projectForm.elements.title.value = project?.title || "";
@@ -4091,6 +4102,19 @@ function syncProjectRichEditorValues() {
     if (!textarea || !surface) return;
     textarea.value = normalizeRichEditorHtml(surface.innerHTML);
   });
+}
+
+function ensureProjectPaymentMethodOptionOrder() {
+  const select = els.paymentMethodSelect;
+  if (!select) return;
+  const options = Array.from(select.options);
+  const empty = options.find((option) => option.value === "");
+  const cash = options.find((option) => option.value === "cash");
+  const card = options.find((option) => option.value === "card");
+  const kmong = options.find((option) => option.value === "kmong");
+  const ordered = [empty, cash, card, kmong].filter(Boolean);
+  if (ordered.length !== options.length) return;
+  select.replaceChildren(...ordered);
 }
 
 function syncPaymentFields() {
@@ -5422,6 +5446,21 @@ function getAnnualGoalPeriodLabel(period) {
   return `${period.year}년 ${period.half === "first" ? "상반기" : "하반기"} 목표`;
 }
 
+function getAnnualGoalKindLabel(kind) {
+  return kind === "planned" ? "작성 예정" : "목표";
+}
+
+function ensureAnnualGoalKindField() {
+  if (!els.annualGoalAddForm) return null;
+  let field = els.annualGoalAddForm.elements.kind;
+  if (field) return field;
+  field = document.createElement("input");
+  field.type = "hidden";
+  field.name = "kind";
+  els.annualGoalAddForm.prepend(field);
+  return field;
+}
+
 function isSameAnnualGoalPeriod(goal, period) {
   return Number(goal.year) === Number(period.year) && goal.half === period.half;
 }
@@ -5433,11 +5472,12 @@ function normalizeGoalText(value) {
 function renderAnnualGoals() {
   if (!els.annualGoalBoard) return;
   const currentPeriod = getAnnualGoalPeriod();
-  const goals = state.yearGoals
-    .filter((goal) => isSameAnnualGoalPeriod(goal, currentPeriod))
-    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-  const list = goals.length
-    ? goals.map((goal) => `
+  const renderColumnList = (kind) => {
+    const goals = state.yearGoals
+      .filter((goal) => isSameAnnualGoalPeriod(goal, currentPeriod) && (goal.kind === "planned" ? "planned" : "goal") === kind)
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    return goals.length
+      ? goals.map((goal) => `
         <li class="annual-goal-item ${goal.done ? "is-done" : ""}">
           <span>${escapeHtml(goal.text || "목표 없음")}</span>
           <div class="annual-goal-item-actions">
@@ -5449,20 +5489,33 @@ function renderAnnualGoals() {
           </div>
         </li>
       `).join("")
-    : '<li class="annual-goal-empty muted small">등록된 목표가 없습니다.</li>';
+      : `<li class="annual-goal-empty muted small">등록된 ${kind === "planned" ? "작성 예정" : "목표"}가 없습니다.</li>`;
+  };
 
   els.annualGoalBoard.innerHTML = `
     <article class="annual-goal-column is-current" data-annual-period="${currentPeriod.year}-${currentPeriod.half}">
       <div class="annual-goal-column-head">
         <div>
-          <span>현재 목표</span>
           <h4>${getAnnualGoalPeriodLabel(currentPeriod)}</h4>
         </div>
+        <button type="button" class="ghost" data-annual-goal-add="goal">추가</button>
       </div>
-      <ul class="annual-goal-list">${list}</ul>
+      <ul class="annual-goal-list">${renderColumnList("goal")}</ul>
+    </article>
+    <article class="annual-goal-column is-current" data-annual-period="${currentPeriod.year}-${currentPeriod.half}-planned">
+      <div class="annual-goal-column-head">
+        <div>
+          <h4>${currentPeriod.year}년 ${currentPeriod.half === "first" ? "상반기" : "하반기"} 작성 예정</h4>
+        </div>
+        <button type="button" class="ghost" data-annual-goal-add="planned">추가</button>
+      </div>
+      <ul class="annual-goal-list">${renderColumnList("planned")}</ul>
     </article>
   `;
 
+  els.annualGoalBoard.querySelectorAll("[data-annual-goal-add]").forEach((button) => {
+    button.addEventListener("click", () => openAnnualGoalAddModal(button.dataset.annualGoalAdd === "planned" ? "planned" : "goal"));
+  });
   els.annualGoalBoard.querySelectorAll("[data-annual-goal-toggle]").forEach((button) => {
     button.addEventListener("click", () => toggleAnnualGoal(button.dataset.annualGoalToggle));
   });
@@ -5474,14 +5527,18 @@ function renderAnnualGoals() {
   });
 }
 
-function openAnnualGoalAddModal() {
+function openAnnualGoalAddModal(kind = "goal") {
   if (!els.annualGoalAddModal || !els.annualGoalAddForm) return;
   const period = getAnnualGoalPeriod();
   currentAnnualGoalEditId = null;
   els.annualGoalAddForm.reset();
   els.annualGoalAddForm.elements.year.value = period.year;
   els.annualGoalAddForm.elements.half.value = period.half;
-  if (els.annualGoalAddTitle) els.annualGoalAddTitle.textContent = `${getAnnualGoalPeriodLabel(period)} 추가`;
+  const kindField = ensureAnnualGoalKindField();
+  if (kindField) kindField.value = kind;
+  if (els.annualGoalAddTitle) {
+    els.annualGoalAddTitle.textContent = `${period.year}년 ${period.half === "first" ? "상반기" : "하반기"} ${getAnnualGoalKindLabel(kind)} 추가`;
+  }
   const submitButton = els.annualGoalAddForm.querySelector('[type="submit"]');
   if (submitButton) submitButton.textContent = "추가";
   els.annualGoalAddModal.classList.remove("hidden");
@@ -5496,8 +5553,12 @@ function openAnnualGoalEditModal(goalId) {
   els.annualGoalAddForm.reset();
   els.annualGoalAddForm.elements.year.value = goal.year;
   els.annualGoalAddForm.elements.half.value = goal.half === "second" ? "second" : "first";
+  const kindField = ensureAnnualGoalKindField();
+  if (kindField) kindField.value = goal.kind === "planned" ? "planned" : "goal";
   els.annualGoalAddForm.elements.goal.value = goal.text || "";
-  if (els.annualGoalAddTitle) els.annualGoalAddTitle.textContent = `${getAnnualGoalPeriodLabel(goal)} 수정`;
+  if (els.annualGoalAddTitle) {
+    els.annualGoalAddTitle.textContent = `${goal.year}년 ${goal.half === "first" ? "상반기" : "하반기"} ${getAnnualGoalKindLabel(goal.kind)} 수정`;
+  }
   const submitButton = els.annualGoalAddForm.querySelector('[type="submit"]');
   if (submitButton) submitButton.textContent = "수정";
   els.annualGoalAddModal.classList.remove("hidden");
@@ -5516,6 +5577,7 @@ function handleAnnualGoalAdd(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const text = normalizeGoalText(new FormData(form).get("goal"));
+  const kind = String(new FormData(form).get("kind") || "goal") === "planned" ? "planned" : "goal";
   if (!text) return;
   if (currentAnnualGoalEditId) {
     const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
@@ -5523,11 +5585,13 @@ function handleAnnualGoalAdd(event) {
     goal.text = text;
     goal.year = Number(form.elements.year.value);
     goal.half = form.elements.half.value === "second" ? "second" : "first";
+    goal.kind = kind;
   } else {
     state.yearGoals.push({
       id: crypto.randomUUID(),
       year: Number(form.elements.year.value),
       half: form.elements.half.value === "second" ? "second" : "first",
+      kind,
       text,
       done: false,
       createdAt: new Date().toISOString(),
@@ -5682,7 +5746,7 @@ function renderAnnualGoalArchiveLists() {
       <li class="annual-goal-archive-item ${goal.done ? "is-done" : ""}">
         <div>
           <strong>${escapeHtml(goal.text || "목표 없음")}</strong>
-          <span>${getAnnualGoalPeriodLabel(goal)}</span>
+          <span>${goal.year}년 ${goal.half === "first" ? "상반기" : "하반기"} ${getAnnualGoalKindLabel(goal.kind)}</span>
         </div>
         <button type="button" class="${goal.done ? "ghost" : "secondary"}" data-annual-goal-archive-toggle="${goal.id}">
           ${goal.done ? "완료 취소" : "달성"}
