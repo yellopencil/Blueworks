@@ -1759,7 +1759,7 @@ function getRefreshTasks() {
 function getStartupRefreshDomainGroups(view) {
   const primary = getRefreshDomainKeysForView(view);
   const primarySet = new Set(primary);
-  const background = ["projects", "yearGoals", "worklogs", "archives", "profiles", "siteSettings"].filter((key) => !primarySet.has(key));
+  const background = ["projects", "yearGoals", "worklogs", "archives", "siteSettings"].filter((key) => !primarySet.has(key));
   return { primary, background };
 }
 
