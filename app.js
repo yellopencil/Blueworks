@@ -357,7 +357,6 @@ const modalSnapshots = {
 bindEvents();
 normalizeAppLayout();
 render();
-syncProjectsAndSchedulesFromSupabase();
 initializeSupabaseAuth();
 
 function loadState() {
@@ -1746,6 +1745,24 @@ function getRefreshDomainKeysForView(view) {
   }
 }
 
+function getRefreshTasks() {
+  return {
+    projects: () => syncProjectsAndSchedulesFromSupabase(),
+    yearGoals: () => syncYearGoalsFromSupabase(),
+    worklogs: () => syncWorklogsFromSupabase(),
+    archives: () => syncArchivesFromSupabase(),
+    profiles: () => syncProfilesFromSupabase(),
+    siteSettings: () => syncSiteSettingsFromSupabase(),
+  };
+}
+
+function getStartupRefreshDomainGroups(view) {
+  const primary = getRefreshDomainKeysForView(view);
+  const primarySet = new Set(primary);
+  const background = ["projects", "yearGoals", "worklogs", "archives", "profiles", "siteSettings"].filter((key) => !primarySet.has(key));
+  return { primary, background };
+}
+
 async function runViewRefreshDomain(domainKey, task, options = {}) {
   if (viewRefreshInFlight.has(domainKey)) {
     return viewRefreshInFlight.get(domainKey);
@@ -1773,22 +1790,13 @@ async function runViewRefreshDomain(domainKey, task, options = {}) {
   return promise;
 }
 
-async function refreshDataForView(view, options = {}) {
+async function refreshDomainKeys(domainKeys, options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) {
     return { ok: true, skipped: true };
   }
 
-  const refreshTasks = {
-    projects: () => syncProjectsAndSchedulesFromSupabase(),
-    yearGoals: () => syncYearGoalsFromSupabase(),
-    worklogs: () => syncWorklogsFromSupabase(),
-    archives: () => syncArchivesFromSupabase(),
-    profiles: () => syncProfilesFromSupabase(),
-    siteSettings: () => syncSiteSettingsFromSupabase(),
-  };
-
-  const domainKeys = getRefreshDomainKeysForView(view);
+  const refreshTasks = getRefreshTasks();
   if (!domainKeys.length) {
     return { ok: true, skipped: true };
   }
@@ -1813,6 +1821,10 @@ async function refreshDataForView(view, options = {}) {
   }
 
   return firstError ? { ok: false, error: firstError } : { ok: true };
+}
+
+async function refreshDataForView(view, options = {}) {
+  return refreshDomainKeys(getRefreshDomainKeysForView(view), options);
 }
 
 async function recoverRepresentativeProfile(profile) {
@@ -1921,33 +1933,22 @@ async function applyAuthSession(session, options = {}) {
     return { ok: false, message };
   }
 
-  const siteSettingsSyncResult = await syncSiteSettingsFromSupabase();
-  if (!siteSettingsSyncResult.ok) {
-    const message = siteSettingsSyncResult.error?.message || "사이트 설정을 불러오지 못했습니다.";
-    if (!options.silent) toast(message);
-  }
-
-  const archiveSyncResult = await syncArchivesFromSupabase();
-  if (!archiveSyncResult.ok) {
-    const message = archiveSyncResult.error?.message || "아카이브 정보를 불러오지 못했습니다.";
-    if (!options.silent) toast(message);
-  }
-
-  const yearGoalSyncResult = await syncYearGoalsFromSupabase();
-  if (!yearGoalSyncResult.ok) {
-    const message = yearGoalSyncResult.error?.message || "연간 목표를 불러오지 못했습니다.";
-    if (!options.silent) toast(message);
-  }
-
-  const worklogSyncResult = await syncWorklogsFromSupabase();
-  if (!worklogSyncResult.ok) {
-    const message = worklogSyncResult.error?.message || "업무일지를 불러오지 못했습니다.";
-    if (!options.silent) toast(message);
-  }
-
-  syncProfilesFromSupabase().catch(() => {});
   saveState({ history: false });
   render();
+
+  const activeView = state.currentView || "dashboard";
+  const { primary, background } = getStartupRefreshDomainGroups(activeView);
+
+  refreshDomainKeys(primary, { force: true })
+    .catch((error) => {
+      console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, error);
+    })
+    .finally(() => {
+      refreshDomainKeys(background, { force: true }).catch((error) => {
+        console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
+      });
+    });
+
   return { ok: true, message: "" };
 }
 
