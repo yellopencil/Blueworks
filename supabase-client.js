@@ -47,13 +47,37 @@
     setCachedSession(session) {
       this.cachedSession = session || null;
     },
+    isSessionExpiringSoon(session, leewaySeconds = 45) {
+      const expiresAt = Number(session?.expires_at || 0);
+      if (!expiresAt) return false;
+      return expiresAt - Math.floor(Date.now() / 1000) <= leewaySeconds;
+    },
+    async refreshCachedSession(force = false) {
+      if (!this.client) {
+        return { data: { session: null }, error: new Error("Supabase client is not ready.") };
+      }
+      if (!force && this.cachedSession?.access_token && !this.isSessionExpiringSoon(this.cachedSession)) {
+        return { data: { session: this.cachedSession }, error: null };
+      }
+      if (typeof this.client.auth.refreshSession === "function" && this.cachedSession?.refresh_token) {
+        const refreshResult = await this.runClientQuery(
+          this.client.auth.refreshSession(),
+          "로그인 상태 갱신 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+          AUTH_REQUEST_TIMEOUT_MS,
+        );
+        if (!refreshResult?.error && refreshResult?.data?.session) {
+          this.setCachedSession(refreshResult.data.session);
+          return refreshResult;
+        }
+      }
+      return this.getSession();
+    },
     async getAccessToken() {
-      if (this.cachedSession?.access_token) return this.cachedSession.access_token;
-      const sessionResult = await this.getSession();
+      const sessionResult = await this.refreshCachedSession();
       return sessionResult?.data?.session?.access_token || "";
     },
     async restRequest(path, options = {}) {
-      const accessToken = await this.getAccessToken();
+      let accessToken = await this.getAccessToken();
       if (!accessToken) {
         return { data: null, error: new Error("Supabase session token is not ready.") };
       }
@@ -66,23 +90,38 @@
         timeoutMessage = "Supabase 요청 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       } = options;
       const requestUrl = `${this.url}/rest/v1/${path}${query ? `?${query}` : ""}`;
-      const headers = {
-        apikey: this.publishableKey,
-        Authorization: `Bearer ${accessToken}`,
+      const executeRequest = async (token) => {
+        const headers = {
+          apikey: this.publishableKey,
+          Authorization: `Bearer ${token}`,
+        };
+        if (body !== undefined) headers["Content-Type"] = "application/json";
+        if (prefer) headers.Prefer = prefer;
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timeoutId = controller
+          ? window.setTimeout(() => controller.abort(), timeoutMs)
+          : null;
+        try {
+          return await fetch(requestUrl, {
+            method,
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body),
+            signal: controller?.signal,
+          });
+        } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+        }
       };
-      if (body !== undefined) headers["Content-Type"] = "application/json";
-      if (prefer) headers.Prefer = prefer;
-      const controller = typeof AbortController === "function" ? new AbortController() : null;
-      const timeoutId = controller
-        ? window.setTimeout(() => controller.abort(), timeoutMs)
-        : null;
       try {
-        const response = await fetch(requestUrl, {
-          method,
-          headers,
-          body: body === undefined ? undefined : JSON.stringify(body),
-          signal: controller?.signal,
-        });
+        let response = await executeRequest(accessToken);
+        if ((response.status === 401 || response.status === 403) && this.cachedSession?.refresh_token) {
+          const refreshedSessionResult = await this.refreshCachedSession(true);
+          const refreshedToken = refreshedSessionResult?.data?.session?.access_token || "";
+          if (refreshedToken) {
+            accessToken = refreshedToken;
+            response = await executeRequest(accessToken);
+          }
+        }
         const text = await response.text();
         let parsed = null;
         if (text) {
@@ -106,33 +145,46 @@
       } catch (error) {
         const nextError = error?.name === "AbortError" ? new Error(timeoutMessage) : error;
         return { data: null, error: nextError };
-      } finally {
-        if (timeoutId) window.clearTimeout(timeoutId);
       }
     },
     async storageUploadRequest(bucket, objectPath, file) {
-      const accessToken = await this.getAccessToken();
+      let accessToken = await this.getAccessToken();
       if (!accessToken) {
         return { data: null, error: new Error("Supabase session token is not ready.") };
       }
       const requestUrl = `${this.url}/storage/v1/object/${bucket}/${objectPath}`;
       const timeoutMessage = "파일 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.";
-      const controller = typeof AbortController === "function" ? new AbortController() : null;
-      const timeoutId = controller
-        ? window.setTimeout(() => controller.abort(), 20000)
-        : null;
+      const executeUpload = async (token) => {
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timeoutId = controller
+          ? window.setTimeout(() => controller.abort(), 20000)
+          : null;
+        try {
+          return await fetch(requestUrl, {
+            method: "POST",
+            headers: {
+              apikey: this.publishableKey,
+              Authorization: `Bearer ${token}`,
+              "x-upsert": "true",
+              "content-type": file?.type || "application/octet-stream",
+            },
+            body: file,
+            signal: controller?.signal,
+          });
+        } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+        }
+      };
       try {
-        const response = await fetch(requestUrl, {
-          method: "POST",
-          headers: {
-            apikey: this.publishableKey,
-            Authorization: `Bearer ${accessToken}`,
-            "x-upsert": "true",
-            "content-type": file?.type || "application/octet-stream",
-          },
-          body: file,
-          signal: controller?.signal,
-        });
+        let response = await executeUpload(accessToken);
+        if ((response.status === 401 || response.status === 403) && this.cachedSession?.refresh_token) {
+          const refreshedSessionResult = await this.refreshCachedSession(true);
+          const refreshedToken = refreshedSessionResult?.data?.session?.access_token || "";
+          if (refreshedToken) {
+            accessToken = refreshedToken;
+            response = await executeUpload(accessToken);
+          }
+        }
         const text = await response.text();
         let parsed = null;
         if (text) {
@@ -157,8 +209,6 @@
       } catch (error) {
         const nextError = error?.name === "AbortError" ? new Error(timeoutMessage) : error;
         return { data: null, error: nextError };
-      } finally {
-        if (timeoutId) window.clearTimeout(timeoutId);
       }
     },
     async fetchProjects() {

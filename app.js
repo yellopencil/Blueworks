@@ -342,8 +342,13 @@ let authStateSubscription = null;
 let authPanelMode = "login";
 let isPasswordRecoveryFlow = false;
 const VIEW_REFRESH_MIN_INTERVAL_MS = 4000;
+const APP_RESUME_IDLE_THRESHOLD_MS = 5 * 60 * 1000;
+const APP_RESUME_MIN_INTERVAL_MS = 10 * 1000;
 const viewRefreshLastRun = new Map();
 const viewRefreshInFlight = new Map();
+let lastAppInteractionAt = Date.now();
+let lastAppResumeRefreshAt = 0;
+let resumeWakePromise = null;
 const modalSnapshots = {
   project: "",
   schedule: "",
@@ -1763,6 +1768,43 @@ function getStartupRefreshDomainGroups(view) {
   return { primary, background };
 }
 
+function markAppInteraction() {
+  lastAppInteractionAt = Date.now();
+}
+
+async function wakeAppAfterIdle(options = {}) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) {
+    return { ok: true, skipped: true };
+  }
+
+  const now = Date.now();
+  if (!options.force && now - lastAppInteractionAt < APP_RESUME_IDLE_THRESHOLD_MS) {
+    return { ok: true, skipped: true };
+  }
+  if (!options.force && now - lastAppResumeRefreshAt < APP_RESUME_MIN_INTERVAL_MS) {
+    return { ok: true, skipped: true };
+  }
+  if (resumeWakePromise) {
+    return resumeWakePromise;
+  }
+
+  lastAppResumeRefreshAt = now;
+  resumeWakePromise = (async () => {
+    const sessionResult = await bridge.refreshCachedSession(true);
+    if (sessionResult?.error) {
+      return { ok: false, error: sessionResult.error };
+    }
+    markAppInteraction();
+    const activeView = state.currentView || "dashboard";
+    return refreshDataForView(activeView, { force: true });
+  })().finally(() => {
+    resumeWakePromise = null;
+  });
+
+  return resumeWakePromise;
+}
+
 async function runViewRefreshDomain(domainKey, task, options = {}) {
   if (viewRefreshInFlight.has(domainKey)) {
     return viewRefreshInFlight.get(domainKey);
@@ -1995,6 +2037,19 @@ function selectedProject() {
 }
 
 function bindEvents() {
+  document.addEventListener("pointerdown", markAppInteraction, true);
+  document.addEventListener("keydown", markAppInteraction, true);
+  window.addEventListener("focus", () => {
+    wakeAppAfterIdle().catch((error) => {
+      console.warn("포커스 복귀 후 데이터를 깨우지 못했습니다.", error);
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    wakeAppAfterIdle().catch((error) => {
+      console.warn("탭 복귀 후 데이터를 깨우지 못했습니다.", error);
+    });
+  });
   ensureHomepageShortcut();
   setupProjectFieldLabels();
   setupCustomerFilters();
