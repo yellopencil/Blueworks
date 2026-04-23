@@ -1730,7 +1730,7 @@ async function syncProfilesFromSupabase() {
 function getRefreshDomainKeysForView(view) {
   switch (view) {
     case "dashboard":
-      return ["projects", "yearGoals", "worklogs", "profiles"];
+      return ["projects", "yearGoals", "worklogs"];
     case "members":
       return ["profiles"];
     case "customers":
