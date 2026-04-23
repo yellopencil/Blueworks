@@ -341,6 +341,9 @@ let archiveCategoryPointerOffsetY = 0;
 let authStateSubscription = null;
 let authPanelMode = "login";
 let isPasswordRecoveryFlow = false;
+const VIEW_REFRESH_MIN_INTERVAL_MS = 4000;
+const viewRefreshLastRun = new Map();
+const viewRefreshInFlight = new Map();
 const modalSnapshots = {
   project: "",
   schedule: "",
@@ -1719,6 +1722,94 @@ async function syncProfilesFromSupabase() {
   return { ok: true, data: state.users };
 }
 
+function getRefreshDomainKeysForView(view) {
+  switch (view) {
+    case "dashboard":
+      return ["projects", "yearGoals", "worklogs", "profiles"];
+    case "members":
+      return ["profiles"];
+    case "customers":
+    case "sales":
+      return ["projects"];
+    case "archiveNotes":
+    case "archiveCodes":
+      return ["archives"];
+    case "settings":
+      return ["siteSettings"];
+    default:
+      return [];
+  }
+}
+
+async function runViewRefreshDomain(domainKey, task, options = {}) {
+  if (viewRefreshInFlight.has(domainKey)) {
+    return viewRefreshInFlight.get(domainKey);
+  }
+
+  const lastRun = viewRefreshLastRun.get(domainKey) || 0;
+  if (!options.force && Date.now() - lastRun < VIEW_REFRESH_MIN_INTERVAL_MS) {
+    return { ok: true, skipped: true };
+  }
+
+  const promise = Promise.resolve()
+    .then(task)
+    .then((result) => {
+      if (result?.ok !== false) {
+        viewRefreshLastRun.set(domainKey, Date.now());
+      }
+      return result;
+    })
+    .catch((error) => ({ ok: false, error }))
+    .finally(() => {
+      viewRefreshInFlight.delete(domainKey);
+    });
+
+  viewRefreshInFlight.set(domainKey, promise);
+  return promise;
+}
+
+async function refreshDataForView(view, options = {}) {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) {
+    return { ok: true, skipped: true };
+  }
+
+  const refreshTasks = {
+    projects: () => syncProjectsAndSchedulesFromSupabase(),
+    yearGoals: () => syncYearGoalsFromSupabase(),
+    worklogs: () => syncWorklogsFromSupabase(),
+    archives: () => syncArchivesFromSupabase(),
+    profiles: () => syncProfilesFromSupabase(),
+    siteSettings: () => syncSiteSettingsFromSupabase(),
+  };
+
+  const domainKeys = getRefreshDomainKeysForView(view);
+  if (!domainKeys.length) {
+    return { ok: true, skipped: true };
+  }
+
+  let ranTask = false;
+  let firstError = null;
+
+  for (const domainKey of domainKeys) {
+    const task = refreshTasks[domainKey];
+    if (!task) continue;
+    const result = await runViewRefreshDomain(domainKey, task, options);
+    if (!result?.skipped) {
+      ranTask = true;
+    }
+    if (result?.ok === false && !firstError) {
+      firstError = result.error || new Error("데이터를 새로고침하지 못했습니다.");
+    }
+  }
+
+  if (ranTask) {
+    render();
+  }
+
+  return firstError ? { ok: false, error: firstError } : { ok: true };
+}
+
 async function recoverRepresentativeProfile(profile) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !profile) return profile;
@@ -2959,6 +3050,9 @@ function switchView(view) {
   if (view === "archiveNotes" || view === "archiveCodes") state.archiveMenuOpen = true;
   saveState({ history: false });
   syncCurrentView();
+  refreshDataForView(view).catch((error) => {
+    console.warn(`${view} 화면 데이터를 새로고침하지 못했습니다.`, error);
+  });
   closeMobileNav();
 }
 
@@ -3031,6 +3125,11 @@ function toggleArchiveMenu() {
   }
   saveState({ history: false });
   syncCurrentView();
+  if (state.archiveMenuOpen && ["archiveNotes", "archiveCodes"].includes(state.currentView)) {
+    refreshDataForView(state.currentView).catch((error) => {
+      console.warn(`${state.currentView} 화면 데이터를 새로고침하지 못했습니다.`, error);
+    });
+  }
 }
 
 async function handleLogin(event) {
