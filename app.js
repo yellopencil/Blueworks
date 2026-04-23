@@ -1666,25 +1666,30 @@ async function removeSiteImage(key) {
 
 async function handleSiteSettingsSave(event) {
   event.preventDefault();
-  if (!canManageSiteSettings()) {
-    toast("사이트 설정은 대표만 수정할 수 있어요.");
-    return;
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    if (!canManageSiteSettings()) {
+      toast("사이트 설정은 대표만 수정할 수 있어요.");
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const previousSettings = { ...(state.siteSettings || {}) };
+    state.siteSettings = {
+      ...(state.siteSettings || {}),
+      title: String(formData.get("title") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      metaTags: String(formData.get("metaTags") || "").trim(),
+      blockCrawling: Boolean(formData.get("blockCrawling")),
+    };
+    const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "사이트 설정 저장 실패" });
+    if (!persistResult.ok) {
+      return;
+    }
+    applySiteSettings();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  const formData = new FormData(event.currentTarget);
-  const previousSettings = { ...(state.siteSettings || {}) };
-  state.siteSettings = {
-    ...(state.siteSettings || {}),
-    title: String(formData.get("title") || "").trim(),
-    description: String(formData.get("description") || "").trim(),
-    metaTags: String(formData.get("metaTags") || "").trim(),
-    blockCrawling: Boolean(formData.get("blockCrawling")),
-  };
-  const persistResult = await persistSiteSettingsToSupabase(previousSettings, { errorPrefix: "사이트 설정 저장 실패" });
-  if (!persistResult.ok) {
-    return;
-  }
-  applySiteSettings();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 function currentUser() {
@@ -4796,6 +4801,7 @@ function getProjectSaveValidationIssues(formData) {
 
 async function handleProjectSave(event) {
   event.preventDefault();
+  const finishBusyToast = startDelayedBusyToast();
   const submitButton = event.submitter || document.activeElement;
   const previousButtonText = submitButton?.textContent || "";
   if (submitButton) {
@@ -4949,6 +4955,7 @@ async function handleProjectSave(event) {
     openNoticeModal(message);
     toast(message);
   } finally {
+    finishBusyToast();
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.textContent = previousButtonText || "저장";
@@ -5087,33 +5094,38 @@ async function persistArchiveChanges(options = {}) {
 
 async function handleArchiveNoteSave(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const now = new Date().toISOString();
-  const payload = {
-    id: String(formData.get("id") || crypto.randomUUID()),
-    title: String(formData.get("title") || "").trim(),
-    content: String(formData.get("content") || "").trim(),
-    color: String(formData.get("color") || "gray"),
-    createdAt: now,
-    updatedAt: now,
-  };
-  const previousNotes = structuredClone(state.archiveNotes);
-  const existing = state.archiveNotes.find((item) => item.id === payload.id);
-  if (existing) {
-    payload.createdAt = existing.createdAt || now;
-    Object.assign(existing, payload);
-  } else {
-    state.archiveNotes.unshift(payload);
-  }
-  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패" });
-  if (!persistResult.ok) {
-    state.archiveNotes = previousNotes;
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const now = new Date().toISOString();
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      title: String(formData.get("title") || "").trim(),
+      content: String(formData.get("content") || "").trim(),
+      color: String(formData.get("color") || "gray"),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const previousNotes = structuredClone(state.archiveNotes);
+    const existing = state.archiveNotes.find((item) => item.id === payload.id);
+    if (existing) {
+      payload.createdAt = existing.createdAt || now;
+      Object.assign(existing, payload);
+    } else {
+      state.archiveNotes.unshift(payload);
+    }
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패" });
+    if (!persistResult.ok) {
+      state.archiveNotes = previousNotes;
+      renderArchiveNotes();
+      return;
+    }
     renderArchiveNotes();
-    return;
+    closeArchiveNoteModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  renderArchiveNotes();
-  closeArchiveNoteModal();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 function deleteCurrentArchiveNote() {
@@ -5158,34 +5170,39 @@ function closeArchiveCodeModal() {
 
 async function handleArchiveCodeSave(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const now = new Date().toISOString();
-  const payload = {
-    id: String(formData.get("id") || crypto.randomUUID()),
-    title: String(formData.get("title") || "").trim(),
-    description: String(formData.get("description") || "").trim(),
-    categoryId: String(formData.get("categoryId") || state.archiveCodeCategories[0]?.id || ""),
-    content: String(formData.get("content") || "").trim(),
-    createdAt: now,
-    updatedAt: now,
-  };
-  const previousCodes = structuredClone(state.archiveCodes);
-  const existing = state.archiveCodes.find((item) => item.id === payload.id);
-  if (existing) {
-    payload.createdAt = existing.createdAt || now;
-    Object.assign(existing, payload);
-  } else {
-    state.archiveCodes.unshift(payload);
-  }
-  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 저장 실패" });
-  if (!persistResult.ok) {
-    state.archiveCodes = previousCodes;
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const now = new Date().toISOString();
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      title: String(formData.get("title") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      categoryId: String(formData.get("categoryId") || state.archiveCodeCategories[0]?.id || ""),
+      content: String(formData.get("content") || "").trim(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const previousCodes = structuredClone(state.archiveCodes);
+    const existing = state.archiveCodes.find((item) => item.id === payload.id);
+    if (existing) {
+      payload.createdAt = existing.createdAt || now;
+      Object.assign(existing, payload);
+    } else {
+      state.archiveCodes.unshift(payload);
+    }
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 저장 실패" });
+    if (!persistResult.ok) {
+      state.archiveCodes = previousCodes;
+      renderArchiveCodes();
+      return;
+    }
     renderArchiveCodes();
-    return;
+    closeArchiveCodeModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  renderArchiveCodes();
-  closeArchiveCodeModal();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 function deleteCurrentArchiveCode() {
@@ -5207,31 +5224,36 @@ function deleteCurrentArchiveCode() {
 
 async function handleArchiveCategorySave(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const id = String(formData.get("id") || crypto.randomUUID());
-  const name = String(formData.get("name") || "").trim();
-  const color = String(formData.get("color") || "gray");
-  if (!name) return;
-  const previousCategories = structuredClone(state.archiveCodeCategories);
-  const existing = state.archiveCodeCategories.find((item) => item.id === id);
-  if (existing) {
-    existing.name = name;
-    existing.color = color;
-    existing.updatedAt = new Date().toISOString();
-  } else {
-    state.archiveCodeCategories.push({ id, name, color, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-  }
-  const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 저장 실패" });
-  if (!persistResult.ok) {
-    state.archiveCodeCategories = previousCategories;
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const id = String(formData.get("id") || crypto.randomUUID());
+    const name = String(formData.get("name") || "").trim();
+    const color = String(formData.get("color") || "gray");
+    if (!name) return;
+    const previousCategories = structuredClone(state.archiveCodeCategories);
+    const existing = state.archiveCodeCategories.find((item) => item.id === id);
+    if (existing) {
+      existing.name = name;
+      existing.color = color;
+      existing.updatedAt = new Date().toISOString();
+    } else {
+      state.archiveCodeCategories.push({ id, name, color, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 저장 실패" });
+    if (!persistResult.ok) {
+      state.archiveCodeCategories = previousCategories;
+      renderArchiveCodeCategories();
+      renderArchiveCodes();
+      return;
+    }
     renderArchiveCodeCategories();
     renderArchiveCodes();
-    return;
+    closeArchiveCategoryModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  renderArchiveCodeCategories();
-  renderArchiveCodes();
-  closeArchiveCategoryModal();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 function deleteCurrentArchiveCategory() {
@@ -5299,66 +5321,68 @@ function syncArchiveCodeScroll() {
   els.archiveCodeHighlight.scrollLeft = els.archiveCodeInput.scrollLeft;
 }
 
-function handleMemberSave(event) {
+async function handleMemberSave(event) {
   event.preventDefault();
-  if (!canManageMembers()) return;
-  const formData = new FormData(event.currentTarget);
-  const payload = {
-    id: String(formData.get("id") || crypto.randomUUID()),
-    name: String(formData.get("name") || "").trim(),
-    roleLabel: String(formData.get("roleLabel") || "").trim(),
-    phone: String(formData.get("phone") || "").trim(),
-    email: String(formData.get("email") || "").trim(),
-    notes: String(formData.get("notes") || "").trim(),
-    lastLoginAt: "",
-    lastLoginIp: "",
-    canManageMembers: Boolean(formData.get("canManageMembers")),
-    approved: Boolean(formData.get("approved")),
-    isOwner: false,
-    createdAt: new Date().toISOString(),
-  };
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    if (!canManageMembers()) return;
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      name: String(formData.get("name") || "").trim(),
+      roleLabel: String(formData.get("roleLabel") || "").trim(),
+      phone: String(formData.get("phone") || "").trim(),
+      email: String(formData.get("email") || "").trim(),
+      notes: String(formData.get("notes") || "").trim(),
+      lastLoginAt: "",
+      lastLoginIp: "",
+      canManageMembers: Boolean(formData.get("canManageMembers")),
+      approved: Boolean(formData.get("approved")),
+      isOwner: false,
+      createdAt: new Date().toISOString(),
+    };
 
-  const existing = state.users.find((user) => user.id === payload.id);
-  if (!existing) {
-    toast("새 멤버는 회원가입으로 추가해주세요.");
-    return;
-  }
+    const existing = state.users.find((user) => user.id === payload.id);
+    if (!existing) {
+      toast("새 멤버는 회원가입으로 추가해주세요.");
+      return;
+    }
 
-  const bridge = getSupabaseBridge();
-  if (existing) {
-    const fallbackUsername = existing.username || existing.email?.split("@")[0] || payload.email.split("@")[0] || "";
-    Object.assign(existing, payload, {
-      username: fallbackUsername,
-      password: "",
-      createdAt: existing.createdAt || payload.createdAt,
-      lastLoginAt: existing.lastLoginAt || "",
-      lastLoginIp: existing.lastLoginIp || "",
-      isOwner: existing.isOwner,
-      approved: existing.isOwner ? true : payload.approved,
-      canManageMembers: existing.isOwner ? true : currentUser()?.isOwner ? payload.canManageMembers : existing.canManageMembers,
-    });
-    if (state.pendingApproval?.username === existing.username && existing.approved) state.pendingApproval = null;
-    existing.rejected = Boolean(existing.rejected);
-  }
+    const bridge = getSupabaseBridge();
+    if (existing) {
+      const fallbackUsername = existing.username || existing.email?.split("@")[0] || payload.email.split("@")[0] || "";
+      Object.assign(existing, payload, {
+        username: fallbackUsername,
+        password: "",
+        createdAt: existing.createdAt || payload.createdAt,
+        lastLoginAt: existing.lastLoginAt || "",
+        lastLoginIp: existing.lastLoginIp || "",
+        isOwner: existing.isOwner,
+        approved: existing.isOwner ? true : payload.approved,
+        canManageMembers: existing.isOwner ? true : currentUser()?.isOwner ? payload.canManageMembers : existing.canManageMembers,
+      });
+      if (state.pendingApproval?.username === existing.username && existing.approved) state.pendingApproval = null;
+      existing.rejected = Boolean(existing.rejected);
+    }
 
-  if (bridge?.isReady()) {
-    bridge.upsertProfile({
-      id: existing.id,
-      username: existing.username,
-      name: existing.name,
-      role_label: existing.roleLabel,
-      phone: existing.phone,
-      email: existing.email,
-      notes: existing.notes,
-      can_manage_members: existing.canManageMembers,
-      is_owner: existing.isOwner,
-      approved: existing.approved,
-      rejected: existing.rejected,
-      last_login_at: existing.lastLoginAt || null,
-      last_login_ip: existing.lastLoginIp || "",
-      created_at: existing.createdAt,
-      updated_at: new Date().toISOString(),
-    }).then(async ({ error }) => {
+    if (bridge?.isReady()) {
+      const { error } = await bridge.upsertProfile({
+        id: existing.id,
+        username: existing.username,
+        name: existing.name,
+        role_label: existing.roleLabel,
+        phone: existing.phone,
+        email: existing.email,
+        notes: existing.notes,
+        can_manage_members: existing.canManageMembers,
+        is_owner: existing.isOwner,
+        approved: existing.approved,
+        rejected: existing.rejected,
+        last_login_at: existing.lastLoginAt || null,
+        last_login_ip: existing.lastLoginIp || "",
+        created_at: existing.createdAt,
+        updated_at: new Date().toISOString(),
+      });
       if (error) {
         toast("Supabase에 멤버 정보를 저장하지 못했습니다.");
         return;
@@ -5367,66 +5391,73 @@ function handleMemberSave(event) {
       renderMembers();
       closeMemberModal();
       openNoticeModal("저장이 완료되었어요!");
-    });
-    return;
-  }
+      return;
+    }
 
-  saveState();
-  closeMemberModal();
-  renderMembers();
-  openNoticeModal("저장이 완료되었어요!");
+    saveState();
+    closeMemberModal();
+    renderMembers();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
+  }
 }
 
 async function handleMyProfileSave(event) {
   event.preventDefault();
-  const user = currentUser();
-  if (!user) return;
-  const formData = new FormData(event.currentTarget);
-  const updatedUser = {
-    ...user,
-    name: String(formData.get("name") || "").trim(),
-    phone: String(formData.get("phone") || "").trim(),
-    notes: String(formData.get("notes") || "").trim(),
-    updatedAt: new Date().toISOString(),
-  };
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const user = currentUser();
+    if (!user) return;
+    const formData = new FormData(event.currentTarget);
+    const updatedUser = {
+      ...user,
+      name: String(formData.get("name") || "").trim(),
+      phone: String(formData.get("phone") || "").trim(),
+      notes: String(formData.get("notes") || "").trim(),
+      updatedAt: new Date().toISOString(),
+    };
 
-  const userIndex = state.users.findIndex((item) => item.id === user.id);
-  if (userIndex >= 0) {
-    state.users[userIndex] = updatedUser;
-  }
-
-  const bridge = getSupabaseBridge();
-  if (bridge?.isReady()) {
-    const result = await bridge.upsertProfile({
-      id: updatedUser.id,
-      username: updatedUser.username,
-      name: updatedUser.name,
-      role_label: updatedUser.roleLabel,
-      phone: updatedUser.phone,
-      email: updatedUser.email,
-      notes: updatedUser.notes,
-      can_manage_members: updatedUser.canManageMembers,
-      is_owner: updatedUser.isOwner,
-      approved: updatedUser.approved,
-      rejected: updatedUser.rejected,
-      last_login_at: updatedUser.lastLoginAt || null,
-      last_login_ip: updatedUser.lastLoginIp || "",
-      created_at: updatedUser.createdAt,
-      updated_at: updatedUser.updatedAt,
-    });
-    if (result.error) {
-      const message = `내 정보 저장 실패: ${result.error.message || "Supabase 오류"}`;
-      toast(message);
-      openNoticeModal(message);
-      return;
+    const userIndex = state.users.findIndex((item) => item.id === user.id);
+    if (userIndex >= 0) {
+      state.users[userIndex] = updatedUser;
     }
-    state.users[userIndex] = normalizeProfileRecord(result.data);
-  }
 
-  saveState();
-  closeMyProfileModal();
-  render();
-  openNoticeModal("내 정보를 저장했어요!");
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      const result = await bridge.upsertProfile({
+        id: updatedUser.id,
+        username: updatedUser.username,
+        name: updatedUser.name,
+        role_label: updatedUser.roleLabel,
+        phone: updatedUser.phone,
+        email: updatedUser.email,
+        notes: updatedUser.notes,
+        can_manage_members: updatedUser.canManageMembers,
+        is_owner: updatedUser.isOwner,
+        approved: updatedUser.approved,
+        rejected: updatedUser.rejected,
+        last_login_at: updatedUser.lastLoginAt || null,
+        last_login_ip: updatedUser.lastLoginIp || "",
+        created_at: updatedUser.createdAt,
+        updated_at: updatedUser.updatedAt,
+      });
+      if (result.error) {
+        const message = `내 정보 저장 실패: ${result.error.message || "Supabase 오류"}`;
+        toast(message);
+        openNoticeModal(message);
+        return;
+      }
+      state.users[userIndex] = normalizeProfileRecord(result.data);
+    }
+
+    saveState();
+    closeMyProfileModal();
+    render();
+    openNoticeModal("내 정보를 저장했어요!");
+  } finally {
+    finishBusyToast();
+  }
 }
 
 function deleteCurrentProject() {
@@ -5976,42 +6007,47 @@ function closeAnnualGoalAddModal() {
 
 async function handleAnnualGoalAdd(event) {
   event.preventDefault();
-  const form = event.currentTarget;
-  const text = normalizeGoalText(new FormData(form).get("goal"));
-  const kind = String(new FormData(form).get("kind") || "goal") === "planned" ? "planned" : "goal";
-  if (!text) return;
-  const previousGoals = structuredClone(state.yearGoals);
-  if (currentAnnualGoalEditId) {
-    const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
-    if (!goal) return;
-    goal.text = text;
-    goal.year = Number(form.elements.year.value);
-    goal.half = form.elements.half.value === "second" ? "second" : "first";
-    goal.kind = kind;
-  } else {
-    state.yearGoals.push({
-      id: crypto.randomUUID(),
-      year: Number(form.elements.year.value),
-      half: form.elements.half.value === "second" ? "second" : "first",
-      kind,
-      text,
-      done: false,
-      createdAt: new Date().toISOString(),
-      completedAt: "",
-    });
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const form = event.currentTarget;
+    const text = normalizeGoalText(new FormData(form).get("goal"));
+    const kind = String(new FormData(form).get("kind") || "goal") === "planned" ? "planned" : "goal";
+    if (!text) return;
+    const previousGoals = structuredClone(state.yearGoals);
+    if (currentAnnualGoalEditId) {
+      const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
+      if (!goal) return;
+      goal.text = text;
+      goal.year = Number(form.elements.year.value);
+      goal.half = form.elements.half.value === "second" ? "second" : "first";
+      goal.kind = kind;
+    } else {
+      state.yearGoals.push({
+        id: crypto.randomUUID(),
+        year: Number(form.elements.year.value),
+        half: form.elements.half.value === "second" ? "second" : "first",
+        kind,
+        text,
+        done: false,
+        createdAt: new Date().toISOString(),
+        completedAt: "",
+      });
+    }
+    saveState();
+    renderAnnualGoals();
+    renderAnnualGoalArchiveLists();
+    const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+    if (!syncResult.ok) {
+      const message = `연간 목표 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast(message);
+      return;
+    }
+    closeAnnualGoalAddModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  saveState();
-  renderAnnualGoals();
-  renderAnnualGoalArchiveLists();
-  const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
-  if (!syncResult.ok) {
-    const message = `연간 목표 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
-    openNoticeModal(message);
-    toast(message);
-    return;
-  }
-  closeAnnualGoalAddModal();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 async function toggleAnnualGoal(goalId) {
@@ -6267,6 +6303,22 @@ function toast(message) {
   els.toast.classList.remove("hidden");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => els.toast.classList.add("hidden"), 2200);
+}
+
+function startDelayedBusyToast(message = "저장 중입니다...", delayMs = 450) {
+  let shown = false;
+  const timer = setTimeout(() => {
+    shown = true;
+    toast(message);
+  }, delayMs);
+
+  return () => {
+    clearTimeout(timer);
+    if (shown && els.toast?.textContent === message) {
+      clearTimeout(toast.timer);
+      els.toast.classList.add("hidden");
+    }
+  };
 }
 
 function readFileAsDataUrl(file) {
@@ -6583,31 +6635,36 @@ function renderWorklogTasks() {
 
 async function handleWorklogSave(event) {
   event.preventDefault();
-  ensureWorklogDraft();
-  const previousWorklogs = structuredClone(state.worklogs || {});
-  currentWorklogDraft.notes = String(els.worklogForm.elements.notes.value || "").trim();
-  const sanitizedWorklog = sanitizeWorklogForPersistence({
-    date: currentWorklogDate,
-    tasks: currentWorklogDraft.tasks,
-    notes: currentWorklogDraft.notes,
-  }, currentWorklogDate);
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    ensureWorklogDraft();
+    const previousWorklogs = structuredClone(state.worklogs || {});
+    currentWorklogDraft.notes = String(els.worklogForm.elements.notes.value || "").trim();
+    const sanitizedWorklog = sanitizeWorklogForPersistence({
+      date: currentWorklogDate,
+      tasks: currentWorklogDraft.tasks,
+      notes: currentWorklogDraft.notes,
+    }, currentWorklogDate);
 
-  if (sanitizedWorklog.notes || sanitizedWorklog.tasks.length) {
-    state.worklogs[currentWorklogDate] = sanitizedWorklog;
-  } else {
-    delete state.worklogs[currentWorklogDate];
+    if (sanitizedWorklog.notes || sanitizedWorklog.tasks.length) {
+      state.worklogs[currentWorklogDate] = sanitizedWorklog;
+    } else {
+      delete state.worklogs[currentWorklogDate];
+    }
+    saveState();
+    const syncResult = await syncWorklogsStateToSupabase(previousWorklogs);
+    if (!syncResult.ok) {
+      const message = `업무일지 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast(message);
+      return;
+    }
+    renderCalendar();
+    closeWorklogModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
   }
-  saveState();
-  const syncResult = await syncWorklogsStateToSupabase(previousWorklogs);
-  if (!syncResult.ok) {
-    const message = `업무일지 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
-    openNoticeModal(message);
-    toast(message);
-    return;
-  }
-  renderCalendar();
-  closeWorklogModal();
-  openNoticeModal("저장이 완료되었어요!");
 }
 
 function escapeHtml(value) {
@@ -6671,48 +6728,53 @@ function deleteScheduleFromDetailModal() {
 
 async function handleScheduleSave(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const payload = {
-    id: String(formData.get("id") || crypto.randomUUID()),
-    title: String(formData.get("title")).trim(),
-    date: String(formData.get("date")),
-    projectId: "",
-    notes: String(formData.get("notes")).trim(),
-  };
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      title: String(formData.get("title")).trim(),
+      date: String(formData.get("date")),
+      projectId: "",
+      notes: String(formData.get("notes")).trim(),
+    };
 
-  const existing = state.schedules.find((schedule) => schedule.id === payload.id);
-  const previousSchedule = existing ? { ...existing } : null;
-  const previousWorklogs = structuredClone(state.worklogs || {});
-  if (existing) Object.assign(existing, payload);
-  else state.schedules.push(payload);
+    const existing = state.schedules.find((schedule) => schedule.id === payload.id);
+    const previousSchedule = existing ? { ...existing } : null;
+    const previousWorklogs = structuredClone(state.worklogs || {});
+    if (existing) Object.assign(existing, payload);
+    else state.schedules.push(payload);
 
-  const bridge = getSupabaseBridge();
-  if (bridge?.isReady()) {
-    const result = await bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload));
-    if (result.error) {
-      if (existing && previousSchedule) {
-        Object.assign(existing, previousSchedule);
-      } else {
-        state.schedules = state.schedules.filter((schedule) => schedule.id !== payload.id);
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      const result = await bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload));
+      if (result.error) {
+        if (existing && previousSchedule) {
+          Object.assign(existing, previousSchedule);
+        } else {
+          state.schedules = state.schedules.filter((schedule) => schedule.id !== payload.id);
+        }
+        const message = `일정 저장 실패: ${result.error.message || "Supabase 오류"}`;
+        openNoticeModal(message);
+        toast(message);
+        return;
       }
-      const message = `일정 저장 실패: ${result.error.message || "Supabase 오류"}`;
-      openNoticeModal(message);
-      toast(message);
-      return;
+      const syncedSchedule = deserializeScheduleFromSupabase(result.data);
+      const syncedIndex = state.schedules.findIndex((schedule) => schedule.id === syncedSchedule.id);
+      if (syncedIndex >= 0) state.schedules[syncedIndex] = syncedSchedule;
+      else state.schedules.push(syncedSchedule);
     }
-    const syncedSchedule = deserializeScheduleFromSupabase(result.data);
-    const syncedIndex = state.schedules.findIndex((schedule) => schedule.id === syncedSchedule.id);
-    if (syncedIndex >= 0) state.schedules[syncedIndex] = syncedSchedule;
-    else state.schedules.push(syncedSchedule);
-  }
-  syncScheduleToWorklog(payload, previousSchedule);
+    syncScheduleToWorklog(payload, previousSchedule);
 
-  saveState();
-  syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
-  closeScheduleEditorModal();
-  renderSchedules();
-  renderCalendar();
-  openNoticeModal("저장이 완료되었어요!");
+    saveState();
+    syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
+    closeScheduleEditorModal();
+    renderSchedules();
+    renderCalendar();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
+  }
 }
 
 function closeScheduleEditorModal() {

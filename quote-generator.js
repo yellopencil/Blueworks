@@ -381,6 +381,25 @@
     }
   }
 
+  function beginDelayedButtonBusyState(button, pendingLabel = "저장 중...", delayMs = 450) {
+    if (!button) return () => {};
+    const originalLabel = button.textContent;
+    let applied = false;
+    const timer = setTimeout(() => {
+      applied = true;
+      button.disabled = true;
+      button.textContent = pendingLabel;
+    }, delayMs);
+
+    return () => {
+      clearTimeout(timer);
+      if (applied) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    };
+  }
+
   function ensureNoticeModal() {
     let modal = doc.getElementById("qaNoticeModal");
     if (modal) return modal;
@@ -2133,13 +2152,18 @@
   }
 
   async function saveRowPreset() {
-    const rows = normalizeRowPresetRows(getRows());
-    if (!rows.length) {
-      openNoticeModal("저장할 견적 항목이 없습니다.");
-      return;
+    const finishBusyState = beginDelayedButtonBusyState(els.saveRowPresetBtn);
+    try {
+      const rows = normalizeRowPresetRows(getRows());
+      if (!rows.length) {
+        openNoticeModal("저장할 견적 항목이 없습니다.");
+        return;
+      }
+      quoteSettings.rowPreset = rows;
+      return persistQuoteSettingsWithFeedback("견적 항목이 저장되었습니다.", "견적 항목 저장에 실패했습니다.");
+    } finally {
+      finishBusyState();
     }
-    quoteSettings.rowPreset = rows;
-    return persistQuoteSettingsWithFeedback("견적 항목이 저장되었습니다.", "견적 항목 저장에 실패했습니다.");
   }
 
   function loadRowPreset() {
@@ -2972,11 +2996,16 @@ ${escapeHtml(data.memo || "-")}
     });
 
     els.agreementSaveBtn.addEventListener("click", async () => {
-      quoteSettings.agreementHtml = getAgreementHtml();
-      const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "약관동의서 저장에 실패했습니다.");
-      if (!saved) return;
-      agreementEditable = false;
-      syncAgreementEditor();
+      const finishBusyState = beginDelayedButtonBusyState(els.agreementSaveBtn);
+      try {
+        quoteSettings.agreementHtml = getAgreementHtml();
+        const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "약관동의서 저장에 실패했습니다.");
+        if (!saved) return;
+        agreementEditable = false;
+        syncAgreementEditor();
+      } finally {
+        finishBusyState();
+      }
     });
 
     els.agreementBoldBtn.addEventListener("click", () => {
@@ -2990,13 +3019,18 @@ ${escapeHtml(data.memo || "-")}
     });
 
     els.termsSaveBtn.addEventListener("click", async () => {
-      const key = isKrmongDoc(currentDocType) ? "kmong" : "normal";
-      quoteSettings.paymentLines[key] = els.termsEditor.value.split("\n");
-      const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "결제 방법 저장에 실패했습니다.");
-      if (!saved) return;
-      termsEditable = false;
-      renderTerms();
-      syncTermsEditor();
+      const finishBusyState = beginDelayedButtonBusyState(els.termsSaveBtn);
+      try {
+        const key = isKrmongDoc(currentDocType) ? "kmong" : "normal";
+        quoteSettings.paymentLines[key] = els.termsEditor.value.split("\n");
+        const saved = await persistQuoteSettingsWithFeedback("저장이 완료되었습니다.", "결제 방법 저장에 실패했습니다.");
+        if (!saved) return;
+        termsEditable = false;
+        renderTerms();
+        syncTermsEditor();
+      } finally {
+        finishBusyState();
+      }
     });
 
     els.docButtons.forEach((button) => {
