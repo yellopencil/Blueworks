@@ -249,8 +249,10 @@ const els = {
   worklogForm: document.querySelector("#worklogForm"),
   worklogTitle: document.querySelector("#worklogTitle"),
   worklogTasks: document.querySelector("#worklogTasks"),
+  worklogWaitingTasks: document.querySelector("#worklogWaitingTasks"),
   worklogCloseBtn: document.querySelector("#worklogCloseBtn"),
   addWorklogTaskBtn: document.querySelector("#addWorklogTaskBtn"),
+  addWorklogWaitingTaskBtn: document.querySelector("#addWorklogWaitingTaskBtn"),
   worklogProgressText: document.querySelector("#worklogProgressText"),
   worklogProgressSummary: document.querySelector("#worklogProgressSummary"),
   worklogProgressFill: document.querySelector("#worklogProgressFill"),
@@ -822,7 +824,8 @@ function serializeWorklogTaskForSupabase(task, worklogId, sortOrder = 0) {
     id: task.id,
     worklog_id: worklogId,
     task_text: task.text || "",
-    done: Boolean(task.done),
+    done: normalizeWorklogTaskStatus(task.status) === "waiting" ? false : Boolean(task.done),
+    task_status: normalizeWorklogTaskStatus(task.status),
     schedule_id: task.scheduleId || null,
     auto: Boolean(task.auto),
     source_task_id: task.sourceTaskId || null,
@@ -841,6 +844,7 @@ function deserializeWorklogFromSupabase(row) {
         id: task.id,
         text: task.task_text || "",
         done: Boolean(task.done),
+        status: task.task_status || "active",
         scheduleId: task.schedule_id || "",
         auto: Boolean(task.auto),
         sourceTaskId: task.source_task_id || "",
@@ -862,6 +866,7 @@ function sanitizeWorklogForPersistence(worklog, dateKey = "") {
       .map((task) => createWorklogTask(task))
       .map((task) => ({
         ...task,
+        done: normalizeWorklogTaskStatus(task.status) === "waiting" ? false : Boolean(task.done),
         text: String(task.text || "").trim(),
       }))
       .filter((task) => task.text || task.scheduleId)
@@ -2181,7 +2186,12 @@ function bindEvents() {
   els.worklogCloseBtn.addEventListener("click", closeWorklogModal);
   els.addWorklogTaskBtn.addEventListener("click", () => {
     ensureWorklogDraft();
-    currentWorklogDraft.tasks.push(createWorklogTask());
+    currentWorklogDraft.tasks.push(createWorklogTask({ status: "active" }));
+    renderWorklogTasks();
+  });
+  els.addWorklogWaitingTaskBtn?.addEventListener("click", () => {
+    ensureWorklogDraft();
+    currentWorklogDraft.tasks.push(createWorklogTask({ status: "waiting" }));
     renderWorklogTasks();
   });
   els.worklogForm.addEventListener("submit", handleWorklogSave);
@@ -6444,11 +6454,21 @@ function createWorklogTask(task = {}) {
     id: task.id || crypto.randomUUID(),
     text: task.text || "",
     done: Boolean(task.done),
+    status: normalizeWorklogTaskStatus(task.status),
     scheduleId: task.scheduleId || "",
     auto: Boolean(task.auto),
     sourceTaskId: task.sourceTaskId || "",
     carriedFromDate: task.carriedFromDate || "",
   };
+}
+
+function normalizeWorklogTaskStatus(status = "") {
+  return status === "waiting" ? "waiting" : "active";
+}
+
+function getWorklogTasksByStatus(tasks = [], status = "active") {
+  const normalizedStatus = normalizeWorklogTaskStatus(status);
+  return (Array.isArray(tasks) ? tasks : []).filter((task) => normalizeWorklogTaskStatus(task.status) === normalizedStatus);
 }
 
 function getAdjacentDateKey(dateKey, offsetDays = 1) {
@@ -6490,8 +6510,9 @@ function syncScheduleToWorklog(schedule, previousSchedule = null) {
   if (linkedTask) {
     linkedTask.text = text;
     linkedTask.auto = true;
+    linkedTask.status = "active";
   } else if (!worklog.tasks.some((task) => String(task.text || "").trim() === text)) {
-    worklog.tasks.push(createWorklogTask({ text, done: false, scheduleId: schedule.id, auto: true }));
+    worklog.tasks.push(createWorklogTask({ text, done: false, status: "active", scheduleId: schedule.id, auto: true }));
   }
   state.worklogs[schedule.date] = worklog;
 }
@@ -6518,7 +6539,7 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
 
   let changed = false;
   previousWorklog.tasks
-    .filter((task) => String(task.text || "").trim() && !task.done)
+    .filter((task) => normalizeWorklogTaskStatus(task.status) === "active" && String(task.text || "").trim() && !task.done)
     .forEach((task) => {
       const sourceTaskId = task.sourceTaskId || task.id;
       const alreadyExists = currentWorklog.tasks.some((existingTask) => {
@@ -6552,7 +6573,7 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
 function getWorklogProgress(dateKey) {
   const worklog = state.worklogs?.[dateKey];
   if (!worklog?.tasks?.length) return 0;
-  const actionableTasks = worklog.tasks.filter((task) => String(task.text || "").trim());
+  const actionableTasks = getWorklogTasksByStatus(worklog.tasks, "active").filter((task) => String(task.text || "").trim());
   if (!actionableTasks.length) return 0;
   const doneCount = actionableTasks.filter((task) => task.done).length;
   return Math.round((doneCount / actionableTasks.length) * 100);
@@ -6569,7 +6590,7 @@ function ensureWorklogDraft(dateKey = currentWorklogDate) {
     const existing = state.worklogs?.[dateKey];
     currentWorklogDraft = {
       date: dateKey,
-      tasks: existing?.tasks?.length ? existing.tasks.map((task) => createWorklogTask(task)) : [createWorklogTask()],
+      tasks: existing?.tasks?.length ? existing.tasks.map((task) => createWorklogTask(task)) : [createWorklogTask({ status: "active" })],
       notes: existing?.notes || "",
     };
   }
@@ -6621,17 +6642,25 @@ function getWorklogTaskAfterElement(container, x, y) {
   return null;
 }
 
-function persistWorklogTaskOrder(container) {
+function persistWorklogTaskOrder(container, status = "active") {
   const orderedIds = [...container.querySelectorAll("[data-worklog-task]")]
     .map((item) => item.dataset.worklogTask);
-  currentWorklogDraft.tasks = orderedIds
+  const normalizedStatus = normalizeWorklogTaskStatus(status);
+  const orderedTasks = orderedIds
     .map((id) => currentWorklogDraft.tasks.find((task) => task.id === id))
     .filter(Boolean);
+  const activeTasks = normalizedStatus === "active"
+    ? orderedTasks
+    : getWorklogTasksByStatus(currentWorklogDraft.tasks, "active");
+  const waitingTasks = normalizedStatus === "waiting"
+    ? orderedTasks
+    : getWorklogTasksByStatus(currentWorklogDraft.tasks, "waiting");
+  currentWorklogDraft.tasks = [...activeTasks, ...waitingTasks];
 }
 
-function startWorklogTaskDrag(event, item) {
+function startWorklogTaskDrag(event, item, container, status = "active") {
   event.preventDefault();
-  if (!els.worklogTasks || !currentWorklogDraft) return;
+  if (!container || !currentWorklogDraft) return;
 
   draggedWorklogTaskId = item.dataset.worklogTask;
   const rect = item.getBoundingClientRect();
@@ -6647,16 +6676,16 @@ function startWorklogTaskDrag(event, item) {
     if (!worklogTaskDragGhost) return;
     worklogTaskDragGhost.style.left = `${moveEvent.clientX - worklogTaskPointerOffsetX}px`;
     worklogTaskDragGhost.style.top = `${moveEvent.clientY - worklogTaskPointerOffsetY}px`;
-    const after = getWorklogTaskAfterElement(els.worklogTasks, moveEvent.clientX, moveEvent.clientY);
-    if (after) els.worklogTasks.insertBefore(item, after);
-    else els.worklogTasks.appendChild(item);
+    const after = getWorklogTaskAfterElement(container, moveEvent.clientX, moveEvent.clientY);
+    if (after) container.insertBefore(item, after);
+    else container.appendChild(item);
   };
 
   const onUp = () => {
     item.classList.remove("is-dragging");
     worklogTaskDragGhost?.remove();
     worklogTaskDragGhost = null;
-    persistWorklogTaskOrder(els.worklogTasks);
+    persistWorklogTaskOrder(container, status);
     draggedWorklogTaskId = null;
     renderWorklogTasks();
     window.removeEventListener("pointermove", onMove);
@@ -6667,28 +6696,33 @@ function startWorklogTaskDrag(event, item) {
   window.addEventListener("pointerup", onUp, { passive: false });
 }
 
-function renderWorklogTasks() {
-  ensureWorklogDraft();
-  const tasks = currentWorklogDraft.tasks;
-  els.worklogTasks.innerHTML = tasks.map((task, index) => `
-    <div class="worklog-task ${task.done ? "is-done" : ""}" data-worklog-task="${task.id}" draggable="true">
-      <button type="button" class="worklog-drag-handle" aria-label="순서 이동">⋮⋮</button>
-      <span class="worklog-order">${index + 1}</span>
-      <input type="text" class="worklog-task-input" data-worklog-input="${task.id}" value="${escapeHtml(task.text)}">
-      <div class="inline-actions worklog-actions">
-        <button type="button" class="ghost ${task.done ? "is-active" : ""}" data-worklog-complete="${task.id}">처리완료</button>
-        <button type="button" class="danger" data-worklog-remove="${task.id}">삭제</button>
+function renderWorklogTaskList(container, tasks, status = "active") {
+  if (!container) return;
+  const normalizedStatus = normalizeWorklogTaskStatus(status);
+  container.innerHTML = tasks.map((task, index) => {
+    const isWaiting = normalizedStatus === "waiting";
+    return `
+      <div class="worklog-task ${task.done ? "is-done" : ""} ${isWaiting ? "is-waiting" : ""}" data-worklog-task="${task.id}" draggable="true">
+        <button type="button" class="worklog-drag-handle" aria-label="순서 이동">⋮⋮</button>
+        <span class="worklog-order">${index + 1}</span>
+        <input type="text" class="worklog-task-input" data-worklog-input="${task.id}" value="${escapeHtml(task.text)}">
+        <div class="inline-actions worklog-actions">
+          ${isWaiting
+            ? `<button type="button" class="ghost" data-worklog-register="${task.id}">오늘의 업무 등록</button>`
+            : `<button type="button" class="ghost ${task.done ? "is-active" : ""}" data-worklog-complete="${task.id}">처리완료</button>`}
+          <button type="button" class="danger" data-worklog-remove="${task.id}">삭제</button>
+        </div>
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 
-  els.worklogTasks.querySelectorAll("[data-worklog-input]").forEach((input) => {
+  container.querySelectorAll("[data-worklog-input]").forEach((input) => {
     input.addEventListener("input", () => {
       const task = currentWorklogDraft.tasks.find((item) => item.id === input.dataset.worklogInput);
       if (task) task.text = input.value;
     });
   });
-  els.worklogTasks.querySelectorAll("[data-worklog-complete]").forEach((button) => {
+  container.querySelectorAll("[data-worklog-complete]").forEach((button) => {
     button.addEventListener("click", () => {
       const task = currentWorklogDraft.tasks.find((item) => item.id === button.dataset.worklogComplete);
       if (!task) return;
@@ -6696,19 +6730,43 @@ function renderWorklogTasks() {
       renderWorklogTasks();
     });
   });
-  els.worklogTasks.querySelectorAll("[data-worklog-remove]").forEach((button) => {
+  container.querySelectorAll("[data-worklog-register]").forEach((button) => {
     button.addEventListener("click", () => {
-      currentWorklogDraft.tasks = currentWorklogDraft.tasks.filter((item) => item.id !== button.dataset.worklogRemove);
-      if (!currentWorklogDraft.tasks.length) currentWorklogDraft.tasks.push(createWorklogTask());
+      const task = currentWorklogDraft.tasks.find((item) => item.id === button.dataset.worklogRegister);
+      if (!task) return;
+      task.status = "active";
+      task.done = false;
+      currentWorklogDraft.tasks = [
+        ...getWorklogTasksByStatus(currentWorklogDraft.tasks, "active").filter((item) => item.id !== task.id),
+        task,
+        ...getWorklogTasksByStatus(currentWorklogDraft.tasks, "waiting").filter((item) => item.id !== task.id),
+      ];
       renderWorklogTasks();
     });
   });
-  els.worklogTasks.querySelectorAll("[data-worklog-task]").forEach((item) => {
-    const handle = item.querySelector(".worklog-drag-handle");
-    handle?.addEventListener("pointerdown", (event) => startWorklogTaskDrag(event, item));
+  container.querySelectorAll("[data-worklog-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      currentWorklogDraft.tasks = currentWorklogDraft.tasks.filter((item) => item.id !== button.dataset.worklogRemove);
+      if (!getWorklogTasksByStatus(currentWorklogDraft.tasks, "active").length) {
+        currentWorklogDraft.tasks.push(createWorklogTask({ status: "active" }));
+      }
+      renderWorklogTasks();
+    });
   });
+  container.querySelectorAll("[data-worklog-task]").forEach((item) => {
+    const handle = item.querySelector(".worklog-drag-handle");
+    handle?.addEventListener("pointerdown", (event) => startWorklogTaskDrag(event, item, container, normalizedStatus));
+  });
+}
 
-  const actionableTasks = tasks.filter((task) => task.text.trim());
+function renderWorklogTasks() {
+  ensureWorklogDraft();
+  const activeTasks = getWorklogTasksByStatus(currentWorklogDraft.tasks, "active");
+  const waitingTasks = getWorklogTasksByStatus(currentWorklogDraft.tasks, "waiting");
+  renderWorklogTaskList(els.worklogTasks, activeTasks, "active");
+  renderWorklogTaskList(els.worklogWaitingTasks, waitingTasks, "waiting");
+
+  const actionableTasks = activeTasks.filter((task) => task.text.trim());
   const doneCount = actionableTasks.filter((task) => task.done).length;
   const totalCount = actionableTasks.length;
   const progress = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;

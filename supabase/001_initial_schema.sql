@@ -100,6 +100,7 @@ create table if not exists public.worklog_tasks (
   worklog_id uuid not null references public.worklogs(id) on delete cascade,
   task_text text not null default '',
   done boolean not null default false,
+  task_status text not null default 'active' check (task_status in ('active', 'waiting')),
   schedule_id uuid references public.schedules(id) on delete set null,
   auto boolean not null default false,
   source_task_id uuid,
