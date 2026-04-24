@@ -344,6 +344,7 @@ let isPasswordRecoveryFlow = false;
 const VIEW_REFRESH_MIN_INTERVAL_MS = 4000;
 const APP_RESUME_IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 const APP_RESUME_MIN_INTERVAL_MS = 10 * 1000;
+const APP_HARD_RELOAD_IDLE_THRESHOLD_MS = 20 * 60 * 1000;
 const viewRefreshLastRun = new Map();
 const viewRefreshInFlight = new Map();
 let lastAppInteractionAt = Date.now();
@@ -1772,6 +1773,33 @@ function markAppInteraction() {
   lastAppInteractionAt = Date.now();
 }
 
+function isActionableWakeTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      "button, a[href], [role='button'], input[type='button'], input[type='submit'], input[type='reset'], summary"
+    )
+  );
+}
+
+function shouldHardReloadAfterIdle(target) {
+  if (!state.sessionUserId) return false;
+  if (resumeWakePromise) return false;
+  if (!isActionableWakeTarget(target)) return false;
+  return Date.now() - lastAppInteractionAt >= APP_HARD_RELOAD_IDLE_THRESHOLD_MS;
+}
+
+function handlePointerWake(event) {
+  if (shouldHardReloadAfterIdle(event.target)) {
+    event.preventDefault();
+    event.stopPropagation();
+    window.location.reload();
+    return;
+  }
+
+  markAppInteraction();
+}
+
 async function wakeAppAfterIdle(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) {
@@ -2037,7 +2065,7 @@ function selectedProject() {
 }
 
 function bindEvents() {
-  document.addEventListener("pointerdown", markAppInteraction, true);
+  document.addEventListener("pointerdown", handlePointerWake, true);
   document.addEventListener("keydown", markAppInteraction, true);
   window.addEventListener("focus", () => {
     wakeAppAfterIdle().catch((error) => {
