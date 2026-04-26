@@ -530,6 +530,28 @@ function normalizeState(source) {
   return normalized;
 }
 
+function clearWorkspaceDataState() {
+  state.selectedProjectId = null;
+  state.projects = [];
+  state.schedules = [];
+  state.worklogs = {};
+  state.yearGoals = [];
+  state.changeHistory = [];
+  state.archiveNotes = [];
+  state.archiveCodeCategories = createDefaultArchiveCategories();
+  state.archiveCodes = [];
+}
+
+function clearSessionScopedState() {
+  state.sessionUserId = null;
+  state.pendingApproval = null;
+  state.users = [];
+  clearWorkspaceDataState();
+  if (state.currentView === "members" || state.currentView === "settings") {
+    state.currentView = "dashboard";
+  }
+}
+
 function createHistorySnapshot(source) {
   const {
     changeHistory,
@@ -1033,61 +1055,39 @@ async function syncSiteSettingsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await bridge.fetchSiteSettings();
+  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchSiteSettings());
   if (result.error) return { ok: false, error: result.error };
 
   const remoteSettings = Array.isArray(result.data) ? result.data[0] : result.data;
-  const hasRemoteData = Boolean(
-    remoteSettings && (
-      remoteSettings.title ||
-      remoteSettings.description ||
-      remoteSettings.favicon_path ||
-      remoteSettings.thumbnail_path ||
-      remoteSettings.meta_tags ||
-      remoteSettings.block_crawling
-    ),
-  );
-  const hasLocalData = Boolean(
-    state.siteSettings?.title ||
-    state.siteSettings?.description ||
-    state.siteSettings?.faviconDataUrl ||
-    state.siteSettings?.thumbnailDataUrl ||
-    state.siteSettings?.metaTags ||
-    state.siteSettings?.blockCrawling,
-  );
-
-  if (!hasRemoteData && hasLocalData) {
-    const seedResult = await persistSiteSettingsToSupabase({ ...state.siteSettings }, { silent: true, successPrefix: "브라우저 사이트 설정을 Supabase로 복사했어요." });
-    return seedResult;
-  }
-
   if (remoteSettings) {
     state.siteSettings = {
       ...(state.siteSettings || {}),
       ...deserializeSiteSettingsFromSupabase(remoteSettings),
     };
-    saveState({ history: false });
-    applySiteSettings();
-    renderSiteSettings();
+  } else {
+    state.siteSettings = normalizeState({}).siteSettings;
   }
+  saveState({ history: false });
+  applySiteSettings();
+  renderSiteSettings();
 
   return { ok: true };
 }
 
 async function syncProjectsAndSchedulesFromSupabase() {
   const bridge = getSupabaseBridge();
-  if (!bridge?.isReady()) {
+  if (!bridge?.isReady() || !state.sessionUserId) {
     renderSiteSettings();
-    return;
+    return { ok: false, error: new Error("Supabase client is not ready.") };
   }
 
   bridge.statusDetail = "Supabase에서 프로젝트와 일정을 확인하는 중입니다.";
   renderSiteSettings();
 
   const [projectResult, scheduleResult, documentResult] = await Promise.all([
-    bridge.fetchProjects(),
-    bridge.fetchSchedules(),
-    bridge.fetchProjectDocuments(),
+    runSupabaseMutationWithRecovery(() => bridge.fetchProjects()),
+    runSupabaseMutationWithRecovery(() => bridge.fetchSchedules()),
+    runSupabaseMutationWithRecovery(() => bridge.fetchProjectDocuments()),
   ]);
 
   if (projectResult.error || scheduleResult.error || documentResult.error) {
@@ -1095,7 +1095,7 @@ async function syncProjectsAndSchedulesFromSupabase() {
     bridge.error = projectResult.error || scheduleResult.error || documentResult.error;
     bridge.statusDetail = bridge.error?.message || "Supabase 데이터를 가져오지 못했습니다.";
     renderSiteSettings();
-    return;
+    return { ok: false, error: bridge.error };
   }
 
   const documentMap = new Map();
@@ -1112,28 +1112,13 @@ async function syncProjectsAndSchedulesFromSupabase() {
     return project;
   });
   const remoteSchedules = (scheduleResult.data || []).map(deserializeScheduleFromSupabase);
-  const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0;
-  const hasLocalData = state.projects.length > 0 || state.schedules.length > 0;
-
-  if (!hasRemoteData && hasLocalData) {
-    const seedResult = await seedSupabaseFromLocalState();
-    if (!seedResult.ok) {
-      bridge.mode = "supabase-error";
-      bridge.error = seedResult.error;
-      bridge.statusDetail = seedResult.error?.message || "브라우저 데이터를 Supabase로 옮기지 못했습니다.";
-      renderSiteSettings();
-      return;
-    }
-    bridge.statusDetail = "브라우저에 있던 프로젝트와 일정을 Supabase로 복사했어요.";
-    renderSiteSettings();
-    return;
-  }
 
   state.projects = remoteProjects;
   state.schedules = remoteSchedules;
   saveState({ history: false });
   updateSupabaseStatusSummary();
   render();
+  return { ok: true };
 }
 
 async function seedSupabaseFromLocalState() {
@@ -1272,18 +1257,10 @@ async function syncYearGoalsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await bridge.fetchYearGoals();
+  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchYearGoals());
   if (result.error) return { ok: false, error: result.error };
 
   const remoteGoals = (result.data || []).map(deserializeYearGoalFromSupabase);
-  const hasRemoteData = remoteGoals.length > 0;
-  const hasLocalData = state.yearGoals.length > 0;
-
-  if (!hasRemoteData && hasLocalData) {
-    const seedResult = await syncYearGoalsStateToSupabase();
-    if (!seedResult.ok) return seedResult;
-    return { ok: true };
-  }
 
   state.yearGoals = remoteGoals;
   saveState({ history: false });
@@ -1296,7 +1273,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
-  const remoteResult = await bridge.fetchWorklogs();
+  const remoteResult = await runSupabaseMutationWithRecovery(() => bridge.fetchWorklogs());
   if (remoteResult.error) {
     if (previousWorklogs) {
       state.worklogs = previousWorklogs;
@@ -1371,23 +1348,12 @@ async function syncWorklogsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await bridge.fetchWorklogs();
+  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchWorklogs());
   if (result.error) return { ok: false, error: result.error };
 
   const remoteWorklogs = (result.data || [])
     .map(deserializeWorklogFromSupabase)
     .filter((worklog) => worklog.date);
-  const hasRemoteData = remoteWorklogs.length > 0;
-  const localWorklogs = Object.entries(state.worklogs || {})
-    .map(([dateKey, worklog]) => sanitizeWorklogForPersistence(worklog, dateKey))
-    .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
-  const hasLocalData = localWorklogs.length > 0;
-
-  if (!hasRemoteData && hasLocalData) {
-    const seedResult = await syncWorklogsStateToSupabase();
-    if (!seedResult.ok) return seedResult;
-    return { ok: true };
-  }
 
   state.worklogs = buildWorklogStateMap(remoteWorklogs);
   saveState({ history: false });
@@ -1400,9 +1366,9 @@ async function syncArchivesFromSupabase() {
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   const [noteResult, categoryResult, codeResult] = await Promise.all([
-    bridge.fetchArchiveNotes(),
-    bridge.fetchArchiveCodeCategories(),
-    bridge.fetchArchiveCodes(),
+    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveNotes()),
+    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveCodeCategories()),
+    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveCodes()),
   ]);
 
   if (noteResult.error || categoryResult.error || codeResult.error) {
@@ -1412,15 +1378,6 @@ async function syncArchivesFromSupabase() {
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
   const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
   const remoteCodes = (codeResult.data || []).map(deserializeArchiveCodeFromSupabase);
-  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0;
-  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0;
-
-  if (!hasRemoteData && hasLocalData) {
-    const seedResult = await syncArchiveStateToSupabase();
-    if (!seedResult.ok) return seedResult;
-    updateSupabaseStatusSummary("브라우저 아카이브 데이터를 Supabase로 복사했어요.");
-    return { ok: true };
-  }
 
   state.archiveNotes = remoteNotes;
   state.archiveCodeCategories = remoteCategories.length ? remoteCategories : createDefaultArchiveCategories();
@@ -2002,7 +1959,7 @@ async function recoverRepresentativeProfile(profile) {
 async function applyAuthSession(session, options = {}) {
   state.sessionUserId = session?.user?.id || null;
   if (!state.sessionUserId) {
-    state.users = [];
+    clearSessionScopedState();
     saveState({ history: false });
     render();
     return { ok: true, message: "" };
@@ -2011,7 +1968,7 @@ async function applyAuthSession(session, options = {}) {
   const bridge = getSupabaseBridge();
   let profile = null;
 
-  const currentProfileResult = await bridge?.fetchCurrentProfile?.(state.sessionUserId);
+  const currentProfileResult = await runSupabaseMutationWithRecovery(() => bridge.fetchCurrentProfile(state.sessionUserId));
   if (currentProfileResult?.data) {
     profile = normalizeProfileRecord(currentProfileResult.data);
     const otherUsers = state.users.filter((user) => user.id !== profile.id);
@@ -2026,9 +1983,7 @@ async function applyAuthSession(session, options = {}) {
     profile = currentUser();
   }
   if (!profile) {
-    await bridge?.signOut();
-    state.sessionUserId = null;
-    state.users = [];
+    clearSessionScopedState();
     saveState({ history: false });
     render();
     const message = "회원 정보를 찾지 못해 다시 로그인해주세요.";
@@ -2040,8 +1995,7 @@ async function applyAuthSession(session, options = {}) {
 
   if (profile.rejected) {
     await bridge?.signOut();
-    state.sessionUserId = null;
-    state.users = [];
+    clearSessionScopedState();
     saveState({ history: false });
     render();
     const message = "가입 요청이 거절되었습니다.";
@@ -2051,7 +2005,7 @@ async function applyAuthSession(session, options = {}) {
 
   if (!profile.approved) {
     await bridge?.signOut();
-    state.sessionUserId = null;
+    clearSessionScopedState();
     saveState({ history: false });
     render();
     const message = "아직 소유자 승인이 완료되지 않았습니다.";
@@ -2059,21 +2013,20 @@ async function applyAuthSession(session, options = {}) {
     return { ok: false, message };
   }
 
-  saveState({ history: false });
-  render();
-
   const activeView = state.currentView || "dashboard";
   const { primary, background } = getStartupRefreshDomainGroups(activeView);
+  clearWorkspaceDataState();
+  saveState({ history: false });
 
-  refreshDomainKeys(primary, { force: true })
-    .catch((error) => {
-      console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, error);
-    })
-    .finally(() => {
-      refreshDomainKeys(background, { force: true }).catch((error) => {
-        console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
-      });
-    });
+  const primaryResult = await refreshDomainKeys(primary, { force: true });
+  if (primaryResult?.ok === false) {
+    console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, primaryResult.error);
+  }
+  render();
+
+  refreshDomainKeys(background, { force: true }).catch((error) => {
+    console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
+  });
 
   return { ok: true, message: "" };
 }
@@ -3579,8 +3532,7 @@ async function handlePasswordUpdate(event) {
     }
 
     await bridge.signOut();
-    state.sessionUserId = null;
-    state.users = [];
+    clearSessionScopedState();
     saveState({ history: false });
     isPasswordRecoveryFlow = false;
     clearPasswordRecoveryUrl();
@@ -3605,14 +3557,13 @@ async function handlePasswordUpdate(event) {
 function logout() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) {
-    state.sessionUserId = null;
+    clearSessionScopedState();
     saveState({ history: false });
     render();
     return;
   }
   bridge.signOut().then(() => {
-    state.sessionUserId = null;
-    state.users = [];
+    clearSessionScopedState();
     saveState({ history: false });
     render();
   });
