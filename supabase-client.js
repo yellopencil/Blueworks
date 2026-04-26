@@ -6,6 +6,7 @@
   const QUOTE_PDF_BUCKET = "quote-pdf-history";
   const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
   const AUTH_REQUEST_TIMEOUT_MS = 15000;
+  const AUTH_REST_SIGN_IN_TIMEOUT_MS = 30000;
 
   const bridge = {
     url: SUPABASE_URL,
@@ -44,8 +45,58 @@
         return { data: null, error };
       }
     },
+    isRecoverableAuthError(error) {
+      const message = String(error?.message || "").toLowerCase();
+      const status = Number(error?.status || error?.code || 0);
+      return (
+        status === 0 ||
+        status === 408 ||
+        status === 429 ||
+        status >= 500 ||
+        message.includes("응답") ||
+        message.includes("늦") ||
+        message.includes("timeout") ||
+        message.includes("timed out") ||
+        message.includes("failed to fetch") ||
+        message.includes("network")
+      );
+    },
     setCachedSession(session) {
       this.cachedSession = session || null;
+    },
+    normalizeAuthSessionPayload(payload) {
+      if (!payload?.access_token) return null;
+      const expiresIn = Number(payload.expires_in || 3600);
+      return {
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token || "",
+        expires_in: expiresIn,
+        expires_at: Number(payload.expires_at || Math.floor(Date.now() / 1000) + expiresIn),
+        token_type: payload.token_type || "bearer",
+        user: payload.user || null,
+      };
+    },
+    async persistAuthSession(session) {
+      if (!session?.access_token) {
+        return { data: { session: null }, error: new Error("Supabase session token is not ready.") };
+      }
+      this.setCachedSession(session);
+      if (typeof this.client?.auth?.setSession !== "function" || !session.refresh_token) {
+        return { data: { session }, error: null };
+      }
+      const result = await this.runClientQuery(
+        this.client.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        }),
+        "로그인 세션 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+        AUTH_REQUEST_TIMEOUT_MS,
+      );
+      if (!result?.error && result?.data?.session) {
+        this.setCachedSession(result.data.session);
+        return result;
+      }
+      return { data: { session }, error: null };
     },
     isSessionExpiringSoon(session, leewaySeconds = 45) {
       const expiresAt = Number(session?.expires_at || 0);
@@ -612,8 +663,78 @@
         "로그인 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
         AUTH_REQUEST_TIMEOUT_MS,
       );
+      if (!result?.error && result?.data?.session) {
+        this.setCachedSession(result.data.session);
+        return result;
+      }
+      if (result?.error && !this.isRecoverableAuthError(result.error)) {
+        this.setCachedSession(null);
+        return result;
+      }
+      const fallbackResult = await this.signInWithPasswordViaRest(credentials);
+      if (!fallbackResult?.error && fallbackResult?.data?.session) return fallbackResult;
       this.setCachedSession(result?.data?.session || null);
-      return result;
+      return result?.error ? result : fallbackResult;
+    },
+    async signInWithPasswordViaRest(credentials) {
+      const requestUrl = `${this.url}/auth/v1/token?grant_type=password`;
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId = controller
+        ? window.setTimeout(() => controller.abort(), AUTH_REST_SIGN_IN_TIMEOUT_MS)
+        : null;
+      try {
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            apikey: this.publishableKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: credentials.email,
+            password: credentials.password,
+          }),
+          signal: controller?.signal,
+        });
+        const text = await response.text();
+        let parsed = null;
+        if (text) {
+          try {
+            parsed = JSON.parse(text);
+          } catch (error) {
+            parsed = text;
+          }
+        }
+        if (!response.ok) {
+          const message =
+            parsed?.msg ||
+            parsed?.message ||
+            parsed?.error_description ||
+            parsed?.error ||
+            response.statusText ||
+            "이메일 또는 비밀번호를 확인해주세요.";
+          const error = new Error(message);
+          error.status = response.status;
+          return { data: null, error };
+        }
+        const session = this.normalizeAuthSessionPayload(parsed);
+        if (!session) return { data: null, error: new Error("로그인 세션을 확인하지 못했습니다.") };
+        const persistResult = await this.persistAuthSession(session);
+        return {
+          data: {
+            ...parsed,
+            session: persistResult?.data?.session || session,
+            user: parsed.user || session.user || null,
+          },
+          error: null,
+        };
+      } catch (error) {
+        const nextError = error?.name === "AbortError"
+          ? new Error("로그인 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.")
+          : error;
+        return { data: null, error: nextError };
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
+      }
     },
     async signUp(credentials) {
       if (!this.client) {
