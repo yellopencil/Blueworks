@@ -6528,39 +6528,78 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
   const todayKey = formatDateKey(new Date());
   if (dateKey !== todayKey) return false;
   state.worklogs = state.worklogs || {};
-  const previousDateKey = getAdjacentDateKey(dateKey, -1);
-  const previousWorklog = state.worklogs[previousDateKey];
-  if (!previousWorklog?.tasks?.length) return false;
+  const pastDateKeys = Object.keys(state.worklogs)
+    .filter((key) => /^\d{4}-\d{2}-\d{2}$/.test(key) && key < todayKey)
+    .sort();
+  if (!pastDateKeys.length) return false;
 
   const currentWorklog = state.worklogs[dateKey] || { date: dateKey, tasks: [], notes: "" };
   currentWorklog.tasks = Array.isArray(currentWorklog.tasks)
     ? currentWorklog.tasks.map((task) => createWorklogTask(task))
     : [];
 
-  let changed = false;
-  previousWorklog.tasks
-    .filter((task) => normalizeWorklogTaskStatus(task.status) === "active" && String(task.text || "").trim() && !task.done)
-    .forEach((task) => {
-      const sourceTaskId = task.sourceTaskId || task.id;
-      const alreadyExists = currentWorklog.tasks.some((existingTask) => {
-        const existingSourceId = existingTask.sourceTaskId || existingTask.id;
-        return (
-          existingSourceId === sourceTaskId ||
-          (
-            String(existingTask.text || "").trim() === String(task.text || "").trim() &&
-            String(existingTask.scheduleId || "") === String(task.scheduleId || "")
-          )
-        );
+  const getTaskContentKey = (task) => `${String(task.scheduleId || "")}|${String(task.text || "").trim()}`;
+  const getTaskSourceId = (task) => task.sourceTaskId || task.id || "";
+  const existingSourceIds = new Set();
+  const existingContentKeys = new Set();
+
+  currentWorklog.tasks.forEach((task) => {
+    const sourceTaskId = getTaskSourceId(task);
+    const contentKey = getTaskContentKey(task);
+    if (sourceTaskId) existingSourceIds.add(sourceTaskId);
+    if (contentKey !== "|") existingContentKeys.add(contentKey);
+  });
+
+  const latestPastTasks = new Map();
+  const latestPastTasksByContent = new Map();
+  pastDateKeys.forEach((sourceDateKey) => {
+    const sourceWorklog = state.worklogs[sourceDateKey];
+    if (!Array.isArray(sourceWorklog?.tasks)) return;
+
+    sourceWorklog.tasks.forEach((task) => {
+      const normalizedTask = createWorklogTask(task);
+      const text = String(normalizedTask.text || "").trim();
+      if (!text) return;
+
+      const sourceTaskId = getTaskSourceId(normalizedTask);
+      const contentKey = getTaskContentKey(normalizedTask);
+      const identityKey = sourceTaskId ? `source:${sourceTaskId}` : `content:${contentKey}`;
+      latestPastTasks.set(identityKey, {
+        task: normalizedTask,
+        sourceDateKey,
+        sourceTaskId,
+        contentKey,
       });
-      if (alreadyExists) return;
+      latestPastTasksByContent.set(contentKey, {
+        task: normalizedTask,
+        sourceDateKey,
+        sourceTaskId,
+        contentKey,
+      });
+    });
+  });
+
+  let changed = false;
+  Array.from(latestPastTasks.values())
+    .sort((a, b) => a.sourceDateKey.localeCompare(b.sourceDateKey))
+    .forEach(({ task, sourceDateKey, sourceTaskId, contentKey }) => {
+      const latestContentTask = latestPastTasksByContent.get(contentKey);
+      if (latestContentTask && latestContentTask.sourceDateKey > sourceDateKey) return;
+      const status = normalizeWorklogTaskStatus(task.status);
+      const shouldCarry = status === "waiting" || (status === "active" && !task.done);
+      if (!shouldCarry) return;
+      if ((sourceTaskId && existingSourceIds.has(sourceTaskId)) || existingContentKeys.has(contentKey)) return;
 
       currentWorklog.tasks.push(createWorklogTask({
         ...task,
         id: crypto.randomUUID(),
         done: false,
+        status,
         sourceTaskId,
-        carriedFromDate: previousDateKey,
+        carriedFromDate: task.carriedFromDate || sourceDateKey,
       }));
+      if (sourceTaskId) existingSourceIds.add(sourceTaskId);
+      existingContentKeys.add(contentKey);
       changed = true;
     });
 
