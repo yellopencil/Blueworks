@@ -1973,21 +1973,21 @@ function buildFallbackProfileFromSession(session) {
   const user = session?.user;
   if (!user?.id) return null;
   const email = String(user.email || "").trim().toLowerCase();
+  if (!isOwnerEmail(email)) return null;
   const metadata = user.user_metadata || {};
-  const owner = isOwnerEmail(email);
   const fallbackName = metadata.name || metadata.full_name || email.split("@")[0] || "멤버";
   return {
     id: user.id,
     username: email.split("@")[0] || user.id,
     name: fallbackName,
-    roleLabel: metadata.role_label || (owner ? "대표" : "멤버"),
+    roleLabel: metadata.role_label || "대표",
     phone: metadata.phone || "",
     email,
     notes: "",
     lastLoginAt: "",
     lastLoginIp: "",
-    canManageMembers: owner,
-    isOwner: owner,
+    canManageMembers: true,
+    isOwner: true,
     approved: true,
     rejected: false,
     createdAt: user.created_at || new Date().toISOString(),
@@ -2007,6 +2007,16 @@ async function fetchCurrentProfileWithRetry(session) {
     if (lastResult?.data || lastResult?.error) break;
   }
   return lastResult || { data: null, error: null };
+}
+
+async function refreshInitialDataAfterLogin(activeView, primary, background) {
+  const primaryResult = await refreshDomainKeys(primary, { force: true });
+  if (primaryResult?.ok === false) {
+    console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, primaryResult.error);
+  }
+  refreshDomainKeys(background, { force: true }).catch((error) => {
+    console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
+  });
 }
 
 async function applyAuthSession(session, options = {}) {
@@ -2067,15 +2077,10 @@ async function applyAuthSession(session, options = {}) {
   const { primary, background } = getStartupRefreshDomainGroups(activeView);
   clearWorkspaceDataState();
   saveState({ history: false });
-
-  const primaryResult = await refreshDomainKeys(primary, { force: true });
-  if (primaryResult?.ok === false) {
-    console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, primaryResult.error);
-  }
   render();
 
-  refreshDomainKeys(background, { force: true }).catch((error) => {
-    console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
+  refreshInitialDataAfterLogin(activeView, primary, background).catch((error) => {
+    console.warn("로그인 후 초기 데이터를 새로고침하지 못했습니다.", error);
   });
 
   return { ok: true, message: "" };
