@@ -1,6 +1,7 @@
 ﻿const STORAGE_KEY = "agency-work-manager-demo-v3";
 
 const CHANGE_HISTORY_LIMIT = 20;
+const OWNER_EMAILS = ["yellopencil@naver.com"];
 
 const STATUS_META = {
   ready: { title: "작업 준비" },
@@ -614,6 +615,10 @@ function saveState(options = {}) {
 
 function getSupabaseBridge() {
   return window.BLUEWORKS_SUPABASE || null;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function setAuthStatus(target, message = "") {
@@ -1689,7 +1694,11 @@ async function syncProfilesFromSupabase() {
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
   const result = await runSupabaseMutationWithRecovery(() => bridge.fetchProfiles());
   if (result.error) return { ok: false, error: result.error };
-  state.users = (result.data || []).map(normalizeProfileRecord);
+  const remoteProfiles = (result.data || []).map(normalizeProfileRecord);
+  if (!remoteProfiles.length && state.sessionUserId && state.users.some((user) => user.id === state.sessionUserId)) {
+    return { ok: true, data: state.users };
+  }
+  state.users = remoteProfiles;
   saveState({ history: false });
   return { ok: true, data: state.users };
 }
@@ -1956,6 +1965,50 @@ async function recoverRepresentativeProfile(profile) {
   return repairedProfile;
 }
 
+function isOwnerEmail(email = "") {
+  return OWNER_EMAILS.includes(String(email || "").trim().toLowerCase());
+}
+
+function buildFallbackProfileFromSession(session) {
+  const user = session?.user;
+  if (!user?.id) return null;
+  const email = String(user.email || "").trim().toLowerCase();
+  const metadata = user.user_metadata || {};
+  const owner = isOwnerEmail(email);
+  const fallbackName = metadata.name || metadata.full_name || email.split("@")[0] || "멤버";
+  return {
+    id: user.id,
+    username: email.split("@")[0] || user.id,
+    name: fallbackName,
+    roleLabel: metadata.role_label || (owner ? "대표" : "멤버"),
+    phone: metadata.phone || "",
+    email,
+    notes: "",
+    lastLoginAt: "",
+    lastLoginIp: "",
+    canManageMembers: owner,
+    isOwner: owner,
+    approved: true,
+    rejected: false,
+    createdAt: user.created_at || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchCurrentProfileWithRetry(session) {
+  const bridge = getSupabaseBridge();
+  const userId = session?.user?.id;
+  if (!bridge?.isReady() || !userId) return { data: null, error: new Error("Supabase client is not ready.") };
+
+  let lastResult = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) await wait(400);
+    lastResult = await runSupabaseMutationWithRecovery(() => bridge.fetchCurrentProfile(userId));
+    if (lastResult?.data || lastResult?.error) break;
+  }
+  return lastResult || { data: null, error: null };
+}
+
 async function applyAuthSession(session, options = {}) {
   state.sessionUserId = session?.user?.id || null;
   if (!state.sessionUserId) {
@@ -1968,19 +2021,16 @@ async function applyAuthSession(session, options = {}) {
   const bridge = getSupabaseBridge();
   let profile = null;
 
-  const currentProfileResult = await runSupabaseMutationWithRecovery(() => bridge.fetchCurrentProfile(state.sessionUserId));
+  const currentProfileResult = await fetchCurrentProfileWithRetry(session);
   if (currentProfileResult?.data) {
     profile = normalizeProfileRecord(currentProfileResult.data);
     const otherUsers = state.users.filter((user) => user.id !== profile.id);
     state.users = [profile, ...otherUsers];
   } else {
-    const profileResult = await syncProfilesFromSupabase();
-    if (!profileResult.ok) {
-      const message = profileResult.error?.message || currentProfileResult?.error?.message || "멤버 정보를 불러오지 못했습니다.";
-      toast(message);
-      return { ok: false, message };
-    }
-    profile = currentUser();
+    const email = String(session?.user?.email || "").trim().toLowerCase();
+    const localProfile = state.users.find((user) => user.id === state.sessionUserId || String(user.email || "").toLowerCase() === email);
+    profile = localProfile ? normalizeProfileRecord(localProfile) : buildFallbackProfileFromSession(session);
+    if (profile) state.users = [profile, ...state.users.filter((user) => user.id !== profile.id)];
   }
   if (!profile) {
     clearSessionScopedState();
