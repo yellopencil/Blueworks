@@ -947,7 +947,7 @@ body[data-theme="dark"] .rich-editor-toolbar {
 .archive-list {
   margin-top: 24px;
   display: grid;
-  gap: 22px;
+  gap: 12px;
 }
 
 #archiveNotesList.archive-list {
@@ -968,7 +968,7 @@ body[data-theme="dark"] .rich-editor-toolbar {
 .archive-code-group-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .archive-empty {
