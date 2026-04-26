@@ -1,7 +1,6 @@
 ﻿const STORAGE_KEY = "agency-work-manager-demo-v3";
 
 const CHANGE_HISTORY_LIMIT = 20;
-const OWNER_EMAILS = ["yellopencil@naver.com"];
 
 const STATUS_META = {
   ready: { title: "작업 준비" },
@@ -531,28 +530,6 @@ function normalizeState(source) {
   return normalized;
 }
 
-function clearWorkspaceDataState() {
-  state.selectedProjectId = null;
-  state.projects = [];
-  state.schedules = [];
-  state.worklogs = {};
-  state.yearGoals = [];
-  state.changeHistory = [];
-  state.archiveNotes = [];
-  state.archiveCodeCategories = createDefaultArchiveCategories();
-  state.archiveCodes = [];
-}
-
-function clearSessionScopedState() {
-  state.sessionUserId = null;
-  state.pendingApproval = null;
-  state.users = [];
-  clearWorkspaceDataState();
-  if (state.currentView === "members" || state.currentView === "settings") {
-    state.currentView = "dashboard";
-  }
-}
-
 function createHistorySnapshot(source) {
   const {
     changeHistory,
@@ -615,10 +592,6 @@ function saveState(options = {}) {
 
 function getSupabaseBridge() {
   return window.BLUEWORKS_SUPABASE || null;
-}
-
-function wait(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function setAuthStatus(target, message = "") {
@@ -1060,39 +1033,61 @@ async function syncSiteSettingsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchSiteSettings());
+  const result = await bridge.fetchSiteSettings();
   if (result.error) return { ok: false, error: result.error };
 
   const remoteSettings = Array.isArray(result.data) ? result.data[0] : result.data;
+  const hasRemoteData = Boolean(
+    remoteSettings && (
+      remoteSettings.title ||
+      remoteSettings.description ||
+      remoteSettings.favicon_path ||
+      remoteSettings.thumbnail_path ||
+      remoteSettings.meta_tags ||
+      remoteSettings.block_crawling
+    ),
+  );
+  const hasLocalData = Boolean(
+    state.siteSettings?.title ||
+    state.siteSettings?.description ||
+    state.siteSettings?.faviconDataUrl ||
+    state.siteSettings?.thumbnailDataUrl ||
+    state.siteSettings?.metaTags ||
+    state.siteSettings?.blockCrawling,
+  );
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await persistSiteSettingsToSupabase({ ...state.siteSettings }, { silent: true, successPrefix: "브라우저 사이트 설정을 Supabase로 복사했어요." });
+    return seedResult;
+  }
+
   if (remoteSettings) {
     state.siteSettings = {
       ...(state.siteSettings || {}),
       ...deserializeSiteSettingsFromSupabase(remoteSettings),
     };
-  } else {
-    state.siteSettings = normalizeState({}).siteSettings;
+    saveState({ history: false });
+    applySiteSettings();
+    renderSiteSettings();
   }
-  saveState({ history: false });
-  applySiteSettings();
-  renderSiteSettings();
 
   return { ok: true };
 }
 
 async function syncProjectsAndSchedulesFromSupabase() {
   const bridge = getSupabaseBridge();
-  if (!bridge?.isReady() || !state.sessionUserId) {
+  if (!bridge?.isReady()) {
     renderSiteSettings();
-    return { ok: false, error: new Error("Supabase client is not ready.") };
+    return;
   }
 
   bridge.statusDetail = "Supabase에서 프로젝트와 일정을 확인하는 중입니다.";
   renderSiteSettings();
 
   const [projectResult, scheduleResult, documentResult] = await Promise.all([
-    runSupabaseMutationWithRecovery(() => bridge.fetchProjects()),
-    runSupabaseMutationWithRecovery(() => bridge.fetchSchedules()),
-    runSupabaseMutationWithRecovery(() => bridge.fetchProjectDocuments()),
+    bridge.fetchProjects(),
+    bridge.fetchSchedules(),
+    bridge.fetchProjectDocuments(),
   ]);
 
   if (projectResult.error || scheduleResult.error || documentResult.error) {
@@ -1100,7 +1095,7 @@ async function syncProjectsAndSchedulesFromSupabase() {
     bridge.error = projectResult.error || scheduleResult.error || documentResult.error;
     bridge.statusDetail = bridge.error?.message || "Supabase 데이터를 가져오지 못했습니다.";
     renderSiteSettings();
-    return { ok: false, error: bridge.error };
+    return;
   }
 
   const documentMap = new Map();
@@ -1117,13 +1112,28 @@ async function syncProjectsAndSchedulesFromSupabase() {
     return project;
   });
   const remoteSchedules = (scheduleResult.data || []).map(deserializeScheduleFromSupabase);
+  const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0;
+  const hasLocalData = state.projects.length > 0 || state.schedules.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await seedSupabaseFromLocalState();
+    if (!seedResult.ok) {
+      bridge.mode = "supabase-error";
+      bridge.error = seedResult.error;
+      bridge.statusDetail = seedResult.error?.message || "브라우저 데이터를 Supabase로 옮기지 못했습니다.";
+      renderSiteSettings();
+      return;
+    }
+    bridge.statusDetail = "브라우저에 있던 프로젝트와 일정을 Supabase로 복사했어요.";
+    renderSiteSettings();
+    return;
+  }
 
   state.projects = remoteProjects;
   state.schedules = remoteSchedules;
   saveState({ history: false });
   updateSupabaseStatusSummary();
   render();
-  return { ok: true };
 }
 
 async function seedSupabaseFromLocalState() {
@@ -1131,21 +1141,21 @@ async function seedSupabaseFromLocalState() {
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   for (const [index, project] of state.projects.entries()) {
-    const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProject(serializeProjectForSupabase(project, index)));
+    const result = await bridge.upsertProject(serializeProjectForSupabase(project, index));
     if (result.error) return { ok: false, error: result.error };
     if (Array.isArray(project.contracts) && project.contracts.length) {
       const documentPayloads = project.contracts
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(project.id, document));
       if (documentPayloads.length) {
-        const documentResult = await runSupabaseMutationWithRecovery(() => bridge.upsertProjectDocuments(documentPayloads));
+        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
         if (documentResult.error) return { ok: false, error: documentResult.error };
       }
     }
   }
 
   for (const schedule of state.schedules) {
-    const result = await runSupabaseMutationWithRecovery(() => bridge.upsertSchedule(serializeScheduleForSupabase(schedule)));
+    const result = await bridge.upsertSchedule(serializeScheduleForSupabase(schedule));
     if (result.error) return { ok: false, error: result.error };
   }
 
@@ -1171,17 +1181,17 @@ async function syncArchiveStateToSupabase() {
   const codePayloads = state.archiveCodes.map((item, index) => serializeArchiveCodeForSupabase(item, index));
 
   if (categoryPayloads.length) {
-    const upsertCategoryResult = await runSupabaseMutationWithRecovery(() => bridge.upsertArchiveCodeCategories(categoryPayloads));
+    const upsertCategoryResult = await bridge.upsertArchiveCodeCategories(categoryPayloads);
     if (upsertCategoryResult.error) return { ok: false, error: upsertCategoryResult.error };
   }
 
   if (notePayloads.length) {
-    const upsertNoteResult = await runSupabaseMutationWithRecovery(() => bridge.upsertArchiveNotes(notePayloads));
+    const upsertNoteResult = await bridge.upsertArchiveNotes(notePayloads);
     if (upsertNoteResult.error) return { ok: false, error: upsertNoteResult.error };
   }
 
   if (codePayloads.length) {
-    const upsertCodeResult = await runSupabaseMutationWithRecovery(() => bridge.upsertArchiveCodes(codePayloads));
+    const upsertCodeResult = await bridge.upsertArchiveCodes(codePayloads);
     if (upsertCodeResult.error) return { ok: false, error: upsertCodeResult.error };
   }
 
@@ -1194,17 +1204,17 @@ async function syncArchiveStateToSupabase() {
   const staleCategoryIds = (remoteCategoryResult.data || []).map((item) => item.id).filter((id) => !localCategoryIds.has(id));
 
   if (staleNoteIds.length) {
-    const deleteNotesResult = await runSupabaseMutationWithRecovery(() => bridge.deleteArchiveNotesByIds(staleNoteIds));
+    const deleteNotesResult = await bridge.deleteArchiveNotesByIds(staleNoteIds);
     if (deleteNotesResult.error) return { ok: false, error: deleteNotesResult.error };
   }
 
   if (staleCodeIds.length) {
-    const deleteCodesResult = await runSupabaseMutationWithRecovery(() => bridge.deleteArchiveCodesByIds(staleCodeIds));
+    const deleteCodesResult = await bridge.deleteArchiveCodesByIds(staleCodeIds);
     if (deleteCodesResult.error) return { ok: false, error: deleteCodesResult.error };
   }
 
   if (staleCategoryIds.length) {
-    const deleteCategoriesResult = await runSupabaseMutationWithRecovery(() => bridge.deleteArchiveCodeCategoriesByIds(staleCategoryIds));
+    const deleteCategoriesResult = await bridge.deleteArchiveCodeCategoriesByIds(staleCategoryIds);
     if (deleteCategoriesResult.error) return { ok: false, error: deleteCategoriesResult.error };
   }
 
@@ -1228,7 +1238,7 @@ async function syncYearGoalsStateToSupabase(previousGoals = null) {
 
   const payloads = state.yearGoals.map((goal) => serializeYearGoalForSupabase(goal));
   if (payloads.length) {
-    const upsertResult = await runSupabaseMutationWithRecovery(() => bridge.upsertYearGoals(payloads));
+    const upsertResult = await bridge.upsertYearGoals(payloads);
     if (upsertResult.error) {
       if (previousGoals) {
         state.yearGoals = previousGoals;
@@ -1243,7 +1253,7 @@ async function syncYearGoalsStateToSupabase(previousGoals = null) {
   const localIds = new Set(state.yearGoals.map((goal) => goal.id));
   const staleIds = (remoteResult.data || []).map((row) => row.id).filter((id) => !localIds.has(id));
   if (staleIds.length) {
-    const deleteResult = await runSupabaseMutationWithRecovery(() => bridge.deleteYearGoalsByIds(staleIds));
+    const deleteResult = await bridge.deleteYearGoalsByIds(staleIds);
     if (deleteResult.error) {
       if (previousGoals) {
         state.yearGoals = previousGoals;
@@ -1262,10 +1272,18 @@ async function syncYearGoalsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchYearGoals());
+  const result = await bridge.fetchYearGoals();
   if (result.error) return { ok: false, error: result.error };
 
   const remoteGoals = (result.data || []).map(deserializeYearGoalFromSupabase);
+  const hasRemoteData = remoteGoals.length > 0;
+  const hasLocalData = state.yearGoals.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncYearGoalsStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    return { ok: true };
+  }
 
   state.yearGoals = remoteGoals;
   saveState({ history: false });
@@ -1278,7 +1296,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
-  const remoteResult = await runSupabaseMutationWithRecovery(() => bridge.fetchWorklogs());
+  const remoteResult = await bridge.fetchWorklogs();
   if (remoteResult.error) {
     if (previousWorklogs) {
       state.worklogs = previousWorklogs;
@@ -1294,7 +1312,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
     .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
 
   for (const worklog of localWorklogs) {
-    const upsertResult = await runSupabaseMutationWithRecovery(() => bridge.upsertWorklog(serializeWorklogForSupabase(worklog)));
+    const upsertResult = await bridge.upsertWorklog(serializeWorklogForSupabase(worklog));
     if (upsertResult.error || !upsertResult.data?.id) {
       if (previousWorklogs) {
         state.worklogs = previousWorklogs;
@@ -1305,7 +1323,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
     }
 
     const worklogId = upsertResult.data.id;
-    const clearTasksResult = await runSupabaseMutationWithRecovery(() => bridge.deleteWorklogTasksByWorklogId(worklogId));
+    const clearTasksResult = await bridge.deleteWorklogTasksByWorklogId(worklogId);
     if (clearTasksResult.error) {
       if (previousWorklogs) {
         state.worklogs = previousWorklogs;
@@ -1317,7 +1335,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
 
     if (worklog.tasks.length) {
       const taskPayloads = worklog.tasks.map((task, index) => serializeWorklogTaskForSupabase(task, worklogId, index));
-      const taskInsertResult = await runSupabaseMutationWithRecovery(() => bridge.insertWorklogTasks(taskPayloads));
+      const taskInsertResult = await bridge.insertWorklogTasks(taskPayloads);
       if (taskInsertResult.error) {
         if (previousWorklogs) {
           state.worklogs = previousWorklogs;
@@ -1335,7 +1353,7 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
     .map((row) => row.id)
     .filter(Boolean);
   if (staleIds.length) {
-    const deleteResult = await runSupabaseMutationWithRecovery(() => bridge.deleteWorklogsByIds(staleIds));
+    const deleteResult = await bridge.deleteWorklogsByIds(staleIds);
     if (deleteResult.error) {
       if (previousWorklogs) {
         state.worklogs = previousWorklogs;
@@ -1353,12 +1371,23 @@ async function syncWorklogsFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchWorklogs());
+  const result = await bridge.fetchWorklogs();
   if (result.error) return { ok: false, error: result.error };
 
   const remoteWorklogs = (result.data || [])
     .map(deserializeWorklogFromSupabase)
     .filter((worklog) => worklog.date);
+  const hasRemoteData = remoteWorklogs.length > 0;
+  const localWorklogs = Object.entries(state.worklogs || {})
+    .map(([dateKey, worklog]) => sanitizeWorklogForPersistence(worklog, dateKey))
+    .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
+  const hasLocalData = localWorklogs.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncWorklogsStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    return { ok: true };
+  }
 
   state.worklogs = buildWorklogStateMap(remoteWorklogs);
   saveState({ history: false });
@@ -1371,9 +1400,9 @@ async function syncArchivesFromSupabase() {
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   const [noteResult, categoryResult, codeResult] = await Promise.all([
-    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveNotes()),
-    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveCodeCategories()),
-    runSupabaseMutationWithRecovery(() => bridge.fetchArchiveCodes()),
+    bridge.fetchArchiveNotes(),
+    bridge.fetchArchiveCodeCategories(),
+    bridge.fetchArchiveCodes(),
   ]);
 
   if (noteResult.error || categoryResult.error || codeResult.error) {
@@ -1383,6 +1412,15 @@ async function syncArchivesFromSupabase() {
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
   const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
   const remoteCodes = (codeResult.data || []).map(deserializeArchiveCodeFromSupabase);
+  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0;
+  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0;
+
+  if (!hasRemoteData && hasLocalData) {
+    const seedResult = await syncArchiveStateToSupabase();
+    if (!seedResult.ok) return seedResult;
+    updateSupabaseStatusSummary("브라우저 아카이브 데이터를 Supabase로 복사했어요.");
+    return { ok: true };
+  }
 
   state.archiveNotes = remoteNotes;
   state.archiveCodeCategories = remoteCategories.length ? remoteCategories : createDefaultArchiveCategories();
@@ -1528,7 +1566,7 @@ async function persistSiteSettingsToSupabase(previousSettings = null, options = 
     return { ok: false, error: new Error("Local storage save failed.") };
   }
 
-  const result = await runSupabaseMutationWithRecovery(() => bridge.upsertSiteSettings(serializeSiteSettingsForSupabase(state.siteSettings)));
+  const result = await bridge.upsertSiteSettings(serializeSiteSettingsForSupabase(state.siteSettings));
   if (result.error) {
     if (previousSettings) {
       state.siteSettings = previousSettings;
@@ -1578,7 +1616,7 @@ async function handleSiteImageUpload(event, key) {
 
   if (bridge?.isReady() && state.sessionUserId) {
     const objectPath = buildSiteAssetObjectPath(targetKey === "faviconStoragePath" ? "favicon" : "thumbnail", file.name);
-    const uploadResult = await runSupabaseMutationWithRecovery(() => bridge.uploadSiteAsset(file, objectPath));
+    const uploadResult = await bridge.uploadSiteAsset(file, objectPath);
     if (uploadResult.error) {
       const message = `이미지 업로드 실패: ${uploadResult.error.message || "Storage 오류"}`;
       toast(message);
@@ -1692,13 +1730,9 @@ function normalizeProfileRecord(profile = {}) {
 async function syncProfilesFromSupabase() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
-  const result = await runSupabaseMutationWithRecovery(() => bridge.fetchProfiles());
+  const result = await bridge.fetchProfiles();
   if (result.error) return { ok: false, error: result.error };
-  const remoteProfiles = (result.data || []).map(normalizeProfileRecord);
-  if (!remoteProfiles.length && state.sessionUserId && state.users.some((user) => user.id === state.sessionUserId)) {
-    return { ok: true, data: state.users };
-  }
-  state.users = remoteProfiles;
+  state.users = (result.data || []).map(normalizeProfileRecord);
   saveState({ history: false });
   return { ok: true, data: state.users };
 }
@@ -1804,57 +1838,6 @@ async function wakeAppAfterIdle(options = {}) {
   return resumeWakePromise;
 }
 
-function isRecoverableSupabaseError(error) {
-  const message = String(error?.message || "").toLowerCase();
-  const status = Number(error?.status || error?.code || 0);
-  return (
-    status === 401 ||
-    status === 403 ||
-    message.includes("jwt") ||
-    message.includes("session") ||
-    message.includes("token") ||
-    message.includes("auth") ||
-    message.includes("응답이 늦어지고") ||
-    message.includes("failed to fetch") ||
-    message.includes("network")
-  );
-}
-
-async function prepareSupabaseMutation() {
-  const bridge = getSupabaseBridge();
-  if (!bridge?.isReady() || !state.sessionUserId) return { ok: true, skipped: true };
-  const result = await bridge.refreshCachedSession(true);
-  if (result?.error) return { ok: false, error: result.error };
-  return { ok: true };
-}
-
-async function runSupabaseMutationWithRecovery(operation, options = {}) {
-  const bridge = getSupabaseBridge();
-  if (bridge?.isReady() && state.sessionUserId) {
-    const prepared = await prepareSupabaseMutation();
-    if (!prepared.ok) return { ok: false, error: prepared.error };
-  }
-
-  let result;
-  try {
-    result = await operation();
-  } catch (error) {
-    result = { error };
-  }
-
-  if (!result?.error) return result;
-  if (!isRecoverableSupabaseError(result.error) || options.retry === false) return result;
-
-  const refreshed = await prepareSupabaseMutation();
-  if (!refreshed.ok) return { ok: false, error: refreshed.error };
-
-  try {
-    return await operation();
-  } catch (error) {
-    return { error };
-  }
-}
-
 async function runViewRefreshDomain(domainKey, task, options = {}) {
   if (viewRefreshInFlight.has(domainKey)) {
     return viewRefreshInFlight.get(domainKey);
@@ -1936,7 +1919,7 @@ async function recoverRepresentativeProfile(profile) {
     updatedAt: new Date().toISOString(),
   };
 
-  const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProfile({
+  const result = await bridge.upsertProfile({
     id: repairedProfile.id,
     username: repairedProfile.username,
     name: repairedProfile.name,
@@ -1952,7 +1935,7 @@ async function recoverRepresentativeProfile(profile) {
     last_login_ip: repairedProfile.lastLoginIp || "",
     created_at: repairedProfile.createdAt,
     updated_at: repairedProfile.updatedAt,
-  }));
+  });
   if (result.error) return profile;
 
   const userIndex = state.users.findIndex((user) => user.id === repairedProfile.id);
@@ -1965,64 +1948,10 @@ async function recoverRepresentativeProfile(profile) {
   return repairedProfile;
 }
 
-function isOwnerEmail(email = "") {
-  return OWNER_EMAILS.includes(String(email || "").trim().toLowerCase());
-}
-
-function buildFallbackProfileFromSession(session) {
-  const user = session?.user;
-  if (!user?.id) return null;
-  const email = String(user.email || "").trim().toLowerCase();
-  if (!isOwnerEmail(email)) return null;
-  const metadata = user.user_metadata || {};
-  const fallbackName = metadata.name || metadata.full_name || email.split("@")[0] || "멤버";
-  return {
-    id: user.id,
-    username: email.split("@")[0] || user.id,
-    name: fallbackName,
-    roleLabel: metadata.role_label || "대표",
-    phone: metadata.phone || "",
-    email,
-    notes: "",
-    lastLoginAt: "",
-    lastLoginIp: "",
-    canManageMembers: true,
-    isOwner: true,
-    approved: true,
-    rejected: false,
-    createdAt: user.created_at || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-async function fetchCurrentProfileWithRetry(session) {
-  const bridge = getSupabaseBridge();
-  const userId = session?.user?.id;
-  if (!bridge?.isReady() || !userId) return { data: null, error: new Error("Supabase client is not ready.") };
-
-  let lastResult = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (attempt > 0) await wait(400);
-    lastResult = await runSupabaseMutationWithRecovery(() => bridge.fetchCurrentProfile(userId));
-    if (lastResult?.data || lastResult?.error) break;
-  }
-  return lastResult || { data: null, error: null };
-}
-
-async function refreshInitialDataAfterLogin(activeView, primary, background) {
-  const primaryResult = await refreshDomainKeys(primary, { force: true });
-  if (primaryResult?.ok === false) {
-    console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, primaryResult.error);
-  }
-  refreshDomainKeys(background, { force: true }).catch((error) => {
-    console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
-  });
-}
-
 async function applyAuthSession(session, options = {}) {
   state.sessionUserId = session?.user?.id || null;
   if (!state.sessionUserId) {
-    clearSessionScopedState();
+    state.users = [];
     saveState({ history: false });
     render();
     return { ok: true, message: "" };
@@ -2031,19 +1960,24 @@ async function applyAuthSession(session, options = {}) {
   const bridge = getSupabaseBridge();
   let profile = null;
 
-  const currentProfileResult = await fetchCurrentProfileWithRetry(session);
+  const currentProfileResult = await bridge?.fetchCurrentProfile?.(state.sessionUserId);
   if (currentProfileResult?.data) {
     profile = normalizeProfileRecord(currentProfileResult.data);
     const otherUsers = state.users.filter((user) => user.id !== profile.id);
     state.users = [profile, ...otherUsers];
   } else {
-    const email = String(session?.user?.email || "").trim().toLowerCase();
-    const localProfile = state.users.find((user) => user.id === state.sessionUserId || String(user.email || "").toLowerCase() === email);
-    profile = localProfile ? normalizeProfileRecord(localProfile) : buildFallbackProfileFromSession(session);
-    if (profile) state.users = [profile, ...state.users.filter((user) => user.id !== profile.id)];
+    const profileResult = await syncProfilesFromSupabase();
+    if (!profileResult.ok) {
+      const message = profileResult.error?.message || currentProfileResult?.error?.message || "멤버 정보를 불러오지 못했습니다.";
+      toast(message);
+      return { ok: false, message };
+    }
+    profile = currentUser();
   }
   if (!profile) {
-    clearSessionScopedState();
+    await bridge?.signOut();
+    state.sessionUserId = null;
+    state.users = [];
     saveState({ history: false });
     render();
     const message = "회원 정보를 찾지 못해 다시 로그인해주세요.";
@@ -2055,7 +1989,8 @@ async function applyAuthSession(session, options = {}) {
 
   if (profile.rejected) {
     await bridge?.signOut();
-    clearSessionScopedState();
+    state.sessionUserId = null;
+    state.users = [];
     saveState({ history: false });
     render();
     const message = "가입 요청이 거절되었습니다.";
@@ -2065,7 +2000,7 @@ async function applyAuthSession(session, options = {}) {
 
   if (!profile.approved) {
     await bridge?.signOut();
-    clearSessionScopedState();
+    state.sessionUserId = null;
     saveState({ history: false });
     render();
     const message = "아직 소유자 승인이 완료되지 않았습니다.";
@@ -2073,15 +2008,21 @@ async function applyAuthSession(session, options = {}) {
     return { ok: false, message };
   }
 
-  const activeView = state.currentView || "dashboard";
-  const { primary, background } = getStartupRefreshDomainGroups(activeView);
-  clearWorkspaceDataState();
   saveState({ history: false });
   render();
 
-  refreshInitialDataAfterLogin(activeView, primary, background).catch((error) => {
-    console.warn("로그인 후 초기 데이터를 새로고침하지 못했습니다.", error);
-  });
+  const activeView = state.currentView || "dashboard";
+  const { primary, background } = getStartupRefreshDomainGroups(activeView);
+
+  refreshDomainKeys(primary, { force: true })
+    .catch((error) => {
+      console.warn(`${activeView} 초기 데이터를 새로고침하지 못했습니다.`, error);
+    })
+    .finally(() => {
+      refreshDomainKeys(background, { force: true }).catch((error) => {
+        console.warn("백그라운드 초기 데이터를 새로고침하지 못했습니다.", error);
+      });
+    });
 
   return { ok: true, message: "" };
 }
@@ -3587,7 +3528,8 @@ async function handlePasswordUpdate(event) {
     }
 
     await bridge.signOut();
-    clearSessionScopedState();
+    state.sessionUserId = null;
+    state.users = [];
     saveState({ history: false });
     isPasswordRecoveryFlow = false;
     clearPasswordRecoveryUrl();
@@ -3612,13 +3554,14 @@ async function handlePasswordUpdate(event) {
 function logout() {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) {
-    clearSessionScopedState();
+    state.sessionUserId = null;
     saveState({ history: false });
     render();
     return;
   }
   bridge.signOut().then(() => {
-    clearSessionScopedState();
+    state.sessionUserId = null;
+    state.users = [];
     saveState({ history: false });
     render();
   });
@@ -5035,9 +4978,9 @@ async function handleProjectSave(event) {
         toast(message);
         return;
       }
-      const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProject(
+      const result = await bridge.upsertProject(
         serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
-      ));
+      );
       if (result.error) {
         if (existing && previousProject) {
           Object.assign(existing, previousProject);
@@ -5054,7 +4997,7 @@ async function handleProjectSave(event) {
         .filter((document) => document.storagePath)
         .map((document) => serializeProjectDocumentForSupabase(payload.id, document));
       if (documentPayloads.length) {
-        const documentResult = await runSupabaseMutationWithRecovery(() => bridge.upsertProjectDocuments(documentPayloads));
+        const documentResult = await bridge.upsertProjectDocuments(documentPayloads);
         if (documentResult.error) {
           const message = `문서 저장 실패: ${documentResult.error.message || "Supabase 오류"}\n업로드한 문서 이름이나 파일 상태를 다시 확인해주세요.`;
           openNoticeModal(message);
@@ -5065,7 +5008,7 @@ async function handleProjectSave(event) {
       const removedDocuments = previousDocuments.filter((document) => !draftProjectDocuments.some((item) => item.id === document.id));
       if (removedDocuments.length) {
         const removedIds = removedDocuments.map((document) => document.id);
-        const deleteResult = await runSupabaseMutationWithRecovery(() => bridge.deleteProjectDocumentsByIds(removedIds));
+        const deleteResult = await bridge.deleteProjectDocumentsByIds(removedIds);
         if (deleteResult.error) {
           const message = `문서 삭제 반영 실패: ${deleteResult.error.message || "Supabase 오류"}`;
           openNoticeModal(message);
@@ -5517,7 +5460,7 @@ async function handleMemberSave(event) {
     }
 
     if (bridge?.isReady()) {
-      const profileResult = await runSupabaseMutationWithRecovery(() => bridge.upsertProfile({
+      const { error } = await bridge.upsertProfile({
         id: existing.id,
         username: existing.username,
         name: existing.name,
@@ -5533,8 +5476,7 @@ async function handleMemberSave(event) {
         last_login_ip: existing.lastLoginIp || "",
         created_at: existing.createdAt,
         updated_at: new Date().toISOString(),
-      }));
-      const { error } = profileResult;
+      });
       if (error) {
         toast("Supabase에 멤버 정보를 저장하지 못했습니다.");
         return;
@@ -5577,7 +5519,7 @@ async function handleMyProfileSave(event) {
 
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProfile({
+      const result = await bridge.upsertProfile({
         id: updatedUser.id,
         username: updatedUser.username,
         name: updatedUser.name,
@@ -5593,7 +5535,7 @@ async function handleMyProfileSave(event) {
         last_login_ip: updatedUser.lastLoginIp || "",
         created_at: updatedUser.createdAt,
         updated_at: updatedUser.updatedAt,
-      }));
+      });
       if (result.error) {
         const message = `내 정보 저장 실패: ${result.error.message || "Supabase 오류"}`;
         toast(message);
@@ -5619,7 +5561,7 @@ function deleteCurrentProject() {
     const removedDocumentPaths = (project.contracts || []).map((document) => document.storagePath).filter(Boolean);
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await runSupabaseMutationWithRecovery(() => bridge.deleteProject(project.id));
+      const result = await bridge.deleteProject(project.id);
       if (result.error) {
         toast("Supabase에서 프로젝트를 삭제하지 못했습니다.");
         return;
@@ -5662,7 +5604,7 @@ async function handleDocumentUpload() {
     if (bridge?.isReady() && state.sessionUserId) {
       storagePath = buildProjectDocumentObjectPath(projectId, file.name);
       const uploadResult = await withTimeout(
-        runSupabaseMutationWithRecovery(() => bridge.uploadProjectDocument(file, storagePath)),
+        bridge.uploadProjectDocument(file, storagePath),
         20000,
         "문서 업로드 응답이 늦어지고 있어요. 다시 시도해주세요.",
       );
@@ -5756,7 +5698,7 @@ async function previewOrDownloadDocument(documentId, options = {}) {
 
   if (!accessibleUrl && file.storagePath && bridge?.isReady()) {
     const signedResult = await withTimeout(
-      runSupabaseMutationWithRecovery(() => bridge.createProjectDocumentSignedUrl(file.storagePath, 3600)),
+      bridge.createProjectDocumentSignedUrl(file.storagePath, 3600),
       12000,
       "문서 열기 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
     );
@@ -5852,7 +5794,7 @@ function removeDocument(documentId) {
   }, file ? `[${file.name}] 문서를 삭제할까요?` : "문서를 삭제할까요?");
 }
 
-async function updateApproval(userId) {
+function updateApproval(userId) {
   if (!canManageMembers()) return;
   const user = state.users.find((item) => item.id === userId);
   if (!user) return;
@@ -5861,7 +5803,7 @@ async function updateApproval(userId) {
   if (state.pendingApproval?.username === user.username) state.pendingApproval = null;
   const bridge = getSupabaseBridge();
   if (bridge?.isReady()) {
-    const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProfile({
+    bridge.upsertProfile({
       id: user.id,
       username: user.username,
       name: user.name,
@@ -5877,14 +5819,15 @@ async function updateApproval(userId) {
       last_login_ip: user.lastLoginIp || "",
       created_at: user.createdAt,
       updated_at: new Date().toISOString(),
-    }));
-    if (result.error) {
-      toast("Supabase에 승인 상태를 저장하지 못했습니다.");
-      return;
-    }
-    await syncProfilesFromSupabase();
-    render();
-    toast("가입 요청을 승인했습니다.");
+    }).then(async ({ error }) => {
+      if (error) {
+        toast("Supabase에 승인 상태를 저장하지 못했습니다.");
+        return;
+      }
+      await syncProfilesFromSupabase();
+      render();
+      toast("가입 요청을 승인했습니다.");
+    });
     return;
   }
   saveState();
@@ -5895,14 +5838,14 @@ async function updateApproval(userId) {
 function rejectUser(userId) {
   if (!canManageMembers()) return;
   const user = state.users.find((item) => item.id === userId);
-  openConfirmModal(async () => {
+  openConfirmModal(() => {
     if (!user) return;
     user.rejected = true;
     user.approved = false;
     if (state.pendingApproval?.username === user?.username) state.pendingApproval = null;
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await runSupabaseMutationWithRecovery(() => bridge.upsertProfile({
+      bridge.upsertProfile({
         id: user.id,
         username: user.username,
         name: user.name,
@@ -5918,14 +5861,15 @@ function rejectUser(userId) {
         last_login_ip: user.lastLoginIp || "",
         created_at: user.createdAt,
         updated_at: new Date().toISOString(),
-      }));
-      if (result.error) {
-        toast("Supabase에 거절 상태를 저장하지 못했습니다.");
-        return;
-      }
-      await syncProfilesFromSupabase();
-      render();
-      toast("가입 요청을 거절했습니다.");
+      }).then(async ({ error }) => {
+        if (error) {
+          toast("Supabase에 거절 상태를 저장하지 못했습니다.");
+          return;
+        }
+        await syncProfilesFromSupabase();
+        render();
+        toast("가입 요청을 거절했습니다.");
+      });
       return;
     }
     saveState();
@@ -5996,7 +5940,7 @@ function deleteSchedule(scheduleId) {
   openConfirmModal(async () => {
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await runSupabaseMutationWithRecovery(() => bridge.deleteSchedule(scheduleId));
+      const result = await bridge.deleteSchedule(scheduleId);
       if (result.error) {
         toast("Supabase에서 일정을 삭제하지 못했습니다.");
         return;
@@ -6945,7 +6889,7 @@ async function handleScheduleSave(event) {
 
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      const result = await runSupabaseMutationWithRecovery(() => bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload)));
+      const result = await bridge.upsertSchedule(serializeScheduleForSupabase(existing || payload));
       if (result.error) {
         if (existing && previousSchedule) {
           Object.assign(existing, previousSchedule);

@@ -294,54 +294,6 @@
     return Boolean(sessionResult?.data?.session);
   }
 
-  function isRecoverableSupabaseError(error) {
-    const message = String(error?.message || "").toLowerCase();
-    const status = Number(error?.status || error?.code || 0);
-    return (
-      status === 401 ||
-      status === 403 ||
-      message.includes("jwt") ||
-      message.includes("session") ||
-      message.includes("token") ||
-      message.includes("auth") ||
-      message.includes("응답이 늦어지고") ||
-      message.includes("failed to fetch") ||
-      message.includes("network")
-    );
-  }
-
-  async function prepareSupabaseMutation() {
-    const bridge = getSupabaseBridge();
-    if (!bridge || !bridge.isReady?.()) return { ok: true, skipped: true };
-    const result = await bridge.refreshCachedSession?.(true);
-    if (result?.error) return { ok: false, error: result.error };
-    return { ok: true };
-  }
-
-  async function runSupabaseMutationWithRecovery(operation, options = {}) {
-    if (!(await hasAuthenticatedSession())) return { data: null, error: null, skipped: true };
-    const prepared = await prepareSupabaseMutation();
-    if (!prepared.ok) return { data: null, error: prepared.error };
-
-    let result;
-    try {
-      result = await operation();
-    } catch (error) {
-      result = { data: null, error };
-    }
-
-    if (!result?.error) return result;
-    if (!isRecoverableSupabaseError(result.error) || options.retry === false) return result;
-
-    const refreshed = await prepareSupabaseMutation();
-    if (!refreshed.ok) return { data: null, error: refreshed.error };
-    try {
-      return await operation();
-    } catch (error) {
-      return { data: null, error };
-    }
-  }
-
   function canUseServerPdfHistory() {
     const bridge = getSupabaseBridge();
     return Boolean(bridge && bridge.isReady?.());
@@ -382,7 +334,7 @@
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return null;
     if (!(await hasAuthenticatedSession())) return null;
-    const result = await runSupabaseMutationWithRecovery(() => bridge.fetchQuoteSettings());
+    const result = await bridge.fetchQuoteSettings();
     if (result?.error) throw result.error;
     if (!result?.data || isEmptySupabaseQuoteSettings(result.data)) {
       if (!isDefaultQuoteSettings(quoteSettings)) {
@@ -397,7 +349,8 @@
   async function persistQuoteSettingsToSupabase() {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return null;
-    const result = await runSupabaseMutationWithRecovery(() => bridge.upsertQuoteSettings(buildQuoteSettingsPayload()));
+    if (!(await hasAuthenticatedSession())) return null;
+    const result = await bridge.upsertQuoteSettings(buildQuoteSettingsPayload());
     if (result?.error) throw result.error;
     return result?.data || null;
   }
@@ -1674,7 +1627,7 @@
   async function pruneServerPdfHistory() {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return;
-    const result = await runSupabaseMutationWithRecovery(() => bridge.fetchQuotePdfHistory());
+    const result = await bridge.fetchQuotePdfHistory();
     if (result?.error) throw result.error;
     const rows = Array.isArray(result?.data) ? result.data : [];
     const threshold = Date.now() - PDF_HISTORY_MAX_AGE;
@@ -1684,8 +1637,8 @@
     });
     if (!expired.length) return;
 
-    await Promise.allSettled(expired.map((row) => runSupabaseMutationWithRecovery(() => bridge.removeQuotePdfAsset(row.storage_path))));
-    const deleteResult = await runSupabaseMutationWithRecovery(() => bridge.deleteQuotePdfHistoryByIds(expired.map((row) => row.id)));
+    await Promise.allSettled(expired.map((row) => bridge.removeQuotePdfAsset(row.storage_path)));
+    const deleteResult = await bridge.deleteQuotePdfHistoryByIds(expired.map((row) => row.id));
     if (deleteResult?.error) throw deleteResult.error;
   }
 
@@ -1700,7 +1653,7 @@
 
     const [localRows, serverResult] = await Promise.all([
       getLocalPdfHistoryRecords(),
-      runSupabaseMutationWithRecovery(() => bridge.fetchQuotePdfHistory()),
+      bridge.fetchQuotePdfHistory(),
     ]);
     if (serverResult?.error) throw serverResult.error;
 
@@ -1728,11 +1681,11 @@
     if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return null;
     await pruneServerPdfHistory();
     const storagePath = buildQuotePdfStoragePath(record);
-    const uploadResult = await runSupabaseMutationWithRecovery(() => bridge.uploadQuotePdf(record.blob, storagePath));
+    const uploadResult = await bridge.uploadQuotePdf(record.blob, storagePath);
     if (uploadResult?.error) throw uploadResult.error;
-    const insertResult = await runSupabaseMutationWithRecovery(() => bridge.insertQuotePdfHistory(buildServerPdfHistoryPayload(record, storagePath)));
+    const insertResult = await bridge.insertQuotePdfHistory(buildServerPdfHistoryPayload(record, storagePath));
     if (insertResult?.error) {
-      await runSupabaseMutationWithRecovery(() => bridge.removeQuotePdfAsset(storagePath));
+      await bridge.removeQuotePdfAsset(storagePath);
       throw insertResult.error;
     }
     return normalizeServerPdfHistoryRecord(insertResult.data || {});
@@ -1772,7 +1725,7 @@
       });
       try {
         const result = await withAsyncTimeout(
-          runSupabaseMutationWithRecovery(() => bridge.fetchQuotePdfHistory()),
+          bridge.fetchQuotePdfHistory(),
           6000,
           "견적 PDF 기록을 불러오는 응답이 지연되었습니다."
         );
@@ -1805,8 +1758,8 @@
     const row = typeof target === "string" ? { id: target } : target;
     if (row?.storagePath && canUseServerPdfHistory() && (await hasAuthenticatedSession())) {
       const bridge = getSupabaseBridge();
-      await runSupabaseMutationWithRecovery(() => bridge.removeQuotePdfAsset(row.storagePath));
-      const result = await runSupabaseMutationWithRecovery(() => bridge.deleteQuotePdfHistoryByIds([row.id]));
+      await bridge.removeQuotePdfAsset(row.storagePath);
+      const result = await bridge.deleteQuotePdfHistoryByIds([row.id]);
       if (result?.error) throw result.error;
       return;
     }
@@ -1852,7 +1805,7 @@
     if (!row?.storagePath) return "";
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return "";
-    const result = await runSupabaseMutationWithRecovery(() => bridge.createQuotePdfSignedUrl(row.storagePath, expiresIn));
+    const result = await bridge.createQuotePdfSignedUrl(row.storagePath, expiresIn);
     if (result?.error) throw result.error;
     return result?.data?.signedUrl || "";
   }
