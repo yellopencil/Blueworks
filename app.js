@@ -362,6 +362,7 @@ const viewRefreshInFlight = new Map();
 const viewRefreshLoadedDomains = new Set();
 let lastAppInteractionAt = Date.now();
 let lastAppResumeRefreshAt = 0;
+let lastModalEditAt = 0;
 let resumeWakePromise = null;
 const modalSnapshots = {
   project: "",
@@ -1041,11 +1042,13 @@ function updateSupabaseStatusSummary(prefix = "") {
 }
 
 async function syncSiteSettingsFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   const result = await bridge.fetchSiteSettings();
   if (result.error) return { ok: false, error: result.error };
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const remoteSettings = Array.isArray(result.data) ? result.data[0] : result.data;
   const hasRemoteData = Boolean(
@@ -1086,6 +1089,7 @@ async function syncSiteSettingsFromSupabase() {
 }
 
 async function syncProjectsAndSchedulesFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) {
     renderSiteSettings();
@@ -1108,6 +1112,7 @@ async function syncProjectsAndSchedulesFromSupabase() {
     renderSiteSettings();
     return;
   }
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const documentMap = new Map();
   (documentResult.data || []).forEach((row) => {
@@ -1275,11 +1280,13 @@ async function syncYearGoalsStateToSupabase(previousGoals = null, options = {}) 
 }
 
 async function syncYearGoalsFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   const result = await bridge.fetchYearGoals();
   if (result.error) return { ok: false, error: result.error };
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const remoteGoals = (result.data || []).map(deserializeYearGoalFromSupabase);
   const hasRemoteData = remoteGoals.length > 0;
@@ -1374,11 +1381,13 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null, options = {}
 }
 
 async function syncWorklogsFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
   const result = await bridge.fetchWorklogs();
   if (result.error) return { ok: false, error: result.error };
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const remoteWorklogs = (result.data || [])
     .map(deserializeWorklogFromSupabase)
@@ -1402,6 +1411,7 @@ async function syncWorklogsFromSupabase() {
 }
 
 async function syncArchivesFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
 
@@ -1414,6 +1424,7 @@ async function syncArchivesFromSupabase() {
   if (noteResult.error || categoryResult.error || codeResult.error) {
     return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error };
   }
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
   const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
@@ -1737,10 +1748,12 @@ function normalizeProfileRecord(profile = {}) {
 }
 
 async function syncProfilesFromSupabase() {
+  const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
   const result = await bridge.fetchProfiles();
   if (result.error) return { ok: false, error: result.error };
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
   state.users = (result.data || []).map(normalizeProfileRecord);
   saveState({ history: false });
   return { ok: true, data: state.users };
@@ -1794,7 +1807,7 @@ function getStaleRefreshDomains(domainKeys = []) {
 async function ensureFreshDataForAction(domainKeys = [], actionLabel = "작업") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return true;
-  if (getOpenDirtyModalKey()) return true;
+  if (getOpenEditingModalKey()) return true;
   const uniqueDomainKeys = [...new Set(domainKeys)].filter(Boolean);
   const staleDomainKeys = getStaleRefreshDomains(uniqueDomainKeys);
   if (!staleDomainKeys.length) return true;
@@ -1826,6 +1839,18 @@ function markAppInteraction() {
   lastAppInteractionAt = Date.now();
 }
 
+function markModalEdit(event) {
+  markAppInteraction();
+  if (event?.target instanceof Element && event.target.closest(".modal-overlay")) {
+    lastModalEditAt = Date.now();
+  }
+}
+
+function shouldDeferRemoteApply(refreshStartedAt) {
+  if (getOpenEditingModalKey()) return true;
+  return Boolean(lastModalEditAt && refreshStartedAt <= lastModalEditAt);
+}
+
 function isActionableWakeTarget(target) {
   if (!(target instanceof Element)) return false;
   return Boolean(
@@ -1839,7 +1864,7 @@ function shouldHardReloadAfterIdle(target) {
   if (!state.sessionUserId) return false;
   if (resumeWakePromise) return false;
   if (!isActionableWakeTarget(target)) return false;
-  if (getOpenDirtyModalKey()) return false;
+  if (getOpenEditingModalKey()) return false;
   return Date.now() - lastAppInteractionAt >= APP_HARD_RELOAD_IDLE_THRESHOLD_MS;
 }
 
@@ -1859,8 +1884,8 @@ async function wakeAppAfterIdle(options = {}) {
   if (!bridge?.isReady() || !state.sessionUserId) {
     return { ok: true, skipped: true };
   }
-  if (!options.force && getOpenDirtyModalKey()) {
-    return { ok: true, skipped: true, reason: "dirty-modal" };
+  if (!options.force && getOpenEditingModalKey()) {
+    return { ok: true, skipped: true, reason: "modal-open" };
   }
 
   const now = Date.now();
@@ -2125,10 +2150,10 @@ function selectedProject() {
 function bindEvents() {
   document.addEventListener("pointerdown", handlePointerWake, true);
   document.addEventListener("keydown", markAppInteraction, true);
-  document.addEventListener("input", markAppInteraction, true);
-  document.addEventListener("change", markAppInteraction, true);
-  document.addEventListener("paste", markAppInteraction, true);
-  document.addEventListener("compositionend", markAppInteraction, true);
+  document.addEventListener("input", markModalEdit, true);
+  document.addEventListener("change", markModalEdit, true);
+  document.addEventListener("paste", markModalEdit, true);
+  document.addEventListener("compositionend", markModalEdit, true);
   window.addEventListener("focus", () => {
     wakeAppAfterIdle().catch((error) => {
       console.warn("포커스 복귀 후 데이터를 깨우지 못했습니다.", error);
@@ -3084,9 +3109,28 @@ function getOpenDirtyModalKey() {
     [els.archiveCategoryModal, "archiveCategory"],
   ];
 
-  const openEntry = modalEntries.find(([overlay, key]) => {
+  return modalEntries.find(([overlay, key]) => {
     if (!overlay || overlay.classList.contains("hidden")) return false;
     return hasUnsavedChanges(key);
+  })?.[1] || "";
+}
+
+function getOpenEditingModalKey() {
+  const modalEntries = [
+    [els.projectModal, "project"],
+    [els.scheduleEditorModal, "schedule"],
+    [els.memberModal, "member"],
+    [els.worklogModal, "worklog"],
+    [els.archiveNoteModal, "archiveNote"],
+    [els.archiveCodeModal, "archiveCode"],
+    [els.archiveCategoryModal, "archiveCategory"],
+    [els.annualGoalAddModal, "annualGoal"],
+    [els.myProfileModal, "myProfile"],
+  ];
+
+  const openEntry = modalEntries.find(([overlay, key]) => {
+    if (!overlay || overlay.classList.contains("hidden")) return false;
+    return Boolean(key);
   });
   return openEntry?.[1] || "";
 }
