@@ -2108,6 +2108,10 @@ async function initializeSupabaseAuth() {
       render();
       return;
     }
+    const nextUserId = session?.user?.id || null;
+    if (nextUserId && nextUserId === state.sessionUserId && ["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED"].includes(event)) {
+      return;
+    }
     await applyAuthSession(session, { silent: true });
   });
 }

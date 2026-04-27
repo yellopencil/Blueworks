@@ -685,7 +685,11 @@
       if (!this.client) return { data: { subscription: { unsubscribe() {} } } };
       return this.client.auth.onAuthStateChange((event, session) => {
         this.setCachedSession(session || null);
-        return callback(event, session);
+        window.setTimeout(() => {
+          Promise.resolve(callback(event, session)).catch((error) => {
+            console.error("Auth state change handler failed:", error);
+          });
+        }, 0);
       });
     },
     async upsertProject(payload) {
