@@ -345,11 +345,21 @@ let authStateSubscription = null;
 let authPanelMode = "login";
 let isPasswordRecoveryFlow = false;
 const VIEW_REFRESH_MIN_INTERVAL_MS = 4000;
+const ACTION_DATA_MAX_AGE_MS = 10 * 60 * 1000;
 const APP_RESUME_IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 const APP_RESUME_MIN_INTERVAL_MS = 10 * 1000;
 const APP_HARD_RELOAD_IDLE_THRESHOLD_MS = 20 * 60 * 1000;
+const REFRESH_DOMAIN_LABELS = {
+  projects: "프로젝트와 일정",
+  yearGoals: "연간 목표",
+  worklogs: "업무일지",
+  archives: "아카이브",
+  profiles: "멤버",
+  siteSettings: "환경설정",
+};
 const viewRefreshLastRun = new Map();
 const viewRefreshInFlight = new Map();
+const viewRefreshLoadedDomains = new Set();
 let lastAppInteractionAt = Date.now();
 let lastAppResumeRefreshAt = 0;
 let resumeWakePromise = null;
@@ -1163,7 +1173,7 @@ async function seedSupabaseFromLocalState() {
   return { ok: true };
 }
 
-async function syncArchiveStateToSupabase() {
+async function syncArchiveStateToSupabase(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
 
@@ -1196,13 +1206,9 @@ async function syncArchiveStateToSupabase() {
     if (upsertCodeResult.error) return { ok: false, error: upsertCodeResult.error };
   }
 
-  const localNoteIds = new Set(state.archiveNotes.map((item) => item.id));
-  const localCategoryIds = new Set(state.archiveCodeCategories.map((item) => item.id));
-  const localCodeIds = new Set(state.archiveCodes.map((item) => item.id));
-
-  const staleNoteIds = (remoteNotesResult.data || []).map((item) => item.id).filter((id) => !localNoteIds.has(id));
-  const staleCodeIds = (remoteCodesResult.data || []).map((item) => item.id).filter((id) => !localCodeIds.has(id));
-  const staleCategoryIds = (remoteCategoryResult.data || []).map((item) => item.id).filter((id) => !localCategoryIds.has(id));
+  const staleNoteIds = Array.isArray(options.deleteNoteIds) ? options.deleteNoteIds.filter(Boolean) : [];
+  const staleCodeIds = Array.isArray(options.deleteCodeIds) ? options.deleteCodeIds.filter(Boolean) : [];
+  const staleCategoryIds = Array.isArray(options.deleteCategoryIds) ? options.deleteCategoryIds.filter(Boolean) : [];
 
   if (staleNoteIds.length) {
     const deleteNotesResult = await bridge.deleteArchiveNotesByIds(staleNoteIds);
@@ -1222,7 +1228,7 @@ async function syncArchiveStateToSupabase() {
   return { ok: true };
 }
 
-async function syncYearGoalsStateToSupabase(previousGoals = null) {
+async function syncYearGoalsStateToSupabase(previousGoals = null, options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
@@ -1251,8 +1257,7 @@ async function syncYearGoalsStateToSupabase(previousGoals = null) {
     }
   }
 
-  const localIds = new Set(state.yearGoals.map((goal) => goal.id));
-  const staleIds = (remoteResult.data || []).map((row) => row.id).filter((id) => !localIds.has(id));
+  const staleIds = Array.isArray(options.deleteIds) ? options.deleteIds.filter(Boolean) : [];
   if (staleIds.length) {
     const deleteResult = await bridge.deleteYearGoalsByIds(staleIds);
     if (deleteResult.error) {
@@ -1293,7 +1298,7 @@ async function syncYearGoalsFromSupabase() {
   return { ok: true };
 }
 
-async function syncWorklogsStateToSupabase(previousWorklogs = null) {
+async function syncWorklogsStateToSupabase(previousWorklogs = null, options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
@@ -1348,9 +1353,9 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null) {
     }
   }
 
-  const localDates = new Set(localWorklogs.map((worklog) => worklog.date));
+  const deleteDateKeys = new Set(Array.isArray(options.deleteDateKeys) ? options.deleteDateKeys.filter(Boolean) : []);
   const staleIds = remoteRows
-    .filter((row) => !localDates.has(row.worklog_date))
+    .filter((row) => deleteDateKeys.has(row.worklog_date))
     .map((row) => row.id)
     .filter(Boolean);
   if (staleIds.length) {
@@ -1609,10 +1614,11 @@ async function handleSiteImageUpload(event, key) {
   }
   const [file] = event.currentTarget.files || [];
   if (!file) return;
+  event.currentTarget.value = "";
+  if (!(await ensureFreshDataForAction(["siteSettings"], "사이트 이미지 저장"))) return;
   const bridge = getSupabaseBridge();
   state.siteSettings = state.siteSettings || {};
   const previousSettings = { ...state.siteSettings };
-  event.currentTarget.value = "";
   const targetKey = key === "faviconDataUrl" ? "faviconStoragePath" : "thumbnailStoragePath";
 
   if (bridge?.isReady() && state.sessionUserId) {
@@ -1655,6 +1661,7 @@ async function removeSiteImage(key) {
     openNoticeModal("삭제할 이미지가 없습니다.");
     return;
   }
+  if (!(await ensureFreshDataForAction(["siteSettings"], "사이트 이미지 삭제"))) return;
   const bridge = getSupabaseBridge();
   const previousSettings = { ...state.siteSettings };
   state.siteSettings[key] = "";
@@ -1684,6 +1691,7 @@ async function handleSiteSettingsSave(event) {
       return;
     }
     const formData = new FormData(event.currentTarget);
+    if (!(await ensureFreshDataForAction(["siteSettings"], "사이트 설정 저장"))) return;
     const previousSettings = { ...(state.siteSettings || {}) };
     state.siteSettings = {
       ...(state.siteSettings || {}),
@@ -1766,6 +1774,44 @@ function getRefreshTasks() {
     profiles: () => syncProfilesFromSupabase(),
     siteSettings: () => syncSiteSettingsFromSupabase(),
   };
+}
+
+function getRefreshDomainLabel(domainKeys = []) {
+  return domainKeys
+    .map((key) => REFRESH_DOMAIN_LABELS[key] || key)
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getStaleRefreshDomains(domainKeys = []) {
+  const now = Date.now();
+  return domainKeys.filter((key) => {
+    const lastRun = viewRefreshLastRun.get(key) || 0;
+    return !viewRefreshLoadedDomains.has(key) || !lastRun || now - lastRun > ACTION_DATA_MAX_AGE_MS;
+  });
+}
+
+async function ensureFreshDataForAction(domainKeys = [], actionLabel = "작업") {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) return true;
+  const uniqueDomainKeys = [...new Set(domainKeys)].filter(Boolean);
+  const staleDomainKeys = getStaleRefreshDomains(uniqueDomainKeys);
+  if (!staleDomainKeys.length) return true;
+
+  const domainLabel = getRefreshDomainLabel(staleDomainKeys) || "데이터";
+  const finishBusyToast = startDelayedBusyToast(`${domainLabel} 최신 상태를 확인하고 있어요...`, 350);
+  try {
+    const result = await refreshDomainKeys(staleDomainKeys, { force: true });
+    if (result.ok === false) {
+      const message = `${domainLabel}를 불러오지 못해서 ${actionLabel}을 진행하지 않았어요.\n${result.error?.message || "잠시 후 다시 시도해주세요."}`;
+      openNoticeModal(message);
+      toast(`${actionLabel}을 진행하지 않았어요.`);
+      return false;
+    }
+    return true;
+  } finally {
+    finishBusyToast();
+  }
 }
 
 function getStartupRefreshDomainGroups(view) {
@@ -1854,6 +1900,7 @@ async function runViewRefreshDomain(domainKey, task, options = {}) {
     .then((result) => {
       if (result?.ok !== false) {
         viewRefreshLastRun.set(domainKey, Date.now());
+        viewRefreshLoadedDomains.add(domainKey);
       }
       return result;
     })
@@ -4960,6 +5007,17 @@ async function handleProjectSave(event) {
     };
     payload.searchIndex = buildProjectSearchIndex({ ...payload, contracts: [...draftProjectDocuments] });
 
+    const bridge = getSupabaseBridge();
+    if (bridge?.isReady()) {
+      if (!state.sessionUserId || !currentUser()) {
+        const message = "로그인 세션을 확인하지 못했어요. 다시 로그인한 뒤 저장해주세요.";
+        openNoticeModal(message);
+        toast(message);
+        return;
+      }
+      if (!(await ensureFreshDataForAction(["projects"], "프로젝트 저장"))) return;
+    }
+
     const existing = state.projects.find((project) => project.id === payload.id);
     const previousProject = existing ? structuredClone(existing) : null;
     const previousDocuments = existing ? structuredClone(existing.contracts || []) : [];
@@ -4971,14 +5029,7 @@ async function handleProjectSave(event) {
 
     const nextProject = existing || state.projects[0];
     const projectIndex = state.projects.findIndex((project) => project.id === payload.id);
-    const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      if (!state.sessionUserId || !currentUser()) {
-        const message = "로그인 세션을 확인하지 못했어요. 다시 로그인한 뒤 저장해주세요.";
-        openNoticeModal(message);
-        toast(message);
-        return;
-      }
       const result = await bridge.upsertProject(
         serializeProjectForSupabase({ ...nextProject, ...payload, contracts: [...draftProjectDocuments] }, projectIndex),
       );
@@ -5173,7 +5224,7 @@ function closeArchiveNoteModal() {
 }
 
 async function persistArchiveChanges(options = {}) {
-  const result = await syncArchiveStateToSupabase();
+  const result = await syncArchiveStateToSupabase(options);
   if (!result.ok) {
     const message = options.errorMessagePrefix
       ? `${options.errorMessagePrefix}: ${result.error?.message || "Supabase 오류"}`
@@ -5201,6 +5252,7 @@ async function handleArchiveNoteSave(event) {
       createdAt: now,
       updatedAt: now,
     };
+    if (!(await ensureFreshDataForAction(["archives"], "메모 저장"))) return;
     const previousNotes = structuredClone(state.archiveNotes);
     const existing = state.archiveNotes.find((item) => item.id === payload.id);
     if (existing) {
@@ -5227,9 +5279,10 @@ function deleteCurrentArchiveNote() {
   if (!currentArchiveNoteId) return;
   const note = state.archiveNotes.find((item) => item.id === currentArchiveNoteId);
   openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["archives"], "메모 삭제"))) return;
     const previousNotes = structuredClone(state.archiveNotes);
     state.archiveNotes = state.archiveNotes.filter((item) => item.id !== currentArchiveNoteId);
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 삭제 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 삭제 실패", deleteNoteIds: [currentArchiveNoteId] });
     if (!persistResult.ok) {
       state.archiveNotes = previousNotes;
       renderArchiveNotes();
@@ -5278,6 +5331,7 @@ async function handleArchiveCodeSave(event) {
       createdAt: now,
       updatedAt: now,
     };
+    if (!(await ensureFreshDataForAction(["archives"], "코드 저장"))) return;
     const previousCodes = structuredClone(state.archiveCodes);
     const existing = state.archiveCodes.find((item) => item.id === payload.id);
     if (existing) {
@@ -5304,9 +5358,10 @@ function deleteCurrentArchiveCode() {
   if (!currentArchiveCodeId) return;
   const code = state.archiveCodes.find((item) => item.id === currentArchiveCodeId);
   openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["archives"], "코드 삭제"))) return;
     const previousCodes = structuredClone(state.archiveCodes);
     state.archiveCodes = state.archiveCodes.filter((item) => item.id !== currentArchiveCodeId);
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 삭제 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 삭제 실패", deleteCodeIds: [currentArchiveCodeId] });
     if (!persistResult.ok) {
       state.archiveCodes = previousCodes;
       renderArchiveCodes();
@@ -5326,6 +5381,7 @@ async function handleArchiveCategorySave(event) {
     const name = String(formData.get("name") || "").trim();
     const color = String(formData.get("color") || "gray");
     if (!name) return;
+    if (!(await ensureFreshDataForAction(["archives"], "카테고리 저장"))) return;
     const previousCategories = structuredClone(state.archiveCodeCategories);
     const existing = state.archiveCodeCategories.find((item) => item.id === id);
     if (existing) {
@@ -5360,12 +5416,13 @@ function deleteCurrentArchiveCategory() {
     return;
   }
   openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["archives"], "카테고리 삭제"))) return;
     const previousCategories = structuredClone(state.archiveCodeCategories);
     const previousCodes = structuredClone(state.archiveCodes);
     const fallbackCategoryId = state.archiveCodeCategories.find((item) => item.id !== currentArchiveCategoryId)?.id || state.archiveCodeCategories[0].id;
     state.archiveCodes = state.archiveCodes.map((item) => item.categoryId === currentArchiveCategoryId ? { ...item, categoryId: fallbackCategoryId } : item);
     state.archiveCodeCategories = state.archiveCodeCategories.filter((item) => item.id !== currentArchiveCategoryId);
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 삭제 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 삭제 실패", deleteCategoryIds: [currentArchiveCategoryId] });
     if (!persistResult.ok) {
       state.archiveCodeCategories = previousCategories;
       state.archiveCodes = previousCodes;
@@ -5437,6 +5494,7 @@ async function handleMemberSave(event) {
       createdAt: new Date().toISOString(),
     };
 
+    if (!(await ensureFreshDataForAction(["profiles"], "멤버 저장"))) return;
     const existing = state.users.find((user) => user.id === payload.id);
     if (!existing) {
       toast("새 멤버는 회원가입으로 추가해주세요.");
@@ -5502,6 +5560,7 @@ async function handleMyProfileSave(event) {
   event.preventDefault();
   const finishBusyToast = startDelayedBusyToast();
   try {
+    if (!(await ensureFreshDataForAction(["profiles"], "내 정보 저장"))) return;
     const user = currentUser();
     if (!user) return;
     const formData = new FormData(event.currentTarget);
@@ -5561,6 +5620,7 @@ function deleteCurrentProject() {
   openConfirmModal(async () => {
     const removedDocumentPaths = (project.contracts || []).map((document) => document.storagePath).filter(Boolean);
     const bridge = getSupabaseBridge();
+    if (!(await ensureFreshDataForAction(["projects"], "프로젝트 삭제"))) return;
     if (bridge?.isReady()) {
       const result = await bridge.deleteProject(project.id);
       if (result.error) {
@@ -5602,6 +5662,7 @@ async function handleDocumentUpload() {
   if (els.documentTypeSelect) els.documentTypeSelect.disabled = true;
 
   try {
+    if (!(await ensureFreshDataForAction(["projects"], "문서 업로드"))) return;
     if (bridge?.isReady() && state.sessionUserId) {
       storagePath = buildProjectDocumentObjectPath(projectId, file.name);
       const uploadResult = await withTimeout(
@@ -5795,16 +5856,18 @@ function removeDocument(documentId) {
   }, file ? `[${file.name}] 문서를 삭제할까요?` : "문서를 삭제할까요?");
 }
 
-function updateApproval(userId) {
+async function updateApproval(userId) {
   if (!canManageMembers()) return;
+  if (!(await ensureFreshDataForAction(["profiles"], "가입 승인"))) return;
   const user = state.users.find((item) => item.id === userId);
   if (!user) return;
+  const previousUser = { ...user };
   user.approved = true;
   user.rejected = false;
   if (state.pendingApproval?.username === user.username) state.pendingApproval = null;
   const bridge = getSupabaseBridge();
   if (bridge?.isReady()) {
-    bridge.upsertProfile({
+    const { error } = await bridge.upsertProfile({
       id: user.id,
       username: user.username,
       name: user.name,
@@ -5820,15 +5883,15 @@ function updateApproval(userId) {
       last_login_ip: user.lastLoginIp || "",
       created_at: user.createdAt,
       updated_at: new Date().toISOString(),
-    }).then(async ({ error }) => {
-      if (error) {
-        toast("Supabase에 승인 상태를 저장하지 못했습니다.");
-        return;
-      }
-      await syncProfilesFromSupabase();
-      render();
-      toast("가입 요청을 승인했습니다.");
     });
+    if (error) {
+      Object.assign(user, previousUser);
+      toast("Supabase에 승인 상태를 저장하지 못했습니다.");
+      return;
+    }
+    await syncProfilesFromSupabase();
+    render();
+    toast("가입 요청을 승인했습니다.");
     return;
   }
   saveState();
@@ -5839,38 +5902,41 @@ function updateApproval(userId) {
 function rejectUser(userId) {
   if (!canManageMembers()) return;
   const user = state.users.find((item) => item.id === userId);
-  openConfirmModal(() => {
-    if (!user) return;
-    user.rejected = true;
-    user.approved = false;
-    if (state.pendingApproval?.username === user?.username) state.pendingApproval = null;
+  openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["profiles"], "가입 거절"))) return;
+    const targetUser = state.users.find((item) => item.id === userId) || user;
+    if (!targetUser) return;
+    const previousUser = { ...targetUser };
+    targetUser.rejected = true;
+    targetUser.approved = false;
+    if (state.pendingApproval?.username === targetUser?.username) state.pendingApproval = null;
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
-      bridge.upsertProfile({
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        role_label: user.roleLabel,
-        phone: user.phone,
-        email: user.email,
-        notes: user.notes,
-        can_manage_members: user.canManageMembers,
-        is_owner: user.isOwner,
+      const { error } = await bridge.upsertProfile({
+        id: targetUser.id,
+        username: targetUser.username,
+        name: targetUser.name,
+        role_label: targetUser.roleLabel,
+        phone: targetUser.phone,
+        email: targetUser.email,
+        notes: targetUser.notes,
+        can_manage_members: targetUser.canManageMembers,
+        is_owner: targetUser.isOwner,
         approved: false,
         rejected: true,
-        last_login_at: user.lastLoginAt || null,
-        last_login_ip: user.lastLoginIp || "",
-        created_at: user.createdAt,
+        last_login_at: targetUser.lastLoginAt || null,
+        last_login_ip: targetUser.lastLoginIp || "",
+        created_at: targetUser.createdAt,
         updated_at: new Date().toISOString(),
-      }).then(async ({ error }) => {
-        if (error) {
-          toast("Supabase에 거절 상태를 저장하지 못했습니다.");
-          return;
-        }
-        await syncProfilesFromSupabase();
-        render();
-        toast("가입 요청을 거절했습니다.");
       });
+      if (error) {
+        Object.assign(targetUser, previousUser);
+        toast("Supabase에 거절 상태를 저장하지 못했습니다.");
+        return;
+      }
+      await syncProfilesFromSupabase();
+      render();
+      toast("가입 요청을 거절했습니다.");
       return;
     }
     saveState();
@@ -5939,6 +6005,8 @@ function renderSchedules() {
 function deleteSchedule(scheduleId) {
   const schedule = state.schedules.find((item) => item.id === scheduleId);
   openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["projects", "worklogs"], "일정 삭제"))) return;
+    const targetSchedule = state.schedules.find((item) => item.id === scheduleId) || schedule;
     const bridge = getSupabaseBridge();
     if (bridge?.isReady()) {
       const result = await bridge.deleteSchedule(scheduleId);
@@ -5949,9 +6017,14 @@ function deleteSchedule(scheduleId) {
     }
     state.schedules = state.schedules.filter((item) => item.id !== scheduleId);
     const previousWorklogs = structuredClone(state.worklogs || {});
-    removeScheduleFromWorklog(scheduleId, schedule?.date || "");
+    const deletedWorklogDates = removeScheduleFromWorklog(scheduleId, targetSchedule?.date || "");
     saveState();
-    syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
+    const worklogSyncResult = await syncWorklogsStateToSupabase(previousWorklogs, { deleteDateKeys: deletedWorklogDates });
+    if (!worklogSyncResult.ok) {
+      const message = `일정은 삭제됐지만 업무일지 반영에 실패했어요.\n${worklogSyncResult.error?.message || "잠시 후 업무일지를 다시 저장해주세요."}`;
+      openNoticeModal(message);
+      toast("업무일지 반영에 실패했어요.");
+    }
     renderSchedules();
     renderCalendar();
   }, schedule ? `[${schedule.title}] 일정을 삭제할까요?` : "일정을 삭제할까요?");
@@ -6108,6 +6181,7 @@ async function handleAnnualGoalAdd(event) {
     const text = normalizeGoalText(new FormData(form).get("goal"));
     const kind = String(new FormData(form).get("kind") || "goal") === "planned" ? "planned" : "goal";
     if (!text) return;
+    if (!(await ensureFreshDataForAction(["yearGoals"], "연간 목표 저장"))) return;
     const previousGoals = structuredClone(state.yearGoals);
     if (currentAnnualGoalEditId) {
       const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
@@ -6146,6 +6220,7 @@ async function handleAnnualGoalAdd(event) {
 }
 
 async function toggleAnnualGoal(goalId) {
+  if (!(await ensureFreshDataForAction(["yearGoals"], "연간 목표 상태 변경"))) return;
   const goal = state.yearGoals.find((item) => item.id === goalId);
   if (!goal) return;
   const previousGoals = structuredClone(state.yearGoals);
@@ -6166,12 +6241,13 @@ function deleteAnnualGoal(goalId) {
   const goal = state.yearGoals.find((item) => item.id === goalId);
   if (!goal) return;
   openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["yearGoals"], "연간 목표 삭제"))) return;
     const previousGoals = structuredClone(state.yearGoals);
     state.yearGoals = state.yearGoals.filter((item) => item.id !== goalId);
     saveState();
     renderAnnualGoals();
     renderAnnualGoalArchiveLists();
-    const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+    const syncResult = await syncYearGoalsStateToSupabase(previousGoals, { deleteIds: [goalId] });
     if (!syncResult.ok) {
       const message = `연간 목표 삭제 실패: ${syncResult.error?.message || "Supabase 오류"}`;
       openNoticeModal(message);
@@ -6528,7 +6604,8 @@ function getScheduleWorklogText(schedule) {
 }
 
 function removeScheduleFromWorklog(scheduleId, dateKey = "") {
-  if (!scheduleId || !state.worklogs) return;
+  const deletedDateKeys = [];
+  if (!scheduleId || !state.worklogs) return deletedDateKeys;
   const targetDates = dateKey ? [dateKey] : Object.keys(state.worklogs);
   targetDates.forEach((key) => {
     const worklog = state.worklogs[key];
@@ -6536,19 +6613,22 @@ function removeScheduleFromWorklog(scheduleId, dateKey = "") {
     worklog.tasks = worklog.tasks.filter((task) => task.scheduleId !== scheduleId);
     if (!worklog.tasks.length && !String(worklog.notes || "").trim()) {
       delete state.worklogs[key];
+      deletedDateKeys.push(key);
     }
   });
+  return deletedDateKeys;
 }
 
 function syncScheduleToWorklog(schedule, previousSchedule = null) {
-  if (!schedule?.id || !schedule.date) return;
+  if (!schedule?.id || !schedule.date) return [];
   state.worklogs = state.worklogs || {};
+  let deletedDateKeys = [];
   if (previousSchedule?.date && previousSchedule.date !== schedule.date) {
-    removeScheduleFromWorklog(schedule.id, previousSchedule.date);
+    deletedDateKeys = removeScheduleFromWorklog(schedule.id, previousSchedule.date);
   }
 
   const text = getScheduleWorklogText(schedule);
-  if (!text) return;
+  if (!text) return deletedDateKeys;
 
   const worklog = state.worklogs[schedule.date] || { date: schedule.date, tasks: [], notes: "" };
   worklog.tasks = Array.isArray(worklog.tasks) ? worklog.tasks : [];
@@ -6561,6 +6641,7 @@ function syncScheduleToWorklog(schedule, previousSchedule = null) {
     worklog.tasks.push(createWorklogTask({ text, done: false, status: "active", scheduleId: schedule.id, auto: true }));
   }
   state.worklogs[schedule.date] = worklog;
+  return deletedDateKeys;
 }
 
 function syncSchedulesForDateToWorklog(dateKey) {
@@ -6878,6 +6959,7 @@ async function handleWorklogSave(event) {
   const finishBusyToast = startDelayedBusyToast();
   try {
     ensureWorklogDraft();
+    if (!(await ensureFreshDataForAction(["worklogs"], "업무일지 저장"))) return;
     const previousWorklogs = structuredClone(state.worklogs || {});
     currentWorklogDraft.notes = String(els.worklogForm.elements.notes.value || "").trim();
     const sanitizedWorklog = sanitizeWorklogForPersistence({
@@ -6892,7 +6974,9 @@ async function handleWorklogSave(event) {
       delete state.worklogs[currentWorklogDate];
     }
     saveState();
-    const syncResult = await syncWorklogsStateToSupabase(previousWorklogs);
+    const syncResult = await syncWorklogsStateToSupabase(previousWorklogs, {
+      deleteDateKeys: sanitizedWorklog.notes || sanitizedWorklog.tasks.length ? [] : [currentWorklogDate],
+    });
     if (!syncResult.ok) {
       const message = `업무일지 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
       openNoticeModal(message);
@@ -6979,6 +7063,7 @@ async function handleScheduleSave(event) {
       notes: String(formData.get("notes")).trim(),
     };
 
+    if (!(await ensureFreshDataForAction(["projects", "worklogs"], "일정 저장"))) return;
     const existing = state.schedules.find((schedule) => schedule.id === payload.id);
     const previousSchedule = existing ? { ...existing } : null;
     const previousWorklogs = structuredClone(state.worklogs || {});
@@ -7004,14 +7089,21 @@ async function handleScheduleSave(event) {
       if (syncedIndex >= 0) state.schedules[syncedIndex] = syncedSchedule;
       else state.schedules.push(syncedSchedule);
     }
-    syncScheduleToWorklog(payload, previousSchedule);
+    const deletedWorklogDates = syncScheduleToWorklog(payload, previousSchedule);
 
     saveState();
-    syncWorklogsStateToSupabase(previousWorklogs).catch(() => {});
+    const worklogSyncResult = await syncWorklogsStateToSupabase(previousWorklogs, { deleteDateKeys: deletedWorklogDates });
+    let worklogSyncFailed = false;
+    if (!worklogSyncResult.ok) {
+      worklogSyncFailed = true;
+      const message = `일정은 저장됐지만 업무일지 반영에 실패했어요.\n${worklogSyncResult.error?.message || "잠시 후 업무일지를 다시 저장해주세요."}`;
+      openNoticeModal(message);
+      toast("업무일지 반영에 실패했어요.");
+    }
     closeScheduleEditorModal();
     renderSchedules();
     renderCalendar();
-    openNoticeModal("저장이 완료되었어요!");
+    if (!worklogSyncFailed) openNoticeModal("저장이 완료되었어요!");
   } finally {
     finishBusyToast();
   }
