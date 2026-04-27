@@ -1838,6 +1838,7 @@ function shouldHardReloadAfterIdle(target) {
   if (!state.sessionUserId) return false;
   if (resumeWakePromise) return false;
   if (!isActionableWakeTarget(target)) return false;
+  if (getOpenDirtyModalKey()) return false;
   return Date.now() - lastAppInteractionAt >= APP_HARD_RELOAD_IDLE_THRESHOLD_MS;
 }
 
@@ -3062,6 +3063,24 @@ function hasUnsavedChanges(key) {
     default:
       return false;
   }
+}
+
+function getOpenDirtyModalKey() {
+  const modalEntries = [
+    [els.projectModal, "project"],
+    [els.scheduleEditorModal, "schedule"],
+    [els.memberModal, "member"],
+    [els.worklogModal, "worklog"],
+    [els.archiveNoteModal, "archiveNote"],
+    [els.archiveCodeModal, "archiveCode"],
+    [els.archiveCategoryModal, "archiveCategory"],
+  ];
+
+  const openEntry = modalEntries.find(([overlay, key]) => {
+    if (!overlay || overlay.classList.contains("hidden")) return false;
+    return hasUnsavedChanges(key);
+  });
+  return openEntry?.[1] || "";
 }
 
 function saveAndCloseDirtyModal(key) {
