@@ -1237,18 +1237,11 @@ async function syncYearGoalsStateToSupabase(previousGoals = null, options = {}) 
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
-  const remoteResult = await bridge.fetchYearGoals();
-  if (remoteResult.error) {
-    if (previousGoals) {
-      state.yearGoals = previousGoals;
-      saveState({ history: false });
-      renderAnnualGoals();
-      renderAnnualGoalArchiveLists();
-    }
-    return { ok: false, error: remoteResult.error };
-  }
-
-  const payloads = state.yearGoals.map((goal) => serializeYearGoalForSupabase(goal));
+  const scopedUpsert = Array.isArray(options.upsertIds);
+  const upsertIds = new Set(scopedUpsert ? options.upsertIds.filter(Boolean) : []);
+  const payloads = state.yearGoals
+    .map((goal) => serializeYearGoalForSupabase(goal))
+    .filter((goal) => !scopedUpsert || upsertIds.has(goal.id));
   if (payloads.length) {
     const upsertResult = await bridge.upsertYearGoals(payloads);
     if (upsertResult.error) {
@@ -1309,17 +1302,6 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null, options = {}
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: true };
 
-  const remoteResult = await bridge.fetchWorklogs();
-  if (remoteResult.error) {
-    if (previousWorklogs) {
-      state.worklogs = previousWorklogs;
-      saveState({ history: false });
-      renderCalendar();
-    }
-    return { ok: false, error: remoteResult.error };
-  }
-
-  const remoteRows = remoteResult.data || [];
   const localWorklogs = Object.entries(state.worklogs || {})
     .map(([dateKey, worklog]) => sanitizeWorklogForPersistence(worklog, dateKey))
     .filter((worklog) => worklog.date && (worklog.notes || worklog.tasks.length));
@@ -1360,13 +1342,9 @@ async function syncWorklogsStateToSupabase(previousWorklogs = null, options = {}
     }
   }
 
-  const deleteDateKeys = new Set(Array.isArray(options.deleteDateKeys) ? options.deleteDateKeys.filter(Boolean) : []);
-  const staleIds = remoteRows
-    .filter((row) => deleteDateKeys.has(row.worklog_date))
-    .map((row) => row.id)
-    .filter(Boolean);
-  if (staleIds.length) {
-    const deleteResult = await bridge.deleteWorklogsByIds(staleIds);
+  const deleteDateKeys = Array.from(new Set(Array.isArray(options.deleteDateKeys) ? options.deleteDateKeys.filter(Boolean) : []));
+  if (deleteDateKeys.length) {
+    const deleteResult = await bridge.deleteWorklogsByDates(deleteDateKeys);
     if (deleteResult.error) {
       if (previousWorklogs) {
         state.worklogs = previousWorklogs;
@@ -6269,6 +6247,7 @@ async function handleAnnualGoalAdd(event) {
     if (!text) return;
     if (!(await ensureFreshDataForAction(["yearGoals"], "연간 목표 저장"))) return;
     const previousGoals = structuredClone(state.yearGoals);
+    let savedGoalId = currentAnnualGoalEditId;
     if (currentAnnualGoalEditId) {
       const goal = state.yearGoals.find((item) => item.id === currentAnnualGoalEditId);
       if (!goal) return;
@@ -6277,8 +6256,9 @@ async function handleAnnualGoalAdd(event) {
       goal.half = form.elements.half.value === "second" ? "second" : "first";
       goal.kind = kind;
     } else {
+      savedGoalId = crypto.randomUUID();
       state.yearGoals.push({
-        id: crypto.randomUUID(),
+        id: savedGoalId,
         year: Number(form.elements.year.value),
         half: form.elements.half.value === "second" ? "second" : "first",
         kind,
@@ -6291,7 +6271,7 @@ async function handleAnnualGoalAdd(event) {
     saveState();
     renderAnnualGoals();
     renderAnnualGoalArchiveLists();
-    const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+    const syncResult = await syncYearGoalsStateToSupabase(previousGoals, { upsertIds: [savedGoalId] });
     if (!syncResult.ok) {
       const message = `연간 목표 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
       openNoticeModal(message);
@@ -6315,7 +6295,7 @@ async function toggleAnnualGoal(goalId) {
   saveState();
   renderAnnualGoals();
   renderAnnualGoalArchiveLists();
-  const syncResult = await syncYearGoalsStateToSupabase(previousGoals);
+  const syncResult = await syncYearGoalsStateToSupabase(previousGoals, { upsertIds: [goalId] });
   if (!syncResult.ok) {
     const message = `연간 목표 상태 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
     openNoticeModal(message);
@@ -6333,7 +6313,7 @@ function deleteAnnualGoal(goalId) {
     saveState();
     renderAnnualGoals();
     renderAnnualGoalArchiveLists();
-    const syncResult = await syncYearGoalsStateToSupabase(previousGoals, { deleteIds: [goalId] });
+    const syncResult = await syncYearGoalsStateToSupabase(previousGoals, { upsertIds: [], deleteIds: [goalId] });
     if (!syncResult.ok) {
       const message = `연간 목표 삭제 실패: ${syncResult.error?.message || "Supabase 오류"}`;
       openNoticeModal(message);

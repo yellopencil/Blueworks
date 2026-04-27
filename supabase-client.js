@@ -379,6 +379,16 @@
         "업무일지 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
+    async deleteWorklogsByDates(dateKeys) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(dateKeys) || !dateKeys.length) return { data: [], error: null };
+      return this.runClientQuery(
+        this.client.from("worklogs").delete().in("worklog_date", dateKeys),
+        "업무일지 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
     async deleteYearGoalsByIds(ids) {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
