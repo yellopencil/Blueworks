@@ -1414,6 +1414,7 @@ async function syncArchivesFromSupabase() {
   const refreshStartedAt = Date.now();
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
+  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const [noteResult, categoryResult, codeResult] = await Promise.all([
     bridge.fetchArchiveNotes(),
@@ -1424,7 +1425,6 @@ async function syncArchivesFromSupabase() {
   if (noteResult.error || categoryResult.error || codeResult.error) {
     return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error };
   }
-  if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
   const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
@@ -1947,6 +1947,9 @@ async function refreshDomainKeys(domainKeys, options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) {
     return { ok: true, skipped: true };
+  }
+  if (!options.allowWhileEditing && getOpenEditingModalKey()) {
+    return { ok: true, skipped: true, reason: "modal-open" };
   }
 
   const refreshTasks = getRefreshTasks();
