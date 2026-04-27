@@ -1182,19 +1182,19 @@ async function syncArchiveStateToSupabase(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const [remoteNotesResult, remoteCategoryResult, remoteCodesResult] = await Promise.all([
-    bridge.fetchArchiveNotes(),
-    bridge.fetchArchiveCodeCategories(),
-    bridge.fetchArchiveCodes(),
-  ]);
-
-  if (remoteNotesResult.error || remoteCategoryResult.error || remoteCodesResult.error) {
-    return { ok: false, error: remoteNotesResult.error || remoteCategoryResult.error || remoteCodesResult.error };
-  }
-
-  const notePayloads = state.archiveNotes.map((item, index) => serializeArchiveNoteForSupabase(item, index));
-  const categoryPayloads = state.archiveCodeCategories.map((item, index) => serializeArchiveCategoryForSupabase(item, index));
-  const codePayloads = state.archiveCodes.map((item, index) => serializeArchiveCodeForSupabase(item, index));
+  const scopedUpsert = ["upsertNoteIds", "upsertCategoryIds", "upsertCodeIds"].some((key) => Array.isArray(options[key]));
+  const upsertNoteIds = new Set(Array.isArray(options.upsertNoteIds) ? options.upsertNoteIds.filter(Boolean) : []);
+  const upsertCategoryIds = new Set(Array.isArray(options.upsertCategoryIds) ? options.upsertCategoryIds.filter(Boolean) : []);
+  const upsertCodeIds = new Set(Array.isArray(options.upsertCodeIds) ? options.upsertCodeIds.filter(Boolean) : []);
+  const notePayloads = state.archiveNotes
+    .map((item, index) => serializeArchiveNoteForSupabase(item, index))
+    .filter((item) => !scopedUpsert || upsertNoteIds.has(item.id));
+  const categoryPayloads = state.archiveCodeCategories
+    .map((item, index) => serializeArchiveCategoryForSupabase(item, index))
+    .filter((item) => !scopedUpsert || upsertCategoryIds.has(item.id));
+  const codePayloads = state.archiveCodes
+    .map((item, index) => serializeArchiveCodeForSupabase(item, index))
+    .filter((item) => !scopedUpsert || upsertCodeIds.has(item.id));
 
   if (categoryPayloads.length) {
     const upsertCategoryResult = await bridge.upsertArchiveCodeCategories(categoryPayloads);
@@ -5332,7 +5332,7 @@ async function handleArchiveNoteSave(event) {
     } else {
       state.archiveNotes.unshift(payload);
     }
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패", upsertNoteIds: [payload.id] });
     if (!persistResult.ok) {
       state.archiveNotes = previousNotes;
       renderArchiveNotes();
@@ -5353,7 +5353,13 @@ function deleteCurrentArchiveNote() {
     if (!(await ensureFreshDataForAction(["archives"], "메모 삭제"))) return;
     const previousNotes = structuredClone(state.archiveNotes);
     state.archiveNotes = state.archiveNotes.filter((item) => item.id !== currentArchiveNoteId);
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 삭제 실패", deleteNoteIds: [currentArchiveNoteId] });
+    const persistResult = await persistArchiveChanges({
+      errorMessagePrefix: "메모 삭제 실패",
+      upsertNoteIds: [],
+      upsertCategoryIds: [],
+      upsertCodeIds: [],
+      deleteNoteIds: [currentArchiveNoteId],
+    });
     if (!persistResult.ok) {
       state.archiveNotes = previousNotes;
       renderArchiveNotes();
@@ -5411,7 +5417,7 @@ async function handleArchiveCodeSave(event) {
     } else {
       state.archiveCodes.unshift(payload);
     }
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 저장 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 저장 실패", upsertCodeIds: [payload.id] });
     if (!persistResult.ok) {
       state.archiveCodes = previousCodes;
       renderArchiveCodes();
@@ -5432,7 +5438,13 @@ function deleteCurrentArchiveCode() {
     if (!(await ensureFreshDataForAction(["archives"], "코드 삭제"))) return;
     const previousCodes = structuredClone(state.archiveCodes);
     state.archiveCodes = state.archiveCodes.filter((item) => item.id !== currentArchiveCodeId);
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "코드 삭제 실패", deleteCodeIds: [currentArchiveCodeId] });
+    const persistResult = await persistArchiveChanges({
+      errorMessagePrefix: "코드 삭제 실패",
+      upsertNoteIds: [],
+      upsertCategoryIds: [],
+      upsertCodeIds: [],
+      deleteCodeIds: [currentArchiveCodeId],
+    });
     if (!persistResult.ok) {
       state.archiveCodes = previousCodes;
       renderArchiveCodes();
@@ -5462,7 +5474,7 @@ async function handleArchiveCategorySave(event) {
     } else {
       state.archiveCodeCategories.push({ id, name, color, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     }
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 저장 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "카테고리 저장 실패", upsertCategoryIds: [id] });
     if (!persistResult.ok) {
       state.archiveCodeCategories = previousCategories;
       renderArchiveCodeCategories();
