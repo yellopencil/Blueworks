@@ -1794,6 +1794,7 @@ function getStaleRefreshDomains(domainKeys = []) {
 async function ensureFreshDataForAction(domainKeys = [], actionLabel = "작업") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) return true;
+  if (getOpenDirtyModalKey()) return true;
   const uniqueDomainKeys = [...new Set(domainKeys)].filter(Boolean);
   const staleDomainKeys = getStaleRefreshDomains(uniqueDomainKeys);
   if (!staleDomainKeys.length) return true;
@@ -1857,6 +1858,9 @@ async function wakeAppAfterIdle(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady() || !state.sessionUserId) {
     return { ok: true, skipped: true };
+  }
+  if (!options.force && getOpenDirtyModalKey()) {
+    return { ok: true, skipped: true, reason: "dirty-modal" };
   }
 
   const now = Date.now();
@@ -2121,6 +2125,10 @@ function selectedProject() {
 function bindEvents() {
   document.addEventListener("pointerdown", handlePointerWake, true);
   document.addEventListener("keydown", markAppInteraction, true);
+  document.addEventListener("input", markAppInteraction, true);
+  document.addEventListener("change", markAppInteraction, true);
+  document.addEventListener("paste", markAppInteraction, true);
+  document.addEventListener("compositionend", markAppInteraction, true);
   window.addEventListener("focus", () => {
     wakeAppAfterIdle().catch((error) => {
       console.warn("포커스 복귀 후 데이터를 깨우지 못했습니다.", error);
