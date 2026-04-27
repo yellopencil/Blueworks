@@ -1,6 +1,7 @@
 ﻿const STORAGE_KEY = "agency-work-manager-demo-v3";
 
 const CHANGE_HISTORY_LIMIT = 20;
+const WORKLOG_CARRY_DISMISS_PREFIX = "__BLUEWORKS_CARRY_DISMISSED__:";
 
 const STATUS_META = {
   ready: { title: "작업 준비" },
@@ -6466,9 +6467,54 @@ function normalizeWorklogTaskStatus(status = "") {
   return status === "waiting" ? "waiting" : "active";
 }
 
+function isWorklogCarryDismissMarker(task = {}) {
+  return String(task.text || "").startsWith(WORKLOG_CARRY_DISMISS_PREFIX);
+}
+
+function getWorklogTaskContentKey(task = {}) {
+  return `${String(task.scheduleId || "")}|${String(task.text || "").trim()}`;
+}
+
+function getWorklogTaskSourceId(task = {}) {
+  return task.sourceTaskId || task.id || "";
+}
+
+function getWorklogCarryDismissKey(task = {}) {
+  const sourceTaskId = getWorklogTaskSourceId(task);
+  if (sourceTaskId) return `source:${sourceTaskId}`;
+  const contentKey = getWorklogTaskContentKey(task);
+  return contentKey === "|" ? "" : `content:${contentKey}`;
+}
+
+function getDismissedWorklogCarryKeys(tasks = []) {
+  return new Set(
+    (Array.isArray(tasks) ? tasks : [])
+      .filter((task) => isWorklogCarryDismissMarker(task))
+      .map((task) => String(task.text || "").slice(WORKLOG_CARRY_DISMISS_PREFIX.length))
+      .filter(Boolean),
+  );
+}
+
+function addWorklogCarryDismissMarker(tasks = [], task = {}) {
+  if (!task.carriedFromDate && !task.sourceTaskId) return;
+  const dismissKey = getWorklogCarryDismissKey(task);
+  if (!dismissKey) return;
+  const markerText = `${WORKLOG_CARRY_DISMISS_PREFIX}${dismissKey}`;
+  if (tasks.some((item) => isWorklogCarryDismissMarker(item) && item.text === markerText)) return;
+  tasks.push(createWorklogTask({
+    text: markerText,
+    done: true,
+    status: "active",
+    sourceTaskId: task.sourceTaskId || "",
+    carriedFromDate: task.carriedFromDate || "",
+  }));
+}
+
 function getWorklogTasksByStatus(tasks = [], status = "active") {
   const normalizedStatus = normalizeWorklogTaskStatus(status);
-  return (Array.isArray(tasks) ? tasks : []).filter((task) => normalizeWorklogTaskStatus(task.status) === normalizedStatus);
+  return (Array.isArray(tasks) ? tasks : [])
+    .filter((task) => !isWorklogCarryDismissMarker(task))
+    .filter((task) => normalizeWorklogTaskStatus(task.status) === normalizedStatus);
 }
 
 function getAdjacentDateKey(dateKey, offsetDays = 1) {
@@ -6538,14 +6584,14 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
     ? currentWorklog.tasks.map((task) => createWorklogTask(task))
     : [];
 
-  const getTaskContentKey = (task) => `${String(task.scheduleId || "")}|${String(task.text || "").trim()}`;
-  const getTaskSourceId = (task) => task.sourceTaskId || task.id || "";
   const existingSourceIds = new Set();
   const existingContentKeys = new Set();
+  const dismissedCarryKeys = getDismissedWorklogCarryKeys(currentWorklog.tasks);
 
   currentWorklog.tasks.forEach((task) => {
-    const sourceTaskId = getTaskSourceId(task);
-    const contentKey = getTaskContentKey(task);
+    if (isWorklogCarryDismissMarker(task)) return;
+    const sourceTaskId = getWorklogTaskSourceId(task);
+    const contentKey = getWorklogTaskContentKey(task);
     if (sourceTaskId) existingSourceIds.add(sourceTaskId);
     if (contentKey !== "|") existingContentKeys.add(contentKey);
   });
@@ -6557,12 +6603,18 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
     if (!Array.isArray(sourceWorklog?.tasks)) return;
 
     sourceWorklog.tasks.forEach((task) => {
+      if (isWorklogCarryDismissMarker(task)) {
+        const dismissKey = String(task.text || "").slice(WORKLOG_CARRY_DISMISS_PREFIX.length);
+        if (dismissKey) dismissedCarryKeys.add(dismissKey);
+        return;
+      }
       const normalizedTask = createWorklogTask(task);
+      if (isWorklogCarryDismissMarker(normalizedTask)) return;
       const text = String(normalizedTask.text || "").trim();
       if (!text) return;
 
-      const sourceTaskId = getTaskSourceId(normalizedTask);
-      const contentKey = getTaskContentKey(normalizedTask);
+      const sourceTaskId = getWorklogTaskSourceId(normalizedTask);
+      const contentKey = getWorklogTaskContentKey(normalizedTask);
       const identityKey = sourceTaskId ? `source:${sourceTaskId}` : `content:${contentKey}`;
       latestPastTasks.set(identityKey, {
         task: normalizedTask,
@@ -6588,6 +6640,7 @@ function carryForwardIncompleteWorklogTasks(dateKey) {
       const status = normalizeWorklogTaskStatus(task.status);
       const shouldCarry = status === "waiting" || (status === "active" && !task.done);
       if (!shouldCarry) return;
+      if (dismissedCarryKeys.has(sourceTaskId ? `source:${sourceTaskId}` : `content:${contentKey}`)) return;
       if ((sourceTaskId && existingSourceIds.has(sourceTaskId)) || existingContentKeys.has(contentKey)) return;
 
       currentWorklog.tasks.push(createWorklogTask({
@@ -6627,9 +6680,13 @@ function formatWorklogTitle(dateKey) {
 function ensureWorklogDraft(dateKey = currentWorklogDate) {
   if (!currentWorklogDraft) {
     const existing = state.worklogs?.[dateKey];
+    const existingTasks = existing?.tasks?.length ? existing.tasks.map((task) => createWorklogTask(task)) : [];
+    const hasVisibleTasks = existingTasks.some((task) => !isWorklogCarryDismissMarker(task));
     currentWorklogDraft = {
       date: dateKey,
-      tasks: existing?.tasks?.length ? existing.tasks.map((task) => createWorklogTask(task)) : [createWorklogTask({ status: "active" })],
+      tasks: existingTasks.length
+        ? (hasVisibleTasks ? existingTasks : [...existingTasks, createWorklogTask({ status: "active" })])
+        : [createWorklogTask({ status: "active" })],
       notes: existing?.notes || "",
     };
   }
@@ -6785,6 +6842,8 @@ function renderWorklogTaskList(container, tasks, status = "active") {
   });
   container.querySelectorAll("[data-worklog-remove]").forEach((button) => {
     button.addEventListener("click", () => {
+      const taskToRemove = currentWorklogDraft.tasks.find((item) => item.id === button.dataset.worklogRemove);
+      if (taskToRemove) addWorklogCarryDismissMarker(currentWorklogDraft.tasks, taskToRemove);
       currentWorklogDraft.tasks = currentWorklogDraft.tasks.filter((item) => item.id !== button.dataset.worklogRemove);
       if (!getWorklogTasksByStatus(currentWorklogDraft.tasks, "active").length) {
         currentWorklogDraft.tasks.push(createWorklogTask({ status: "active" }));
