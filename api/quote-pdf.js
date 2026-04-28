@@ -1,11 +1,13 @@
 const fs = require("fs/promises");
 const path = require("path");
-const chromium = require("@sparticuz/chromium");
+const chromium = require("@sparticuz/chromium-min");
 const puppeteer = require("puppeteer-core");
 
 const MAX_HTML_LENGTH = 900000;
 const ALLOWED_IMAGE_HOSTS = new Set(["cdn.imweb.me"]);
 const ALLOWED_FONT_HOSTS = new Set(["cdn.jsdelivr.net"]);
+const DEFAULT_CHROMIUM_PACK_URL =
+  "https://github.com/Sparticuz/chromium/releases/download/v143.0.4/chromium-v143.0.4-pack.x64.tar";
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -94,13 +96,33 @@ function buildPdfHtml(pagesHtml, quoteCss) {
 }
 
 async function createBrowser() {
+  const chromiumPackUrl = process.env.CHROMIUM_PACK_URL || DEFAULT_CHROMIUM_PACK_URL;
+  const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH || (await chromium.executablePath(chromiumPackUrl));
+  const viewport = {
+    width: 794,
+    height: 1123,
+    deviceScaleFactor: 1,
+    hasTouch: false,
+    isLandscape: false,
+    isMobile: false,
+  };
+
   return puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: { width: 794, height: 1123, deviceScaleFactor: 1 },
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
+    args: puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
+    defaultViewport: viewport,
+    executablePath,
+    headless: "shell",
     ignoreHTTPSErrors: true,
   });
+}
+
+function shouldExposeDebugError(req) {
+  try {
+    const url = new URL(req.url || "", `https://${req.headers.host || "blueworks.local"}`);
+    return url.searchParams.get("debug") === "1";
+  } catch (error) {
+    return false;
+  }
 }
 
 module.exports = async (req, res) => {
@@ -163,12 +185,17 @@ module.exports = async (req, res) => {
     res.status(200).send(pdfBuffer);
   } catch (error) {
     console.error("Quote PDF generation failed:", error);
-    res.status(500).json({ error: "PDF generation failed." });
+    const payload = { error: "PDF generation failed." };
+    if (shouldExposeDebugError(req)) {
+      payload.detail = error?.message || String(error);
+      payload.stack = error?.stack || "";
+    }
+    res.status(500).json(payload);
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
 };
 
 module.exports.config = {
-  maxDuration: 30,
+  maxDuration: 60,
 };
