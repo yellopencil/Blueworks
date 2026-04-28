@@ -5,9 +5,10 @@ const puppeteer = require("puppeteer-core");
 
 const MAX_HTML_LENGTH = 900000;
 const ALLOWED_IMAGE_HOSTS = new Set(["cdn.imweb.me"]);
-const ALLOWED_FONT_HOSTS = new Set(["cdn.jsdelivr.net"]);
+const ALLOWED_FONT_HOSTS = new Set(["cdnjs.cloudflare.com", "cdn.jsdelivr.net"]);
 const DEFAULT_CHROMIUM_PACK_URL =
   "https://github.com/Sparticuz/chromium/releases/download/v143.0.4/chromium-v143.0.4-pack.x64.tar";
+const PRETENDARD_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pretendard-std/1.3.9/static/woff2";
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -43,19 +44,19 @@ function buildPdfHtml(pagesHtml, quoteCss) {
       font-family: "Pretendard";
       font-weight: 400;
       font-display: swap;
-      src: url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/woff2/Pretendard-Regular.woff2") format("woff2");
+      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-Regular.woff2") format("woff2");
     }
     @font-face {
       font-family: "Pretendard";
       font-weight: 700;
       font-display: swap;
-      src: url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/woff2/Pretendard-Bold.woff2") format("woff2");
+      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-Bold.woff2") format("woff2");
     }
     @font-face {
       font-family: "Pretendard";
       font-weight: 800;
       font-display: swap;
-      src: url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/woff2/Pretendard-ExtraBold.woff2") format("woff2");
+      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-ExtraBold.woff2") format("woff2");
     }
     ${quoteCss}
     @page {
@@ -77,6 +78,12 @@ function buildPdfHtml(pagesHtml, quoteCss) {
       width: 794px !important;
       margin: 0 !important;
       pointer-events: auto !important;
+      font-family: Pretendard, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #0f172a;
+    }
+    #pdfTemplateRoot,
+    #pdfTemplateRoot * {
+      box-sizing: border-box;
     }
     .qa-pdf-page {
       page-break-after: always;
@@ -163,12 +170,13 @@ module.exports = async (req, res) => {
         return;
       }
       try {
-        const { hostname, protocol } = new URL(url);
+        const { hostname, protocol, pathname } = new URL(url);
         if (protocol === "https:" && resourceType === "image" && ALLOWED_IMAGE_HOSTS.has(hostname)) {
           request.continue();
           return;
         }
-        if (protocol === "https:" && resourceType === "font" && ALLOWED_FONT_HOSTS.has(hostname)) {
+        const isFontRequest = resourceType === "font" || /\.(?:woff2?|ttf|otf)$/i.test(pathname);
+        if (protocol === "https:" && isFontRequest && ALLOWED_FONT_HOSTS.has(hostname)) {
           request.continue();
           return;
         }
