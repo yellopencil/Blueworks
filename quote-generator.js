@@ -830,7 +830,7 @@
       "총 합계",
       "약관동의서",
       "아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.",
-      "Copyright ⓒ 옐로펜슬 All Rights Reserved.",
+      "Copyright © 옐로펜슬 All Rights Reserved.",
     ].join("\n");
 
     const dynamicText = [
@@ -1260,7 +1260,7 @@
         size,
         color: palette.muted,
       });
-      page.drawText("Copyright ⓒ 옐로펜슬 All Rights Reserved.", {
+      page.drawText("Copyright © 옐로펜슬 All Rights Reserved.", {
         x: PDF_MARGIN.left,
         y: 18,
         font: fonts.regular,
@@ -1997,7 +1997,7 @@
       ${includeIntro ? '<p class="qa-pdf-agreement-sub">아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
       ${contentHtml}
       <div class="qa-pdf-footer">
-        <span>Copyright ⓒ 옐로펜슬 All Rights Reserved.</span>
+        <span>Copyright © 옐로펜슬 All Rights Reserved.</span>
         <span data-page-number></span>
       </div>
     `;
@@ -2740,7 +2740,7 @@ ${escapeHtml(data.memo || "-")}
       <h2 class="agreement-title">약관동의서</h2>
       <p class="agreement-sub">약관동의서 내용을 꼼꼼히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>
       <div class="agreement-html">${data.agreementHtml}</div>
-      <div class="agreement-footer">Copyright ⓒ 옐로펜슬 All Rights Reserved.</div>
+      <div class="agreement-footer">Copyright © 옐로펜슬 All Rights Reserved.</div>
     </section>
   </main>
   <script>
@@ -2807,7 +2807,7 @@ ${escapeHtml(data.memo || "-")}
         ${index === 0 ? '<p class="qa-pdf-agreement-sub">약관동의서 내용을 꼼꼼히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
         ${content}
         <div class="qa-pdf-footer">
-          <span>Copyright ⓒ 옐로펜슬 All Rights Reserved.</span>
+          <span>Copyright © 옐로펜슬 All Rights Reserved.</span>
           <span data-page-number></span>
         </div>
       `;
