@@ -6,7 +6,7 @@
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   <link rel="stylesheet" href="./styles.css?v=20260420-reset1">
-  <link rel="stylesheet" href="./quote-generator.css?v=20260428-pdf-table-border1">
+  <link rel="stylesheet" href="./quote-generator.css?v=20260428-agreement-spacing1">
 </head>
 <body>
   <div class="shell">
@@ -587,6 +587,11 @@
             <p>필요할 때만 수정 버튼을 눌러 편집하고 저장할 수 있습니다.</p>
           </div>
           <div class="qa-agreement-actions">
+            <div id="agreementSpacingControl" class="qa-segmented qa-agreement-spacing-control hidden" aria-label="PDF 조항 간격">
+              <button type="button" data-agreement-spacing="compact">좁게</button>
+              <button type="button" data-agreement-spacing="normal">기본</button>
+              <button type="button" data-agreement-spacing="relaxed">넓게</button>
+            </div>
             <button id="agreementBoldBtn" type="button" class="qa-btn qa-btn-subtle hidden">볼드</button>
             <button id="agreementEditBtn" type="button" class="qa-btn qa-btn-subtle">수정</button>
             <button id="agreementSaveBtn" type="button" class="qa-btn qa-btn-primary hidden">저장</button>
@@ -1291,7 +1296,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabase-client.js?v=20260427-auth-callback-defer1"></script>
   <script src="./app.js?v=20260427-auth-callback-defer1"></script>
-  <script src="./quote-generator.js?v=20260428-pdf-footer-symbol1"></script>
+  <script src="./quote-generator.js?v=20260428-agreement-spacing1"></script>
 </body>
 </html>
 

@@ -992,6 +992,41 @@
   flex-shrink: 0;
 }
 
+.qa-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--qa-line-strong);
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.qa-segmented button {
+  min-width: 44px;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: transparent;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qa-segmented button.is-active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 6px rgba(37, 99, 235, 0.14);
+}
+
+.qa-segmented button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.34);
+  outline-offset: 2px;
+}
+
 .qa-agreement-editor {
   background: rgba(255, 255, 255, 0.82);
   color: #475569;
@@ -1003,6 +1038,18 @@
 .qa-agreement-editor.is-editable {
   background: rgba(255, 255, 255, 0.98);
   color: var(--qa-text);
+}
+
+.qa-agreement-spacing-compact {
+  line-height: 1.55;
+}
+
+.qa-agreement-spacing-normal {
+  line-height: 1.72;
+}
+
+.qa-agreement-spacing-relaxed {
+  line-height: 1.9;
 }
 
 #pdfTemplateRoot {
@@ -1270,7 +1317,7 @@
   font-weight: 700;
 }
 
-.qa-pdf-agreement-section { margin-top: 12px; }
+.qa-pdf-agreement-section { margin-top: 0; }
 
 .qa-pdf-agreement-block {
   display: grid;
@@ -1288,6 +1335,35 @@
 .qa-pdf-agreement-line-heading {
   color: #0f172a;
   font-weight: 800;
+  margin-top: 10px;
+}
+
+.qa-pdf-agreement-block:first-child .qa-pdf-agreement-line-heading:first-child {
+  margin-top: 0;
+}
+
+.qa-pdf-agreement-spacing-compact .qa-pdf-agreement-block {
+  gap: 4px;
+}
+
+.qa-pdf-agreement-spacing-compact .qa-pdf-agreement-line-heading {
+  margin-top: 7px;
+}
+
+.qa-pdf-agreement-spacing-normal .qa-pdf-agreement-block {
+  gap: 5px;
+}
+
+.qa-pdf-agreement-spacing-normal .qa-pdf-agreement-line-heading {
+  margin-top: 10px;
+}
+
+.qa-pdf-agreement-spacing-relaxed .qa-pdf-agreement-block {
+  gap: 6px;
+}
+
+.qa-pdf-agreement-spacing-relaxed .qa-pdf-agreement-line-heading {
+  margin-top: 14px;
 }
 
 .qa-pdf-agreement-section h4 {
