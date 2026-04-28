@@ -992,39 +992,10 @@
   flex-shrink: 0;
 }
 
-.qa-segmented {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  padding: 3px;
-  border: 1px solid var(--qa-line-strong);
-  border-radius: 12px;
-  background: #f8fbff;
-}
-
-.qa-segmented button {
-  min-width: 44px;
-  border: 0;
-  border-radius: 9px;
-  padding: 8px 10px;
-  background: transparent;
-  color: #64748b;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.qa-segmented button.is-active {
-  background: #ffffff;
+.qa-agreement-actions .qa-btn.is-active {
+  border-color: rgba(59, 130, 246, 0.52);
+  background: #eff6ff;
   color: #2563eb;
-  box-shadow: 0 1px 6px rgba(37, 99, 235, 0.14);
-}
-
-.qa-segmented button:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.34);
-  outline-offset: 2px;
 }
 
 .qa-agreement-editor {
@@ -1040,16 +1011,10 @@
   color: var(--qa-text);
 }
 
-.qa-agreement-spacing-compact {
-  line-height: 1.55;
-}
-
-.qa-agreement-spacing-normal {
-  line-height: 1.72;
-}
-
-.qa-agreement-spacing-relaxed {
-  line-height: 1.9;
+.qa-agreement-editor .qa-agreement-heading {
+  margin-top: 12px;
+  color: #0f172a;
+  font-weight: 800;
 }
 
 #pdfTemplateRoot {
@@ -1340,30 +1305,6 @@
 
 .qa-pdf-agreement-block:first-child .qa-pdf-agreement-line-heading:first-child {
   margin-top: 0;
-}
-
-.qa-pdf-agreement-spacing-compact .qa-pdf-agreement-block {
-  gap: 4px;
-}
-
-.qa-pdf-agreement-spacing-compact .qa-pdf-agreement-line-heading {
-  margin-top: 7px;
-}
-
-.qa-pdf-agreement-spacing-normal .qa-pdf-agreement-block {
-  gap: 5px;
-}
-
-.qa-pdf-agreement-spacing-normal .qa-pdf-agreement-line-heading {
-  margin-top: 10px;
-}
-
-.qa-pdf-agreement-spacing-relaxed .qa-pdf-agreement-block {
-  gap: 6px;
-}
-
-.qa-pdf-agreement-spacing-relaxed .qa-pdf-agreement-line-heading {
-  margin-top: 14px;
 }
 
 .qa-pdf-agreement-section h4 {

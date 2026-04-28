@@ -84,7 +84,6 @@
   const PDF_STAMP_URL = "https://cdn.imweb.me/upload/S20210903c0421227bca81/8f10c47f62d80.png";
   const PDF_FONT_REGULAR_URL = "https://cdn.jsdelivr.net/gh/jhaemin/noto-sans-kr/NotoSansKR-Regular.otf";
   const PDF_FONT_BOLD_URL = "https://cdn.jsdelivr.net/gh/jhaemin/noto-sans-kr/NotoSansKR-Bold.otf";
-  const AGREEMENT_SPACING_OPTIONS = new Set(["compact", "normal", "relaxed"]);
 
   const els = {
     itemsBody: doc.getElementById("itemsBody"),
@@ -118,10 +117,10 @@
     vatToggle: doc.getElementById("vatToggle"),
     signNote: doc.getElementById("signNote"),
     agreementContent: doc.getElementById("agreementContent"),
+    agreementHeadingBtn: doc.getElementById("agreementHeadingBtn"),
     agreementBoldBtn: doc.getElementById("agreementBoldBtn"),
     agreementEditBtn: doc.getElementById("agreementEditBtn"),
     agreementSaveBtn: doc.getElementById("agreementSaveBtn"),
-    agreementSpacingControl: doc.getElementById("agreementSpacingControl"),
     pdfTemplateRoot: doc.getElementById("pdfTemplateRoot")
   };
 
@@ -201,18 +200,12 @@
   function createDefaultQuoteSettings() {
     return {
       agreementHtml: agreementTextToHtml(TERMS_TEMPLATE),
-      agreementSpacing: "normal",
       paymentLines: {
         normal: [...PAYMENT_LINES.normal],
         kmong: [...PAYMENT_LINES.kmong],
       },
       rowPreset: [],
     };
-  }
-
-  function normalizeAgreementSpacing(value) {
-    const spacing = String(value || "").trim();
-    return AGREEMENT_SPACING_OPTIONS.has(spacing) ? spacing : "normal";
   }
 
   function normalizeRowPresetRows(rows) {
@@ -233,7 +226,6 @@
     const agreementSource = String(raw?.agreementHtml || fallback.agreementHtml || "").trim() || fallback.agreementHtml;
     return {
       agreementHtml: sanitizeAgreementHtml(agreementSource),
-      agreementSpacing: normalizeAgreementSpacing(raw?.agreementSpacing ?? fallback.agreementSpacing),
       paymentLines: {
         normal: Array.isArray(paymentLines.normal) ? paymentLines.normal.map((line) => String(line ?? "")) : fallback.paymentLines.normal,
         kmong: Array.isArray(paymentLines.kmong) ? paymentLines.kmong.map((line) => String(line ?? "")) : fallback.paymentLines.kmong,
@@ -281,11 +273,10 @@
   function isEmptySupabaseQuoteSettings(record) {
     if (!record || typeof record !== "object") return true;
     const agreement = String(record.agreement_html || "").trim();
-    const agreementSpacing = normalizeAgreementSpacing(record.agreement_spacing);
     const normal = Array.isArray(record.payment_lines_normal) ? record.payment_lines_normal : [];
     const kmong = Array.isArray(record.payment_lines_kmong) ? record.payment_lines_kmong : [];
     const rowPreset = Array.isArray(record.row_preset) ? record.row_preset : [];
-    return !agreement && agreementSpacing === "normal" && !normal.length && !kmong.length && !rowPreset.length;
+    return !agreement && !normal.length && !kmong.length && !rowPreset.length;
   }
 
   function getSupabaseBridge() {
@@ -314,7 +305,6 @@
     return {
       id: "global",
       agreement_html: quoteSettings.agreementHtml,
-      agreement_spacing: quoteSettings.agreementSpacing,
       payment_lines_normal: quoteSettings.paymentLines.normal,
       payment_lines_kmong: quoteSettings.paymentLines.kmong,
       row_preset: quoteSettings.rowPreset,
@@ -326,7 +316,6 @@
     if (!record) return false;
     quoteSettings = normalizeQuoteSettings({
       agreementHtml: record.agreement_html,
-      agreementSpacing: record.agreement_spacing,
       paymentLines: {
         normal: Array.isArray(record.payment_lines_normal) ? record.payment_lines_normal : undefined,
         kmong: Array.isArray(record.payment_lines_kmong) ? record.payment_lines_kmong : undefined,
@@ -362,13 +351,7 @@
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.()) return null;
     if (!(await hasAuthenticatedSession())) return null;
-    const payload = buildQuoteSettingsPayload();
-    let result = await bridge.upsertQuoteSettings(payload);
-    if (result?.error && /agreement_spacing/i.test(result.error.message || "")) {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.agreement_spacing;
-      result = await bridge.upsertQuoteSettings(fallbackPayload);
-    }
+    const result = await bridge.upsertQuoteSettings(buildQuoteSettingsPayload());
     if (result?.error) throw result.error;
     return result?.data || null;
   }
@@ -668,6 +651,20 @@
     return fragment;
   }
 
+  function isAgreementHeadingText(text = "") {
+    return /^\[\s*제?\s*\d+조\]/.test(String(text || "").trim());
+  }
+
+  function isAgreementHeadingNode(node) {
+    return Boolean(
+      node?.nodeType === Node.ELEMENT_NODE &&
+      (
+        node.classList?.contains("qa-agreement-heading") ||
+        node.dataset?.agreementRole === "heading"
+      )
+    );
+  }
+
   function buildAgreementBlockHtmlFromNode(node) {
     if (!node) return [];
     if (node.nodeType === Node.TEXT_NODE) {
@@ -710,6 +707,10 @@
 
     if (isAgreementBlockTag(tagName)) {
       const wrapper = doc.createElement("div");
+      const nodeText = (node.textContent || "").trim();
+      if (isAgreementHeadingNode(node) || isAgreementHeadingText(nodeText)) {
+        wrapper.classList.add("qa-agreement-heading");
+      }
       Array.from(node.childNodes).forEach((child) => {
         if (child.nodeType === Node.TEXT_NODE && String(child.textContent || "").includes("\n")) {
           buildAgreementBlockHtmlFromNode(child).forEach((blockHtml) => {
@@ -754,6 +755,55 @@
     const sanitized = sanitizeAgreementHtml(els.agreementContent.innerHTML);
     els.agreementContent.innerHTML = sanitized;
     return sanitized;
+  }
+
+  function getAgreementBlockFromNode(node) {
+    if (!node) return null;
+    let element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    while (element && element !== els.agreementContent) {
+      if (element.parentElement === els.agreementContent) return element;
+      element = element.parentElement;
+    }
+    return null;
+  }
+
+  function getSelectedAgreementBlocks() {
+    const selection = doc.getSelection();
+    if (!selection || !selection.rangeCount) return [];
+    const range = selection.getRangeAt(0);
+    if (!els.agreementContent.contains(range.commonAncestorContainer)) return [];
+    if (range.collapsed) {
+      const block = getAgreementBlockFromNode(selection.anchorNode);
+      return block ? [block] : [];
+    }
+    return Array.from(els.agreementContent.children).filter((child) => {
+      try {
+        return range.intersectsNode(child);
+      } catch (error) {
+        return false;
+      }
+    });
+  }
+
+  function updateAgreementHeadingButtonState() {
+    if (!agreementEditable || !els.agreementHeadingBtn) return;
+    const blocks = getSelectedAgreementBlocks();
+    const active = blocks.length > 0 && blocks.every((block) => block.classList.contains("qa-agreement-heading"));
+    els.agreementHeadingBtn.classList.toggle("is-active", active);
+  }
+
+  function toggleAgreementHeadingForSelection() {
+    if (!agreementEditable) return;
+    const blocks = getSelectedAgreementBlocks().filter((block) => {
+      const tagName = block.tagName?.toUpperCase();
+      return isAgreementBlockTag(tagName) || tagName === "DIV";
+    });
+    if (!blocks.length) return;
+    const shouldApply = blocks.some((block) => !block.classList.contains("qa-agreement-heading"));
+    blocks.forEach((block) => {
+      block.classList.toggle("qa-agreement-heading", shouldApply);
+    });
+    updateAgreementHeadingButtonState();
   }
 
   function sanitizeFilename(value) {
@@ -1947,7 +1997,7 @@
         const text = (node.textContent || "").trim();
         const inner = node.innerHTML?.trim();
         if (text || inner === "<br>") {
-          lines.push({ html: inner === "<br>" ? "" : node.innerHTML.trim(), text });
+          lines.push({ html: inner === "<br>" ? "" : node.innerHTML.trim(), text, isHeading: isAgreementHeadingNode(node) });
         }
       }
     });
@@ -1956,7 +2006,7 @@
     let current = null;
     lines.forEach((line) => {
       if (!line.text && !line.html) return;
-      if (/^\[\s*제?\s*\d+조\]/.test(line.text)) {
+      if (line.isHeading || isAgreementHeadingText(line.text)) {
         current = { heading: line, lines: [] };
         sections.push(current);
         return;
@@ -2007,9 +2057,9 @@
     return sections.join("");
   }
 
-  function createAgreementPageElement(contentHtml, includeIntro, spacing = "normal") {
+  function createAgreementPageElement(contentHtml, includeIntro) {
     const page = doc.createElement("section");
-    page.className = `qa-pdf-page qa-pdf-agreement-spacing-${normalizeAgreementSpacing(spacing)}`;
+    page.className = "qa-pdf-page";
     page.innerHTML = `
       <h2 class="qa-pdf-agreement-title">약관동의서</h2>
       ${includeIntro ? '<p class="qa-pdf-agreement-sub">아래 약관동의서 내용을 충분히 읽어주세요. 계약 내용 미숙지로 발생한 문제는 책임지지 않습니다.</p>' : ""}
@@ -2022,8 +2072,8 @@
     return page;
   }
 
-  function measureAgreementPageFits(measureRoot, items, includeIntro, spacing = "normal") {
-    const page = createAgreementPageElement(renderAgreementItems(items), includeIntro, spacing);
+  function measureAgreementPageFits(measureRoot, items, includeIntro) {
+    const page = createAgreementPageElement(renderAgreementItems(items), includeIntro);
     page.style.position = "absolute";
     page.style.left = "0";
     page.style.top = "0";
@@ -2045,15 +2095,9 @@
   }
 
   function syncAgreementEditor() {
-    const spacing = normalizeAgreementSpacing(quoteSettings.agreementSpacing);
     els.agreementContent.contentEditable = agreementEditable ? "true" : "false";
     els.agreementContent.classList.toggle("is-editable", agreementEditable);
-    els.agreementContent.classList.remove("qa-agreement-spacing-compact", "qa-agreement-spacing-normal", "qa-agreement-spacing-relaxed");
-    els.agreementContent.classList.add(`qa-agreement-spacing-${spacing}`);
-    els.agreementSpacingControl?.classList.toggle("hidden", !agreementEditable);
-    els.agreementSpacingControl?.querySelectorAll("[data-agreement-spacing]").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.agreementSpacing === spacing);
-    });
+    els.agreementHeadingBtn.classList.toggle("hidden", !agreementEditable);
     els.agreementBoldBtn.classList.toggle("hidden", !agreementEditable);
     els.agreementEditBtn.classList.toggle("hidden", agreementEditable);
     els.agreementSaveBtn.classList.toggle("hidden", !agreementEditable);
@@ -2296,7 +2340,6 @@
       rows,
       paymentLines: getPaymentLines().slice(),
       agreementHtml: getAgreementHtml(),
-      agreementSpacing: quoteSettings.agreementSpacing,
       signNote: els.signNote.textContent.trim()
     };
   }
@@ -2866,32 +2909,31 @@ ${escapeHtml(data.memo || "-")}
     const pages = [];
     let currentItems = [];
     let includeIntro = true;
-    const spacing = normalizeAgreementSpacing(data.agreementSpacing || quoteSettings.agreementSpacing);
 
     flatItems.forEach((item) => {
       const candidateItems = [...currentItems, item];
-      if (measureAgreementPageFits(measureRoot, candidateItems, includeIntro, spacing)) {
+      if (measureAgreementPageFits(measureRoot, candidateItems, includeIntro)) {
         currentItems = candidateItems;
         return;
       }
 
       if (currentItems.length) {
-        pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro, spacing));
+        pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro));
         includeIntro = false;
       }
 
       currentItems = [];
       currentItems.push(item);
 
-      if (!measureAgreementPageFits(measureRoot, currentItems, includeIntro, spacing) && currentItems.length > 1) {
-        pages.push(createAgreementPageElement(renderAgreementItems([currentItems[0]]), includeIntro, spacing));
+      if (!measureAgreementPageFits(measureRoot, currentItems, includeIntro) && currentItems.length > 1) {
+        pages.push(createAgreementPageElement(renderAgreementItems([currentItems[0]]), includeIntro));
         includeIntro = false;
         currentItems = [item];
       }
     });
 
     if (currentItems.length) {
-      pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro, spacing));
+      pages.push(createAgreementPageElement(renderAgreementItems(currentItems), includeIntro));
     }
 
     pages.forEach((page, index) => {
@@ -3077,13 +3119,13 @@ ${escapeHtml(data.memo || "-")}
       doc.execCommand("bold");
     });
 
-    els.agreementSpacingControl?.addEventListener("click", (event) => {
-      const button = event.target?.closest?.("[data-agreement-spacing]");
-      if (!button) return;
-      quoteSettings.agreementSpacing = normalizeAgreementSpacing(button.dataset.agreementSpacing);
-      saveQuoteSettings();
-      syncAgreementEditor();
-      queueQuoteSettingsSync();
+    [els.agreementHeadingBtn, els.agreementBoldBtn].forEach((button) => {
+      button?.addEventListener("mousedown", (event) => event.preventDefault());
+    });
+
+    els.agreementHeadingBtn?.addEventListener("click", () => {
+      toggleAgreementHeadingForSelection();
+      els.agreementContent.focus();
     });
 
     els.termsEditBtn.addEventListener("click", () => {
@@ -3119,6 +3161,14 @@ ${escapeHtml(data.memo || "-")}
     });
 
     els.agreementContent.addEventListener("input", calc);
+    ["keyup", "mouseup", "focus"].forEach((eventName) => {
+      els.agreementContent.addEventListener(eventName, updateAgreementHeadingButtonState);
+    });
+    doc.addEventListener("selectionchange", () => {
+      if (agreementEditable && doc.activeElement === els.agreementContent) {
+        updateAgreementHeadingButtonState();
+      }
+    });
     els.agreementContent.addEventListener("paste", (event) => {
       if (!agreementEditable) return;
       event.preventDefault();
