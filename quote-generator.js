@@ -2820,7 +2820,6 @@ ${escapeHtml(data.memo || "-")}
     if (!sections.length) return [];
 
     const flatItems = [];
-    const sectionHeadings = new Map();
 
     sections.forEach((section, sectionIndex) => {
       const sectionId = `section-${sectionIndex}`;
@@ -2830,7 +2829,6 @@ ${escapeHtml(data.memo || "-")}
       if (heading) {
         const headingItem = buildAgreementLineHtml(heading, true);
         flatItems.push(headingItem);
-        sectionHeadings.set(sectionId, headingItem);
       }
       section.lines
         .filter((line) => line && (line.text || line.html))
@@ -2856,10 +2854,6 @@ ${escapeHtml(data.memo || "-")}
       }
 
       currentItems = [];
-      if (!item.isHeading) {
-        const headingItem = sectionHeadings.get(item.sectionId);
-        if (headingItem) currentItems.push(headingItem);
-      }
       currentItems.push(item);
 
       if (!measureAgreementPageFits(measureRoot, currentItems, includeIntro) && currentItems.length > 1) {
