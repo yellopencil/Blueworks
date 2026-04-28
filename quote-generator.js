@@ -2897,14 +2897,62 @@ ${escapeHtml(data.memo || "-")}
     await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
   }
 
+  async function requestServerPrintedPdfBlob(pagesHtml) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 45000) : null;
+    try {
+      const response = await fetch("/api/quote-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pagesHtml }),
+        signal: controller?.signal,
+      });
+      if (!response.ok) {
+        let message = "서버 PDF 생성에 실패했습니다.";
+        try {
+          const payload = await response.json();
+          if (payload?.error) message = payload.error;
+        } catch (error) {
+          // Ignore non-JSON error responses.
+        }
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      if (!blob?.size) throw new Error("서버 PDF 응답이 비어 있습니다.");
+      return blob;
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function buildCapturedPdfBlobFromPages(pages, onProgress = () => {}) {
+    if (!window.html2canvas || !window.jspdf?.jsPDF) {
+      throw new Error("PDF 라이브러리를 불러오지 못했습니다.");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
+
+    for (let index = 0; index < pages.length; index += 1) {
+      onProgress(index, pages.length);
+      const canvas = await window.html2canvas(pages[index], {
+        scale: 1.4,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+      const imageData = canvas.toDataURL("image/jpeg", 0.82);
+      if (index > 0) pdf.addPage();
+      pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
+    }
+
+    return pdf.output("blob");
+  }
+
   async function exportPdf() {
     if (!validateRequired()) {
       openNoticeModal("시작 요청자, 담당자명, 담당자 연락처를 입력해주세요.");
-      return;
-    }
-
-    if (!window.html2canvas || !window.jspdf?.jsPDF) {
-      openNoticeModal("PDF 라이브러리를 불러오지 못했습니다.");
       return;
     }
 
@@ -2931,25 +2979,18 @@ ${escapeHtml(data.memo || "-")}
 
       await waitForPdfAssets(rootEl);
 
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
-
-      for (let index = 0; index < pages.length; index += 1) {
-        els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${pages.length}`;
-        const canvas = await window.html2canvas(pages[index], {
-          scale: 1.4,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff",
-          logging: false,
+      let pdfBlob = null;
+      try {
+        els.downloadPdfBtn.textContent = "텍스트 PDF 생성 중...";
+        pdfBlob = await requestServerPrintedPdfBlob(rootEl.innerHTML);
+      } catch (serverError) {
+        console.warn("서버 텍스트형 PDF 생성에 실패해 기존 캡처형 PDF로 전환합니다.", serverError);
+        pdfBlob = await buildCapturedPdfBlobFromPages(pages, (index, total) => {
+          els.downloadPdfBtn.textContent = `PDF 내보내기 ${index + 1}/${total}`;
         });
-        const imageData = canvas.toDataURL("image/jpeg", 0.82);
-        if (index > 0) pdf.addPage();
-        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "MEDIUM");
       }
 
       const fileName = createPdfFilename(data);
-      const pdfBlob = pdf.output("blob");
       await savePdfHistoryRecord(makePdfHistoryRecord(data, pdfBlob));
       triggerBlobDownload(pdfBlob, fileName);
     } catch (error) {
