@@ -2919,6 +2919,8 @@ ${escapeHtml(data.memo || "-")}
       }
       const blob = await response.blob();
       if (!blob?.size) throw new Error("서버 PDF 응답이 비어 있습니다.");
+      const signature = await blob.slice(0, 5).text();
+      if (signature !== "%PDF-") throw new Error("서버 PDF 응답이 PDF 형식이 아닙니다.");
       return blob;
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId);

@@ -125,6 +125,14 @@ function shouldExposeDebugError(req) {
   }
 }
 
+function normalizePdfBuffer(pdfData) {
+  const pdfBuffer = Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData);
+  if (pdfBuffer.subarray(0, 5).toString("utf8") !== "%PDF-") {
+    throw new Error("Generated response is not a valid PDF.");
+  }
+  return pdfBuffer;
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -172,15 +180,17 @@ module.exports = async (req, res) => {
 
     await page.setContent(html, { waitUntil: "networkidle0", timeout: 30000 });
     await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true));
-    const pdfBuffer = await page.pdf({
+    const pdfData = await page.pdf({
       format: "A4",
       printBackground: true,
       preferCSSPageSize: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
     });
+    const pdfBuffer = normalizePdfBuffer(pdfData);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", "attachment; filename=\"blueworks-quote.pdf\"");
+    res.setHeader("Content-Length", String(pdfBuffer.length));
     res.setHeader("Cache-Control", "private, no-store, max-age=0");
     res.status(200).send(pdfBuffer);
   } catch (error) {
