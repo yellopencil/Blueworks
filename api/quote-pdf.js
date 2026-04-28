@@ -5,10 +5,10 @@ const puppeteer = require("puppeteer-core");
 
 const MAX_HTML_LENGTH = 900000;
 const ALLOWED_IMAGE_HOSTS = new Set(["cdn.imweb.me"]);
-const ALLOWED_FONT_HOSTS = new Set(["cdnjs.cloudflare.com", "cdn.jsdelivr.net"]);
 const DEFAULT_CHROMIUM_PACK_URL =
   "https://github.com/Sparticuz/chromium/releases/download/v143.0.4/chromium-v143.0.4-pack.x64.tar";
-const PRETENDARD_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pretendard-std/1.3.9/static/woff2";
+const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
+let fontFaceCssCache = "";
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -32,32 +32,39 @@ function stripUnsafeHtml(html = "") {
     .replace(/\s(?:src|href)\s*=\s*(['"])\s*javascript:[\s\S]*?\1/gi, "");
 }
 
-function buildPdfHtml(pagesHtml, quoteCss) {
+async function buildFontFaceCss() {
+  if (fontFaceCssCache) return fontFaceCssCache;
+  const fontFiles = [
+    { weight: 400, fileName: "Pretendard-Regular.woff2" },
+    { weight: 700, fileName: "Pretendard-Bold.woff2" },
+    { weight: 800, fileName: "Pretendard-ExtraBold.woff2" },
+  ];
+  const rules = await Promise.all(fontFiles.map(async ({ weight, fileName }) => {
+    const fontBuffer = await fs.readFile(path.join(FONT_DIR, fileName));
+    const fontData = fontBuffer.toString("base64");
+    return `
+    @font-face {
+      font-family: "Pretendard";
+      font-weight: ${weight};
+      font-style: normal;
+      font-display: block;
+      src: url("data:font/woff2;base64,${fontData}") format("woff2");
+    }`;
+  }));
+  fontFaceCssCache = rules.join("\n");
+  return fontFaceCssCache;
+}
+
+async function buildPdfHtml(pagesHtml, quoteCss) {
   const safePagesHtml = stripUnsafeHtml(pagesHtml);
+  const fontFaceCss = await buildFontFaceCss();
   return `<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    @font-face {
-      font-family: "Pretendard";
-      font-weight: 400;
-      font-display: swap;
-      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-Regular.woff2") format("woff2");
-    }
-    @font-face {
-      font-family: "Pretendard";
-      font-weight: 700;
-      font-display: swap;
-      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-Bold.woff2") format("woff2");
-    }
-    @font-face {
-      font-family: "Pretendard";
-      font-weight: 800;
-      font-display: swap;
-      src: url("${PRETENDARD_CDN_BASE}/PretendardStd-ExtraBold.woff2") format("woff2");
-    }
+    ${fontFaceCss}
     ${quoteCss}
     @page {
       size: A4;
@@ -157,7 +164,7 @@ module.exports = async (req, res) => {
     }
 
     const quoteCss = await fs.readFile(path.join(process.cwd(), "quote-generator.css"), "utf8");
-    const html = buildPdfHtml(pagesHtml, quoteCss);
+    const html = await buildPdfHtml(pagesHtml, quoteCss);
     browser = await createBrowser();
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
@@ -170,13 +177,8 @@ module.exports = async (req, res) => {
         return;
       }
       try {
-        const { hostname, protocol, pathname } = new URL(url);
+        const { hostname, protocol } = new URL(url);
         if (protocol === "https:" && resourceType === "image" && ALLOWED_IMAGE_HOSTS.has(hostname)) {
-          request.continue();
-          return;
-        }
-        const isFontRequest = resourceType === "font" || /\.(?:woff2?|ttf|otf)$/i.test(pathname);
-        if (protocol === "https:" && isFontRequest && ALLOWED_FONT_HOSTS.has(hostname)) {
           request.continue();
           return;
         }
