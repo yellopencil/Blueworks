@@ -828,6 +828,15 @@ body[data-sidebar-collapsed="true"] .main {
   cursor: text;
 }
 
+.rich-editor.is-readonly .rich-editor-toolbar {
+  display: none;
+}
+
+.rich-editor-surface.is-readonly,
+.rich-editor-surface.is-readonly * {
+  cursor: default;
+}
+
 .rich-editor-surface:empty::before {
   content: "";
 }
@@ -1105,6 +1114,7 @@ body[data-theme="dark"] .rich-editor-toolbar {
 .diary-card {
   align-content: start;
   min-height: 208px;
+  padding: 28px;
 }
 
 .diary-card-top {
@@ -3017,6 +3027,10 @@ body[data-theme="dark"] .project-modal-card .modal-head {
   min-height: calc(50vh - 80px);
   font-weight: 400;
   line-height: 1.75;
+}
+
+#archiveDiaryModal .rich-editor-surface {
+  min-height: calc(50vh - 80px);
 }
 
 .archive-code-modal-card {

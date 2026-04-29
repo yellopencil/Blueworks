@@ -2653,17 +2653,18 @@ function setupCustomerFilters() {
 function setupProjectRichEditors() {
   ensureRichLinkModal();
   [
-    { name: "notes", label: "메모" },
-    { name: "timeline", label: "타임라인" },
-  ].forEach(({ name, label }) => {
-    const textarea = els.projectForm?.elements?.[name];
+    { form: els.projectForm, name: "notes", label: "메모" },
+    { form: els.projectForm, name: "timeline", label: "타임라인" },
+    { form: els.archiveDiaryForm, name: "content", label: "다이어리 내용" },
+  ].forEach(({ form, name, label }) => {
+    const textarea = form?.elements?.[name];
     if (!textarea || textarea.dataset.richEditor === "ready") return;
     textarea.dataset.richEditor = "ready";
     textarea.classList.add("hidden-rich-input");
     textarea.insertAdjacentHTML(
       "afterend",
       `
-        <div class="rich-editor" data-editor-for="${name}">
+        <div class="rich-editor" data-editor-for="${name}" data-editor-form="${textarea.form?.id || ""}">
           <div class="rich-editor-toolbar">
             <button type="button" class="ghost tiny-btn" data-rich-action="bold">볼드</button>
             <div class="rich-editor-color">
@@ -2936,7 +2937,7 @@ function applyRichLink() {
     anchor.setAttribute("target", "_blank");
     anchor.setAttribute("rel", "noopener noreferrer");
   });
-  const textarea = els.projectForm?.elements?.[surface.dataset.richSurface || ""];
+  const textarea = getRichEditorTextarea(surface);
   if (textarea) textarea.value = normalizeRichEditorHtml(surface.innerHTML);
   closeRichLinkModal();
 }
@@ -3190,6 +3191,7 @@ function captureArchiveCodeModalState() {
 }
 
 function captureArchiveDiaryModalState() {
+  syncArchiveDiaryRichEditorValue();
   return serializeFormControls(els.archiveDiaryForm);
 }
 
@@ -4243,7 +4245,7 @@ function renderArchiveDiaries() {
         <div class="archive-card-head">
           <strong>${escapeHtml(item.title || "제목 없음")}</strong>
         </div>
-        <p class="archive-card-preview">${escapeHtml(item.content || "내용 없음")}</p>
+        <p class="archive-card-preview">${escapeHtml(stripHtml(item.content) || "내용 없음")}</p>
         <span class="archive-card-meta">수정 ${escapeHtml(formatDateTime(item.updatedAt || item.createdAt))}</span>
       </article>
     `;
@@ -4252,6 +4254,20 @@ function renderArchiveDiaries() {
   els.archiveDiaryList.querySelectorAll("[data-diary-id]").forEach((card) => {
     card.addEventListener("click", () => openArchiveDiaryModal(card.dataset.diaryId));
   });
+}
+
+function getRichEditorSurface(form, name) {
+  const formId = form?.id || "";
+  if (!formId || !name) return null;
+  return document.querySelector(`[data-editor-form="${formId}"] [data-rich-surface="${name}"]`);
+}
+
+function getRichEditorTextarea(surface) {
+  const editor = surface?.closest?.(".rich-editor");
+  const formId = editor?.dataset?.editorForm || "";
+  const name = surface?.dataset?.richSurface || "";
+  const form = formId ? document.getElementById(formId) : surface?.closest?.("form");
+  return form?.elements?.[name] || null;
 }
 
 function renderArchiveNoteColorPalette(selectedColor = "gray") {
@@ -4960,20 +4976,36 @@ function closeProjectModal() {
 
 function populateProjectRichEditors() {
   ["timeline", "notes"].forEach((name) => {
-    const textarea = els.projectForm?.elements?.[name];
-    const surface = document.querySelector(`[data-rich-surface="${name}"]`);
-    if (!textarea || !surface) return;
-    surface.innerHTML = plainTextToRichHtml(textarea.value);
+    populateRichEditorValue(els.projectForm, name);
   });
 }
 
 function syncProjectRichEditorValues() {
   ["timeline", "notes"].forEach((name) => {
-    const textarea = els.projectForm?.elements?.[name];
-    const surface = document.querySelector(`[data-rich-surface="${name}"]`);
-    if (!textarea || !surface) return;
-    textarea.value = normalizeRichEditorHtml(surface.innerHTML);
+    syncRichEditorValue(els.projectForm, name);
   });
+}
+
+function populateArchiveDiaryRichEditor() {
+  populateRichEditorValue(els.archiveDiaryForm, "content");
+}
+
+function syncArchiveDiaryRichEditorValue() {
+  syncRichEditorValue(els.archiveDiaryForm, "content");
+}
+
+function populateRichEditorValue(form, name) {
+  const textarea = form?.elements?.[name];
+  const surface = getRichEditorSurface(form, name);
+  if (!textarea || !surface) return;
+  surface.innerHTML = plainTextToRichHtml(textarea.value);
+}
+
+function syncRichEditorValue(form, name) {
+  const textarea = form?.elements?.[name];
+  const surface = getRichEditorSurface(form, name);
+  if (!textarea || !surface) return;
+  textarea.value = normalizeRichEditorHtml(surface.innerHTML);
 }
 
 function ensureProjectPaymentMethodOptionOrder() {
@@ -5520,6 +5552,16 @@ function setArchiveDiaryEditing(editable) {
     field.readOnly = !editable;
     field.disabled = false;
   });
+  const contentSurface = getRichEditorSurface(els.archiveDiaryForm, "content");
+  const contentEditor = contentSurface?.closest(".rich-editor");
+  if (contentSurface) {
+    contentSurface.contentEditable = editable ? "true" : "false";
+    contentSurface.classList.toggle("is-readonly", !editable);
+  }
+  contentEditor?.classList.toggle("is-readonly", !editable);
+  contentEditor?.querySelectorAll(".rich-editor-toolbar button, .rich-editor-toolbar input, .rich-editor-toolbar select").forEach((control) => {
+    control.disabled = !editable;
+  });
   els.archiveDiaryColorPalette?.classList.toggle("is-readonly", !editable);
   els.archiveDiaryEditBtn?.classList.toggle("hidden", editable || !currentArchiveDiaryId);
   els.archiveDiarySaveBtn?.classList.toggle("hidden", !editable);
@@ -5676,6 +5718,7 @@ function openArchiveDiaryModal(diaryId = null) {
   els.archiveDiaryForm.elements.content.value = diary?.content || "";
   els.archiveDiaryModalTitle.textContent = diary ? "다이어리 상세" : "다이어리 작성";
   els.archiveDiaryDeleteBtn?.classList.toggle("hidden", !diary);
+  populateArchiveDiaryRichEditor();
   setArchiveDiaryEditing(!diary);
   renderArchiveDiaryColorPalette(diary?.color || "gray");
   els.archiveDiaryModal.classList.remove("hidden");
@@ -5754,6 +5797,7 @@ async function handleArchiveDiarySave(event) {
   event.preventDefault();
   const finishBusyToast = startDelayedBusyToast();
   try {
+    syncArchiveDiaryRichEditorValue();
     const formData = new FormData(event.currentTarget);
     const now = new Date().toISOString();
     const entryDate = String(formData.get("entryDate") || formatDateKey(new Date())).trim();
@@ -5770,7 +5814,7 @@ async function handleArchiveDiarySave(event) {
       createdAt: now,
       updatedAt: now,
     };
-    if (!payload.content) {
+    if (!stripHtml(payload.content)) {
       openNoticeModal("다이어리 내용을 입력해주세요.");
       return;
     }
