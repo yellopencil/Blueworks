@@ -4238,7 +4238,7 @@ function renderArchiveDiaries() {
     return `
       <article class="archive-card archive-note-card diary-card" data-diary-id="${item.id}" style="--note-card-bg:${color.bg}; --note-card-border:${color.border};">
         <div class="diary-card-top">
-          <span class="diary-card-date">${escapeHtml(item.entryDate ? formatDateOnly(item.entryDate) : "-")}</span>
+          <span class="diary-card-date">${escapeHtml(item.entryDate ? formatDateWithWeekday(item.entryDate) : "-")}</span>
         </div>
         <div class="archive-card-head">
           <strong>${escapeHtml(item.title || "제목 없음")}</strong>
@@ -6969,6 +6969,14 @@ function formatDateOnly(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("ko-KR");
+}
+
+function formatDateWithWeekday(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekday = date.toLocaleDateString("ko-KR", { weekday: "short" });
+  return `${formatDateOnly(value)} (${weekday})`;
 }
 
 function formatDateKey(date) {
