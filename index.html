@@ -139,6 +139,10 @@
                     <span class="sidebar-sublink-icon" aria-hidden="true"><i class="fa fa-folder"></i></span>
                     <span class="sidebar-sublink-label">코드</span>
                   </button>
+                  <button id="navArchiveDiaryBtn" class="sidebar-sublink" type="button">
+                    <span class="sidebar-sublink-icon" aria-hidden="true"><i class="fa fa-book"></i></span>
+                    <span class="sidebar-sublink-label">다이어리</span>
+                  </button>
                 </div>
               </div>
               <button id="navSettingsBtn" class="sidebar-link" type="button" aria-label="환경설정" title="환경설정">
@@ -649,6 +653,65 @@
                   </div>
                 </div>
                 <div id="archiveCodeCategoriesList" class="archive-category-list"></div>
+              </section>
+            </section>
+
+            <section id="archiveDiaryView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Archive Diary</p>
+                  <h2 id="archiveDiaryHeroText">대표님, 사업을 운영하며 느낀 생각을 기록해두세요.</h2>
+                </div>
+              </div>
+              <section class="panel archive-panel diary-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>다이어리</h3>
+                    <p class="muted small">운영 회고, 배운 점, 결정한 생각을 날짜별로 모아두고 검색할 수 있습니다.</p>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="newArchiveDiaryBtn" class="secondary">새 기록</button>
+                  </div>
+                </div>
+                <div class="diary-toolbar">
+                  <label class="diary-search-field">
+                    <span>검색</span>
+                    <input id="archiveDiarySearchInput" type="search" placeholder="제목, 본문, 태그를 검색해보세요.">
+                  </label>
+                  <div class="diary-filter-grid">
+                    <label>기간
+                      <select id="archiveDiaryPeriodFilter">
+                        <option value="">전체</option>
+                        <option value="thisMonth">이번 달</option>
+                        <option value="thisYear">올해</option>
+                      </select>
+                    </label>
+                    <label>주제
+                      <select id="archiveDiaryTopicFilter">
+                        <option value="">전체</option>
+                      </select>
+                    </label>
+                    <label>감정
+                      <select id="archiveDiaryMoodFilter">
+                        <option value="">전체</option>
+                        <option value="good">좋음</option>
+                        <option value="normal">보통</option>
+                        <option value="hard">힘듦</option>
+                        <option value="learned">배움</option>
+                        <option value="decision">결심</option>
+                      </select>
+                    </label>
+                    <label>정렬
+                      <select id="archiveDiarySortSelect">
+                        <option value="entryDesc">작성일 최신순</option>
+                        <option value="entryAsc">작성일 오래된순</option>
+                        <option value="updatedDesc">최근 수정순</option>
+                      </select>
+                    </label>
+                    <button type="button" id="archiveDiaryClearFiltersBtn" class="ghost small-btn diary-clear-btn">초기화</button>
+                  </div>
+                </div>
+                <div id="archiveDiaryList" class="archive-list diary-list"></div>
               </section>
             </section>
 
@@ -1250,6 +1313,58 @@
       </form>
       <div class="button-row archive-modal-actions">
         <button type="button" id="archiveCodeDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="archiveDiaryModal" class="modal-overlay hidden">
+    <div class="modal-card archive-modal-card diary-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Archive Diary</p>
+          <h3 id="archiveDiaryModalTitle">새 기록</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="archiveDiaryEditBtn" class="ghost hidden">수정</button>
+          <button type="submit" form="archiveDiaryForm" id="archiveDiarySaveBtn" class="primary">저장</button>
+          <button type="button" id="archiveDiaryCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="archiveDiaryForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group archive-modal-section">
+          <div class="section-label">
+            <p class="eyebrow">Diary Info</p>
+            <h4>기록 정보</h4>
+          </div>
+          <div class="two-col">
+            <label>작성일<input name="entryDate" type="date" class="picker-date" required></label>
+            <label>감정
+              <select name="mood">
+                <option value="">선택</option>
+                <option value="good">좋음</option>
+                <option value="normal">보통</option>
+                <option value="hard">힘듦</option>
+                <option value="learned">배움</option>
+                <option value="decision">결심</option>
+              </select>
+            </label>
+          </div>
+          <label>제목<input name="title" type="text" required placeholder="예: 오늘의 운영 회고"></label>
+          <div class="two-col">
+            <label>주제<input name="topic" type="text" placeholder="예: 운영, 고객, 매출"></label>
+            <label>태그<input name="tags" type="text" placeholder="쉼표로 구분해 입력하세요."></label>
+          </div>
+          <input type="hidden" name="color" value="gray">
+          <div class="archive-color-field">
+            <span>카드 색상</span>
+            <div id="archiveDiaryColorPalette" class="archive-color-palette" role="radiogroup" aria-label="다이어리 카드 색상"></div>
+          </div>
+          <label>내용<textarea name="content" rows="16" required placeholder="오늘 사업을 운영하며 남겨두고 싶은 생각, 배운 점, 다음에 기억할 것을 적어보세요."></textarea></label>
+        </section>
+      </form>
+      <div class="button-row archive-modal-actions">
+        <button type="button" id="archiveDiaryDeleteBtn" class="danger hidden">삭제</button>
       </div>
     </div>
   </div>

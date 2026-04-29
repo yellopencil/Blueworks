@@ -69,6 +69,14 @@ const ARCHIVE_NOTE_COLORS = [
   { id: "ink", label: "먹색", bg: "#eef0f2", border: "#aeb6c0" },
 ];
 
+const DIARY_MOOD_META = {
+  good: "좋음",
+  normal: "보통",
+  hard: "힘듦",
+  learned: "배움",
+  decision: "결심",
+};
+
 function getArchiveNoteColor(colorId) {
   return ARCHIVE_NOTE_COLORS.find((color) => color.id === colorId) || ARCHIVE_NOTE_COLORS[14];
 }
@@ -106,6 +114,7 @@ const els = {
   quotesView: document.querySelector("#quotesView"),
   archiveNotesView: document.querySelector("#archiveNotesView"),
   archiveCodesView: document.querySelector("#archiveCodesView"),
+  archiveDiaryView: document.querySelector("#archiveDiaryView"),
   settingsView: document.querySelector("#settingsView"),
   navDashboardBtn: document.querySelector("#navDashboardBtn"),
   navMembersBtn: document.querySelector("#navMembersBtn"),
@@ -115,6 +124,7 @@ const els = {
   navArchiveBtn: document.querySelector("#navArchiveBtn"),
   navArchiveNotesBtn: document.querySelector("#navArchiveNotesBtn"),
   navArchiveCodesBtn: document.querySelector("#navArchiveCodesBtn"),
+  navArchiveDiaryBtn: document.querySelector("#navArchiveDiaryBtn"),
   navSettingsBtn: document.querySelector("#navSettingsBtn"),
   archiveSubnav: document.querySelector("#archiveSubnav"),
   sidebarToggleBtn: document.querySelector("#sidebarToggleBtn"),
@@ -144,6 +154,7 @@ const els = {
   quotesHeroText: document.querySelector("#quotesHeroText"),
   archiveNotesHeroText: document.querySelector("#archiveNotesHeroText"),
   archiveCodesHeroText: document.querySelector("#archiveCodesHeroText"),
+  archiveDiaryHeroText: document.querySelector("#archiveDiaryHeroText"),
   sidebarSiteTitle: document.querySelector("#sidebarSiteTitle"),
   homepageShortcutBtn: document.querySelector("#homepageShortcutBtn"),
   portfolioShortcutBtn: document.querySelector("#portfolioShortcutBtn"),
@@ -177,6 +188,14 @@ const els = {
   archiveCodesList: document.querySelector("#archiveCodesList"),
   newArchiveCategoryBtn: document.querySelector("#newArchiveCategoryBtn"),
   archiveCodeCategoriesList: document.querySelector("#archiveCodeCategoriesList"),
+  newArchiveDiaryBtn: document.querySelector("#newArchiveDiaryBtn"),
+  archiveDiarySearchInput: document.querySelector("#archiveDiarySearchInput"),
+  archiveDiaryPeriodFilter: document.querySelector("#archiveDiaryPeriodFilter"),
+  archiveDiaryTopicFilter: document.querySelector("#archiveDiaryTopicFilter"),
+  archiveDiaryMoodFilter: document.querySelector("#archiveDiaryMoodFilter"),
+  archiveDiarySortSelect: document.querySelector("#archiveDiarySortSelect"),
+  archiveDiaryClearFiltersBtn: document.querySelector("#archiveDiaryClearFiltersBtn"),
+  archiveDiaryList: document.querySelector("#archiveDiaryList"),
   salesMonthlySummary: document.querySelector("#salesMonthlySummary"),
   salesMonthlyChart: document.querySelector("#salesMonthlyChart"),
   salesYearlySummary: document.querySelector("#salesYearlySummary"),
@@ -282,6 +301,14 @@ const els = {
   archiveCodeSaveBtn: document.querySelector("#archiveCodeSaveBtn"),
   archiveCodeCloseBtn: document.querySelector("#archiveCodeCloseBtn"),
   archiveCodeDeleteBtn: document.querySelector("#archiveCodeDeleteBtn"),
+  archiveDiaryModal: document.querySelector("#archiveDiaryModal"),
+  archiveDiaryModalTitle: document.querySelector("#archiveDiaryModalTitle"),
+  archiveDiaryForm: document.querySelector("#archiveDiaryForm"),
+  archiveDiaryColorPalette: document.querySelector("#archiveDiaryColorPalette"),
+  archiveDiaryEditBtn: document.querySelector("#archiveDiaryEditBtn"),
+  archiveDiarySaveBtn: document.querySelector("#archiveDiarySaveBtn"),
+  archiveDiaryCloseBtn: document.querySelector("#archiveDiaryCloseBtn"),
+  archiveDiaryDeleteBtn: document.querySelector("#archiveDiaryDeleteBtn"),
   archiveCategoryModal: document.querySelector("#archiveCategoryModal"),
   archiveCategoryModalTitle: document.querySelector("#archiveCategoryModalTitle"),
   archiveCategoryForm: document.querySelector("#archiveCategoryForm"),
@@ -330,8 +357,10 @@ let pendingUnsavedLeaveAction = null;
 let currentArchiveNoteId = null;
 let currentArchiveCodeId = null;
 let currentArchiveCategoryId = null;
+let currentArchiveDiaryId = null;
 let archiveNoteEditing = false;
 let archiveCodeEditing = false;
+let archiveDiaryEditing = false;
 let draggedArchiveNoteId = null;
 let draggedArchiveCodeId = null;
 let archiveCardDragGhost = null;
@@ -371,6 +400,7 @@ const modalSnapshots = {
   worklog: "",
   archiveNote: "",
   archiveCode: "",
+  archiveDiary: "",
   archiveCategory: "",
 };
 
@@ -432,6 +462,7 @@ function loadState() {
     archiveNotes: [],
     archiveCodeCategories: createDefaultArchiveCategories(),
     archiveCodes: [],
+    archiveDiaries: [],
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
@@ -520,6 +551,18 @@ function normalizeState(source) {
       description: item.description || "",
       categoryId: item.categoryId || "",
       content: item.content || "",
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+    })),
+    archiveDiaries: (source.archiveDiaries || []).map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      entryDate: item.entryDate || formatDateKey(new Date()),
+      title: item.title || "",
+      content: item.content || "",
+      mood: item.mood || "",
+      topic: item.topic || "",
+      tags: normalizeDiaryTags(item.tags || []),
+      color: item.color || "gray",
       createdAt: item.createdAt || new Date().toISOString(),
       updatedAt: item.updatedAt || new Date().toISOString(),
     })),
@@ -995,6 +1038,67 @@ function deserializeArchiveCodeFromSupabase(row) {
   };
 }
 
+function normalizeDiaryTags(value) {
+  const rawTags = Array.isArray(value)
+    ? value
+    : String(value || "").split(/[,\n#]+/);
+  const seen = new Set();
+  return rawTags
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean)
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function formatDiaryTagsInput(tags) {
+  return normalizeDiaryTags(tags).join(", ");
+}
+
+function getDiaryMoodLabel(mood) {
+  return DIARY_MOOD_META[mood] || "";
+}
+
+function serializeArchiveDiaryForSupabase(diary, index = 0) {
+  return {
+    id: diary.id,
+    entry_date: diary.entryDate || formatDateKey(new Date()),
+    title: diary.title || "",
+    content: diary.content || "",
+    mood: diary.mood || "",
+    topic: diary.topic || "",
+    tags: normalizeDiaryTags(diary.tags || []),
+    color: diary.color || "gray",
+    sort_order: index,
+    created_by: state.sessionUserId || null,
+    created_at: diary.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeArchiveDiaryFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    entryDate: row.entry_date || formatDateKey(new Date()),
+    title: row.title || "",
+    content: row.content || "",
+    mood: row.mood || "",
+    topic: row.topic || "",
+    tags: normalizeDiaryTags(row.tags || []),
+    color: row.color || "gray",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function isArchiveDiaryTableMissingError(error) {
+  const message = String(error?.message || error?.details || error?.hint || "");
+  return /archive_diaries|schema cache|does not exist/i.test(message);
+}
+
 function serializeSiteSettingsForSupabase(settings = {}) {
   return {
     id: settings.id || undefined,
@@ -1036,7 +1140,7 @@ function deserializeSiteSettingsFromSupabase(row = {}) {
 function updateSupabaseStatusSummary(prefix = "") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return;
-  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건을 Supabase에서 확인했어요.`;
+  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건, 다이어리 ${state.archiveDiaries.length}건을 Supabase에서 확인했어요.`;
   bridge.statusDetail = prefix ? `${prefix} ${summary}` : summary;
   renderSiteSettings();
 }
@@ -1182,10 +1286,11 @@ async function syncArchiveStateToSupabase(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const scopedUpsert = ["upsertNoteIds", "upsertCategoryIds", "upsertCodeIds"].some((key) => Array.isArray(options[key]));
+  const scopedUpsert = ["upsertNoteIds", "upsertCategoryIds", "upsertCodeIds", "upsertDiaryIds"].some((key) => Array.isArray(options[key]));
   const upsertNoteIds = new Set(Array.isArray(options.upsertNoteIds) ? options.upsertNoteIds.filter(Boolean) : []);
   const upsertCategoryIds = new Set(Array.isArray(options.upsertCategoryIds) ? options.upsertCategoryIds.filter(Boolean) : []);
   const upsertCodeIds = new Set(Array.isArray(options.upsertCodeIds) ? options.upsertCodeIds.filter(Boolean) : []);
+  const upsertDiaryIds = new Set(Array.isArray(options.upsertDiaryIds) ? options.upsertDiaryIds.filter(Boolean) : []);
   const notePayloads = state.archiveNotes
     .map((item, index) => serializeArchiveNoteForSupabase(item, index))
     .filter((item) => !scopedUpsert || upsertNoteIds.has(item.id));
@@ -1195,6 +1300,9 @@ async function syncArchiveStateToSupabase(options = {}) {
   const codePayloads = state.archiveCodes
     .map((item, index) => serializeArchiveCodeForSupabase(item, index))
     .filter((item) => !scopedUpsert || upsertCodeIds.has(item.id));
+  const diaryPayloads = state.archiveDiaries
+    .map((item, index) => serializeArchiveDiaryForSupabase(item, index))
+    .filter((item) => !scopedUpsert || upsertDiaryIds.has(item.id));
 
   if (categoryPayloads.length) {
     const upsertCategoryResult = await bridge.upsertArchiveCodeCategories(categoryPayloads);
@@ -1211,9 +1319,15 @@ async function syncArchiveStateToSupabase(options = {}) {
     if (upsertCodeResult.error) return { ok: false, error: upsertCodeResult.error };
   }
 
+  if (diaryPayloads.length) {
+    const upsertDiaryResult = await bridge.upsertArchiveDiaries(diaryPayloads);
+    if (upsertDiaryResult.error) return { ok: false, error: upsertDiaryResult.error };
+  }
+
   const staleNoteIds = Array.isArray(options.deleteNoteIds) ? options.deleteNoteIds.filter(Boolean) : [];
   const staleCodeIds = Array.isArray(options.deleteCodeIds) ? options.deleteCodeIds.filter(Boolean) : [];
   const staleCategoryIds = Array.isArray(options.deleteCategoryIds) ? options.deleteCategoryIds.filter(Boolean) : [];
+  const staleDiaryIds = Array.isArray(options.deleteDiaryIds) ? options.deleteDiaryIds.filter(Boolean) : [];
 
   if (staleNoteIds.length) {
     const deleteNotesResult = await bridge.deleteArchiveNotesByIds(staleNoteIds);
@@ -1228,6 +1342,11 @@ async function syncArchiveStateToSupabase(options = {}) {
   if (staleCategoryIds.length) {
     const deleteCategoriesResult = await bridge.deleteArchiveCodeCategoriesByIds(staleCategoryIds);
     if (deleteCategoriesResult.error) return { ok: false, error: deleteCategoriesResult.error };
+  }
+
+  if (staleDiaryIds.length) {
+    const deleteDiariesResult = await bridge.deleteArchiveDiariesByIds(staleDiaryIds);
+    if (deleteDiariesResult.error) return { ok: false, error: deleteDiariesResult.error };
   }
 
   return { ok: true };
@@ -1394,21 +1513,26 @@ async function syncArchivesFromSupabase() {
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
   if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
-  const [noteResult, categoryResult, codeResult] = await Promise.all([
+  const [noteResult, categoryResult, codeResult, diaryResult] = await Promise.all([
     bridge.fetchArchiveNotes(),
     bridge.fetchArchiveCodeCategories(),
     bridge.fetchArchiveCodes(),
+    bridge.fetchArchiveDiaries(),
   ]);
 
-  if (noteResult.error || categoryResult.error || codeResult.error) {
-    return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error };
+  const diaryTableMissing = diaryResult.error && isArchiveDiaryTableMissingError(diaryResult.error);
+  if (noteResult.error || categoryResult.error || codeResult.error || (diaryResult.error && !diaryTableMissing)) {
+    return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error || diaryResult.error };
   }
 
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
   const remoteCategories = (categoryResult.data || []).map(deserializeArchiveCategoryFromSupabase);
   const remoteCodes = (codeResult.data || []).map(deserializeArchiveCodeFromSupabase);
-  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0;
-  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0;
+  const remoteDiaries = diaryTableMissing
+    ? (state.archiveDiaries || [])
+    : (diaryResult.data || []).map(deserializeArchiveDiaryFromSupabase);
+  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0 || remoteDiaries.length > 0;
+  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0 || state.archiveDiaries.length > 0;
 
   if (!hasRemoteData && hasLocalData) {
     const seedResult = await syncArchiveStateToSupabase();
@@ -1424,11 +1548,13 @@ async function syncArchivesFromSupabase() {
     ...item,
     categoryId: state.archiveCodeCategories.some((category) => category.id === item.categoryId) ? item.categoryId : fallbackCategoryId,
   }));
+  state.archiveDiaries = remoteDiaries;
   saveState({ history: false });
   updateSupabaseStatusSummary();
   renderArchiveNotes();
   renderArchiveCodeCategories();
   renderArchiveCodes();
+  renderArchiveDiaries();
   return { ok: true };
 }
 
@@ -1748,6 +1874,7 @@ function getRefreshDomainKeysForView(view) {
       return ["projects"];
     case "archiveNotes":
     case "archiveCodes":
+    case "archiveDiary":
       return ["archives"];
     case "settings":
       return ["siteSettings"];
@@ -2177,6 +2304,7 @@ function bindEvents() {
   els.navArchiveBtn?.addEventListener("click", toggleArchiveMenu);
   els.navArchiveNotesBtn?.addEventListener("click", () => switchView("archiveNotes"));
   els.navArchiveCodesBtn?.addEventListener("click", () => switchView("archiveCodes"));
+  els.navArchiveDiaryBtn?.addEventListener("click", () => switchView("archiveDiary"));
   els.navSettingsBtn?.addEventListener("click", () => switchView("settings"));
   els.sidebarToggleBtn.addEventListener("click", toggleSidebar);
   els.mobileNavOpenBtn?.addEventListener("click", openMobileNav);
@@ -2189,6 +2317,7 @@ function bindEvents() {
   els.newArchiveNoteBtn?.addEventListener("click", () => openArchiveNoteModal());
   els.newArchiveCodeBtn?.addEventListener("click", () => openArchiveCodeModal());
   els.newArchiveCategoryBtn?.addEventListener("click", () => openArchiveCategoryModal());
+  els.newArchiveDiaryBtn?.addEventListener("click", () => openArchiveDiaryModal());
 
   els.projectModalCloseBtn.addEventListener("click", closeProjectModal);
   els.projectForm.addEventListener("submit", handleProjectSave);
@@ -2276,6 +2405,32 @@ function bindEvents() {
   els.archiveCodeForm?.addEventListener("submit", handleArchiveCodeSave);
   els.archiveCodeInput?.addEventListener("input", syncArchiveCodeHighlight);
   els.archiveCodeInput?.addEventListener("scroll", syncArchiveCodeScroll);
+  els.archiveDiaryCloseBtn?.addEventListener("click", closeArchiveDiaryModal);
+  els.archiveDiaryEditBtn?.addEventListener("click", () => setArchiveDiaryEditing(true));
+  els.archiveDiaryDeleteBtn?.addEventListener("click", deleteCurrentArchiveDiary);
+  els.archiveDiaryForm?.addEventListener("submit", handleArchiveDiarySave);
+  [
+    els.archiveDiarySearchInput,
+    els.archiveDiaryPeriodFilter,
+    els.archiveDiaryTopicFilter,
+    els.archiveDiaryMoodFilter,
+    els.archiveDiarySortSelect,
+  ].forEach((field) => field?.addEventListener("input", renderArchiveDiaries));
+  [
+    els.archiveDiaryPeriodFilter,
+    els.archiveDiaryTopicFilter,
+    els.archiveDiaryMoodFilter,
+    els.archiveDiarySortSelect,
+  ].forEach((field) => field?.addEventListener("change", renderArchiveDiaries));
+  els.archiveDiaryClearFiltersBtn?.addEventListener("click", () => {
+    if (els.archiveDiarySearchInput) els.archiveDiarySearchInput.value = "";
+    if (els.archiveDiaryPeriodFilter) els.archiveDiaryPeriodFilter.value = "";
+    if (els.archiveDiaryTopicFilter) els.archiveDiaryTopicFilter.value = "";
+    if (els.archiveDiaryMoodFilter) els.archiveDiaryMoodFilter.value = "";
+    if (els.archiveDiarySortSelect) els.archiveDiarySortSelect.value = "entryDesc";
+    syncAllCustomSelects();
+    renderArchiveDiaries();
+  });
   els.archiveCategoryCloseBtn?.addEventListener("click", closeArchiveCategoryModal);
   els.archiveCategoryDeleteBtn?.addEventListener("click", deleteCurrentArchiveCategory);
   els.archiveCategoryForm?.addEventListener("submit", handleArchiveCategorySave);
@@ -3054,6 +3209,10 @@ function captureArchiveCodeModalState() {
   return serializeFormControls(els.archiveCodeForm);
 }
 
+function captureArchiveDiaryModalState() {
+  return serializeFormControls(els.archiveDiaryForm);
+}
+
 function captureArchiveCategoryModalState() {
   return serializeFormControls(els.archiveCategoryForm);
 }
@@ -3076,6 +3235,8 @@ function hasUnsavedChanges(key) {
       return modalSnapshots.archiveNote !== captureArchiveNoteModalState();
     case "archiveCode":
       return modalSnapshots.archiveCode !== captureArchiveCodeModalState();
+    case "archiveDiary":
+      return modalSnapshots.archiveDiary !== captureArchiveDiaryModalState();
     case "archiveCategory":
       return modalSnapshots.archiveCategory !== captureArchiveCategoryModalState();
     default:
@@ -3091,6 +3252,7 @@ function getOpenDirtyModalKey() {
     [els.worklogModal, "worklog"],
     [els.archiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, "archiveCode"],
+    [els.archiveDiaryModal, "archiveDiary"],
     [els.archiveCategoryModal, "archiveCategory"],
   ];
 
@@ -3108,6 +3270,7 @@ function getOpenEditingModalKey() {
     [els.worklogModal, "worklog"],
     [els.archiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, "archiveCode"],
+    [els.archiveDiaryModal, "archiveDiary"],
     [els.archiveCategoryModal, "archiveCategory"],
     [els.annualGoalAddModal, "annualGoal"],
     [els.myProfileModal, "myProfile"],
@@ -3140,6 +3303,9 @@ function saveAndCloseDirtyModal(key) {
     case "archiveCode":
       els.archiveCodeForm?.requestSubmit();
       break;
+    case "archiveDiary":
+      els.archiveDiaryForm?.requestSubmit();
+      break;
     case "archiveCategory":
       els.archiveCategoryForm?.requestSubmit();
       break;
@@ -3165,6 +3331,7 @@ function bindOverlayDismissals() {
     [els.myProfileModal, closeMyProfileModal],
     [els.archiveNoteModal, closeArchiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, closeArchiveCodeModal, "archiveCode"],
+    [els.archiveDiaryModal, closeArchiveDiaryModal, "archiveDiary"],
     [els.archiveCategoryModal, closeArchiveCategoryModal, "archiveCategory"],
   ];
 
@@ -3222,6 +3389,9 @@ function render() {
   if (els.archiveCodesHeroText) {
     els.archiveCodesHeroText.textContent = `${roleLabel || "멤버"}님, 자주 쓰는 코드를 아카이브하세요.`;
   }
+  if (els.archiveDiaryHeroText) {
+    els.archiveDiaryHeroText.textContent = `${roleLabel || "멤버"}님, 사업을 운영하며 느낀 생각을 기록해두세요.`;
+  }
   syncCurrentView();
   syncSidebar();
   if (new URLSearchParams(window.location.search).get("mobileNav") === "open") {
@@ -3241,6 +3411,7 @@ function render() {
   renderArchiveNotes();
   renderArchiveCodeCategories();
   renderArchiveCodes();
+  renderArchiveDiaries();
   renderSiteSettings();
   applySiteSettings();
   syncAllCustomSelects();
@@ -3250,7 +3421,7 @@ function switchView(view) {
   if (view === "members" && !canManageMembers()) return;
   if (view === "settings" && !canManageSiteSettings()) return;
   state.currentView = view;
-  if (view === "archiveNotes" || view === "archiveCodes") state.archiveMenuOpen = true;
+  if (["archiveNotes", "archiveCodes", "archiveDiary"].includes(view)) state.archiveMenuOpen = true;
   saveState({ history: false });
   syncCurrentView();
   refreshDataForView(view).catch((error) => {
@@ -3279,15 +3450,17 @@ function syncCurrentView() {
   els.quotesView.classList.toggle("hidden", activeView !== "quotes");
   els.archiveNotesView.classList.toggle("hidden", activeView !== "archiveNotes");
   els.archiveCodesView.classList.toggle("hidden", activeView !== "archiveCodes");
+  els.archiveDiaryView?.classList.toggle("hidden", activeView !== "archiveDiary");
   els.settingsView?.classList.toggle("hidden", activeView !== "settings");
   els.navDashboardBtn.classList.toggle("active", activeView === "dashboard");
   els.navMembersBtn.classList.toggle("active", activeView === "members");
   els.navCustomersBtn.classList.toggle("active", activeView === "customers");
   els.navSalesBtn.classList.toggle("active", activeView === "sales");
   els.navQuotesBtn.classList.toggle("active", activeView === "quotes");
-  els.navArchiveBtn?.classList.toggle("active", activeView === "archiveNotes" || activeView === "archiveCodes");
+  els.navArchiveBtn?.classList.toggle("active", ["archiveNotes", "archiveCodes", "archiveDiary"].includes(activeView));
   els.navArchiveNotesBtn?.classList.toggle("active", activeView === "archiveNotes");
   els.navArchiveCodesBtn?.classList.toggle("active", activeView === "archiveCodes");
+  els.navArchiveDiaryBtn?.classList.toggle("active", activeView === "archiveDiary");
   els.navSettingsBtn?.classList.toggle("active", activeView === "settings");
   els.navMembersBtn.classList.toggle("hidden", !memberAccess);
   els.navSettingsBtn?.classList.toggle("hidden", !settingsAccess);
@@ -3323,12 +3496,12 @@ function closeMobileNav() {
 
 function toggleArchiveMenu() {
   state.archiveMenuOpen = !state.archiveMenuOpen;
-  if (state.archiveMenuOpen && !["archiveNotes", "archiveCodes"].includes(state.currentView)) {
+  if (state.archiveMenuOpen && !["archiveNotes", "archiveCodes", "archiveDiary"].includes(state.currentView)) {
     state.currentView = "archiveNotes";
   }
   saveState({ history: false });
   syncCurrentView();
-  if (state.archiveMenuOpen && ["archiveNotes", "archiveCodes"].includes(state.currentView)) {
+  if (state.archiveMenuOpen && ["archiveNotes", "archiveCodes", "archiveDiary"].includes(state.currentView)) {
     refreshDataForView(state.currentView).catch((error) => {
       console.warn(`${state.currentView} 화면 데이터를 새로고침하지 못했습니다.`, error);
     });
@@ -4009,6 +4182,131 @@ function renderArchiveNotes() {
   bindArchiveListInteractions("note");
 }
 
+function getArchiveDiaryFilterState() {
+  return {
+    keyword: String(els.archiveDiarySearchInput?.value || "").trim().toLowerCase(),
+    period: String(els.archiveDiaryPeriodFilter?.value || ""),
+    topic: String(els.archiveDiaryTopicFilter?.value || ""),
+    mood: String(els.archiveDiaryMoodFilter?.value || ""),
+    sort: String(els.archiveDiarySortSelect?.value || "entryDesc"),
+  };
+}
+
+function isDiaryInPeriod(diary, period) {
+  if (!period) return true;
+  const entryDate = String(diary.entryDate || "");
+  const now = new Date();
+  if (period === "thisMonth") return entryDate.startsWith(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  if (period === "thisYear") return entryDate.startsWith(String(now.getFullYear()));
+  return true;
+}
+
+function populateArchiveDiaryTopicFilter() {
+  if (!els.archiveDiaryTopicFilter) return;
+  const currentValue = els.archiveDiaryTopicFilter.value;
+  const topics = Array.from(new Set(
+    (state.archiveDiaries || [])
+      .map((item) => String(item.topic || "").trim())
+      .filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b, "ko-KR"));
+  els.archiveDiaryTopicFilter.innerHTML = '<option value="">전체</option>' + topics
+    .map((topic) => `<option value="${escapeHtml(topic)}">${escapeHtml(topic)}</option>`)
+    .join("");
+  els.archiveDiaryTopicFilter.value = topics.includes(currentValue) ? currentValue : "";
+  refreshCustomSelect(els.archiveDiaryTopicFilter);
+}
+
+function getFilteredArchiveDiaries() {
+  const filters = getArchiveDiaryFilterState();
+  const diaries = [...(state.archiveDiaries || [])]
+    .filter((diary) => {
+      if (filters.period && !isDiaryInPeriod(diary, filters.period)) return false;
+      if (filters.topic && diary.topic !== filters.topic) return false;
+      if (filters.mood && diary.mood !== filters.mood) return false;
+      if (filters.keyword) {
+        const haystack = [
+          diary.entryDate,
+          diary.title,
+          diary.content,
+          diary.topic,
+          getDiaryMoodLabel(diary.mood),
+          ...(diary.tags || []),
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(filters.keyword)) return false;
+      }
+      return true;
+    });
+
+  diaries.sort((a, b) => {
+    if (filters.sort === "entryAsc") {
+      return String(a.entryDate || "").localeCompare(String(b.entryDate || ""))
+        || String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    }
+    if (filters.sort === "updatedDesc") {
+      return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+    }
+    return String(b.entryDate || "").localeCompare(String(a.entryDate || ""))
+      || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+
+  return diaries;
+}
+
+function renderArchiveDiaries() {
+  if (!els.archiveDiaryList) return;
+  const diaries = state.archiveDiaries || [];
+  populateArchiveDiaryTopicFilter();
+
+  if (!diaries.length) {
+    els.archiveDiaryList.innerHTML = `
+      <div class="archive-empty muted small">
+        아직 등록된 다이어리가 없습니다. 오늘 느낀 점부터 짧게 남겨보세요.
+        <div class="diary-empty-actions">
+          <button type="button" class="secondary small-btn" data-diary-empty-new>새 기록</button>
+        </div>
+      </div>
+    `;
+    els.archiveDiaryList.querySelector("[data-diary-empty-new]")?.addEventListener("click", () => openArchiveDiaryModal());
+    return;
+  }
+
+  const filteredDiaries = getFilteredArchiveDiaries();
+  if (!filteredDiaries.length) {
+    els.archiveDiaryList.innerHTML = '<div class="archive-empty muted small">검색 결과가 없습니다. 키워드나 필터를 조금 넓혀보세요.</div>';
+    return;
+  }
+
+  els.archiveDiaryList.innerHTML = filteredDiaries.map((item) => {
+    const color = getArchiveNoteColor(item.color);
+    const moodLabel = getDiaryMoodLabel(item.mood);
+    const moodClass = DIARY_MOOD_META[item.mood] ? ` mood-${item.mood}` : "";
+    const visibleTags = normalizeDiaryTags(item.tags || []).slice(0, 4);
+    const extraTagCount = Math.max(0, normalizeDiaryTags(item.tags || []).length - visibleTags.length);
+    return `
+      <article class="archive-card archive-note-card diary-card" data-diary-id="${item.id}" style="--note-card-bg:${color.bg}; --note-card-border:${color.border};">
+        <div class="diary-card-top">
+          <span class="diary-card-date">${escapeHtml(item.entryDate ? formatDateOnly(item.entryDate) : "-")}</span>
+          ${item.topic ? `<span class="diary-chip">${escapeHtml(item.topic)}</span>` : ""}
+          ${moodLabel ? `<span class="diary-chip${moodClass}">${escapeHtml(moodLabel)}</span>` : ""}
+        </div>
+        <div class="archive-card-head">
+          <strong>${escapeHtml(item.title || "제목 없음")}</strong>
+        </div>
+        <p class="archive-card-preview">${escapeHtml(item.content || "내용 없음")}</p>
+        <div class="diary-card-tags">
+          ${visibleTags.map((tag) => `<span class="diary-tag">#${escapeHtml(tag)}</span>`).join("")}
+          ${extraTagCount ? `<span class="diary-tag">+${extraTagCount}</span>` : ""}
+        </div>
+        <span class="archive-card-meta">수정 ${escapeHtml(formatDateTime(item.updatedAt || item.createdAt))}</span>
+      </article>
+    `;
+  }).join("");
+
+  els.archiveDiaryList.querySelectorAll("[data-diary-id]").forEach((card) => {
+    card.addEventListener("click", () => openArchiveDiaryModal(card.dataset.diaryId));
+  });
+}
+
 function renderArchiveNoteColorPalette(selectedColor = "gray") {
   if (!els.archiveNoteColorPalette) return;
   els.archiveNoteColorPalette.innerHTML = ARCHIVE_NOTE_COLORS.map((color) => `
@@ -4030,6 +4328,31 @@ function renderArchiveNoteColorPalette(selectedColor = "gray") {
         els.archiveNoteForm.elements.color.value = colorId;
       }
       renderArchiveNoteColorPalette(colorId);
+    });
+  });
+}
+
+function renderArchiveDiaryColorPalette(selectedColor = "gray") {
+  if (!els.archiveDiaryColorPalette) return;
+  els.archiveDiaryColorPalette.innerHTML = ARCHIVE_NOTE_COLORS.map((color) => `
+    <button
+      type="button"
+      class="archive-color-chip ${color.id === selectedColor ? "is-active" : ""}"
+      data-archive-diary-color="${color.id}"
+      title="${escapeHtml(color.label)}"
+      aria-label="${escapeHtml(color.label)}"
+      style="--chip-bg:${color.bg}; --chip-border:${color.border};"
+    ></button>
+  `).join("");
+
+  els.archiveDiaryColorPalette.querySelectorAll("[data-archive-diary-color]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!archiveDiaryEditing) return;
+      const colorId = button.dataset.archiveDiaryColor || "gray";
+      if (els.archiveDiaryForm?.elements?.color) {
+        els.archiveDiaryForm.elements.color.value = colorId;
+      }
+      renderArchiveDiaryColorPalette(colorId);
     });
   });
 }
@@ -5238,6 +5561,23 @@ function setArchiveCodeEditing(editable) {
   syncArchiveCodeHighlight();
 }
 
+function setArchiveDiaryEditing(editable) {
+  archiveDiaryEditing = editable;
+  const fields = els.archiveDiaryForm?.querySelectorAll('input[name="entryDate"], input[name="title"], input[name="topic"], input[name="tags"], textarea[name="content"], select[name="mood"]') || [];
+  fields.forEach((field) => {
+    if (field.tagName === "SELECT") {
+      field.disabled = !editable;
+      refreshCustomSelect(field);
+      return;
+    }
+    field.readOnly = !editable;
+    field.disabled = false;
+  });
+  els.archiveDiaryColorPalette?.classList.toggle("is-readonly", !editable);
+  els.archiveDiaryEditBtn?.classList.toggle("hidden", editable || !currentArchiveDiaryId);
+  els.archiveDiarySaveBtn?.classList.toggle("hidden", !editable);
+}
+
 function openArchiveCategoryModal(categoryId = null) {
   currentArchiveCategoryId = categoryId;
   const category = categoryId ? state.archiveCodeCategories.find((item) => item.id === categoryId) : null;
@@ -5378,6 +5718,33 @@ function closeArchiveCodeModal() {
   els.archiveCodeModal.classList.add("hidden");
 }
 
+function openArchiveDiaryModal(diaryId = null) {
+  currentArchiveDiaryId = diaryId;
+  const diary = diaryId ? state.archiveDiaries.find((item) => item.id === diaryId) : null;
+  els.archiveDiaryForm?.reset();
+  els.archiveDiaryForm.elements.id.value = diary?.id || "";
+  els.archiveDiaryForm.elements.entryDate.value = diary?.entryDate || formatDateKey(new Date());
+  els.archiveDiaryForm.elements.title.value = diary?.title || "";
+  els.archiveDiaryForm.elements.mood.value = diary?.mood || "";
+  els.archiveDiaryForm.elements.topic.value = diary?.topic || "";
+  els.archiveDiaryForm.elements.tags.value = formatDiaryTagsInput(diary?.tags || []);
+  els.archiveDiaryForm.elements.color.value = diary?.color || "gray";
+  els.archiveDiaryForm.elements.content.value = diary?.content || "";
+  els.archiveDiaryModalTitle.textContent = diary ? "다이어리 상세" : "새 기록";
+  els.archiveDiaryDeleteBtn?.classList.toggle("hidden", !diary);
+  setArchiveDiaryEditing(!diary);
+  renderArchiveDiaryColorPalette(diary?.color || "gray");
+  refreshCustomSelect(els.archiveDiaryForm.elements.mood);
+  els.archiveDiaryModal.classList.remove("hidden");
+  setModalSnapshot("archiveDiary", captureArchiveDiaryModalState());
+}
+
+function closeArchiveDiaryModal() {
+  currentArchiveDiaryId = null;
+  archiveDiaryEditing = false;
+  els.archiveDiaryModal.classList.add("hidden");
+}
+
 async function handleArchiveCodeSave(event) {
   event.preventDefault();
   const finishBusyToast = startDelayedBusyToast();
@@ -5438,6 +5805,78 @@ function deleteCurrentArchiveCode() {
     renderArchiveCodes();
     closeArchiveCodeModal();
   }, code ? `[${code.title}] 코드를 삭제할까요?` : "코드를 삭제할까요?");
+}
+
+async function handleArchiveDiarySave(event) {
+  event.preventDefault();
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const now = new Date().toISOString();
+    const entryDate = String(formData.get("entryDate") || formatDateKey(new Date())).trim();
+    const title = String(formData.get("title") || "").trim() || `${entryDate} 회고`;
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      entryDate,
+      title,
+      content: String(formData.get("content") || "").trim(),
+      mood: String(formData.get("mood") || ""),
+      topic: String(formData.get("topic") || "").trim(),
+      tags: normalizeDiaryTags(formData.get("tags")),
+      color: String(formData.get("color") || "gray"),
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!payload.content) {
+      openNoticeModal("다이어리 내용을 입력해주세요.");
+      return;
+    }
+    if (!(await ensureFreshDataForAction(["archives"], "다이어리 저장"))) return;
+    const previousDiaries = structuredClone(state.archiveDiaries);
+    const existing = state.archiveDiaries.find((item) => item.id === payload.id);
+    if (existing) {
+      payload.createdAt = existing.createdAt || now;
+      Object.assign(existing, payload);
+    } else {
+      state.archiveDiaries.unshift(payload);
+    }
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "다이어리 저장 실패", upsertDiaryIds: [payload.id] });
+    if (!persistResult.ok) {
+      state.archiveDiaries = previousDiaries;
+      renderArchiveDiaries();
+      return;
+    }
+    renderArchiveDiaries();
+    closeArchiveDiaryModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
+  }
+}
+
+function deleteCurrentArchiveDiary() {
+  if (!currentArchiveDiaryId) return;
+  const diary = state.archiveDiaries.find((item) => item.id === currentArchiveDiaryId);
+  openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["archives"], "다이어리 삭제"))) return;
+    const previousDiaries = structuredClone(state.archiveDiaries);
+    state.archiveDiaries = state.archiveDiaries.filter((item) => item.id !== currentArchiveDiaryId);
+    const persistResult = await persistArchiveChanges({
+      errorMessagePrefix: "다이어리 삭제 실패",
+      upsertNoteIds: [],
+      upsertCategoryIds: [],
+      upsertCodeIds: [],
+      upsertDiaryIds: [],
+      deleteDiaryIds: [currentArchiveDiaryId],
+    });
+    if (!persistResult.ok) {
+      state.archiveDiaries = previousDiaries;
+      renderArchiveDiaries();
+      return;
+    }
+    renderArchiveDiaries();
+    closeArchiveDiaryModal();
+  }, diary ? `[${diary.title}] 다이어리를 삭제할까요?` : "다이어리를 삭제할까요?");
 }
 
 async function handleArchiveCategorySave(event) {
@@ -6334,6 +6773,7 @@ function getHistorySnapshotSummary(snapshotJson) {
       `일정 ${snapshot.schedules?.length || 0}건`,
       `메모 ${snapshot.archiveNotes?.length || 0}건`,
       `코드 ${snapshot.archiveCodes?.length || 0}건`,
+      `다이어리 ${snapshot.archiveDiaries?.length || 0}건`,
     ].join(" · ");
   } catch (error) {
     return "스냅샷 정보를 읽을 수 없습니다.";

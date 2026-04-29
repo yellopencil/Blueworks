@@ -84,6 +84,7 @@ button, input, select, textarea { font: inherit; }
 #quotesView,
 #archiveNotesView,
 #archiveCodesView,
+#archiveDiaryView,
 #settingsView {
   width: 100%;
   max-width: 100%;
@@ -97,6 +98,7 @@ button, input, select, textarea { font: inherit; }
 #quotesView > *,
 #archiveNotesView > *,
 #archiveCodesView > *,
+#archiveDiaryView > *,
 #settingsView > * {
   width: 100%;
   margin-left: 0;
@@ -954,6 +956,10 @@ body[data-theme="dark"] .rich-editor-toolbar {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+#archiveDiaryList.archive-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .archive-code-group {
   display: grid;
   gap: 14px;
@@ -1062,6 +1068,100 @@ body[data-theme="dark"] .rich-editor-toolbar {
 .archive-card-meta {
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.diary-toolbar {
+  margin-top: 20px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.diary-search-field {
+  display: grid;
+  gap: 8px;
+}
+
+.diary-search-field span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.diary-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.diary-clear-btn {
+  min-height: 44px;
+}
+
+.diary-card {
+  align-content: start;
+  min-height: 208px;
+}
+
+.diary-card-top,
+.diary-card-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diary-card-date {
+  font-size: 0.8rem;
+  color: #52657f;
+  font-weight: 800;
+}
+
+.diary-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(61, 124, 255, 0.08);
+  color: #466285;
+  border: 1px solid rgba(61, 124, 255, 0.14);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.diary-chip.mood-good { background: #edf8f2; color: #397557; border-color: #c4e4d2; }
+.diary-chip.mood-normal { background: #eef3fb; color: #52657f; border-color: #ccd7e7; }
+.diary-chip.mood-hard { background: #fff5e5; color: #8a6732; border-color: #ead0a7; }
+.diary-chip.mood-learned { background: #eef7ff; color: #3d6b9f; border-color: #bfd8f2; }
+.diary-chip.mood-decision { background: #f3f0ff; color: #6150a3; border-color: #d5ccf4; }
+
+.diary-card .archive-card-head {
+  align-items: flex-start;
+}
+
+.diary-card .archive-card-head strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.diary-card-tags {
+  min-height: 24px;
+}
+
+.diary-tag {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.diary-empty-actions {
+  margin-top: 12px;
 }
 
 .archive-drag-handle {
@@ -1713,6 +1813,16 @@ body[data-theme="dark"] .customer-card {
 body[data-theme="dark"] .archive-card {
   background: #1b1f27;
   border-color: #334154;
+}
+
+body[data-theme="dark"] .diary-toolbar {
+  background: var(--surface-soft);
+}
+
+body[data-theme="dark"] .diary-card-date,
+body[data-theme="dark"] .diary-chip,
+body[data-theme="dark"] .diary-tag {
+  color: var(--muted);
 }
 
 body[data-theme="dark"] .archive-category-card {
@@ -2936,6 +3046,12 @@ body[data-theme="dark"] .project-modal-card .modal-head {
   font-weight: 400;
 }
 
+#archiveDiaryModal textarea[name="content"] {
+  min-height: calc(50vh - 80px);
+  font-weight: 400;
+  line-height: 1.75;
+}
+
 .archive-code-modal-card {
   width: min(100%, 1120px);
 }
@@ -2945,7 +3061,8 @@ body[data-theme="dark"] .project-modal-card .modal-head {
 }
 
 #archiveNoteModal .modal-head,
-#archiveCodeModal .modal-head {
+#archiveCodeModal .modal-head,
+#archiveDiaryModal .modal-head {
   border-bottom: none;
   padding-bottom: 0;
   margin-bottom: 18px;
@@ -3555,7 +3672,11 @@ body[data-theme="dark"] .sales-chart-value {
 
 @media (max-width: 1180px) {
   .shell, .auth-grid, .workspace-grid, .summary-grid, .board-columns, .annual-goal-board, .annual-goal-modal-grid, .two-col, .members-grid, .customers-grid, .sales-grid, .app-shell { grid-template-columns: 1fr; }
+  .diary-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .archive-list,
+  #archiveDiaryList.archive-list,
   .archive-code-group-list,
   .archive-category-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sidebar {
@@ -3575,11 +3696,15 @@ body[data-theme="dark"] .sales-chart-value {
 }
 
 @media (max-width: 720px) {
+  .diary-filter-grid {
+    grid-template-columns: 1fr;
+  }
   .sales-filter-grid,
   .sales-metrics {
     grid-template-columns: 1fr;
   }
   .archive-list,
+  #archiveDiaryList.archive-list,
   .archive-code-group-list,
   .archive-category-list {
     grid-template-columns: 1fr;
@@ -3957,6 +4082,7 @@ body[data-theme="dark"] .sales-chart-value {
   }
 
   .archive-list,
+  #archiveDiaryList.archive-list,
   .archive-code-group-list,
   .archive-category-list,
   .annual-goal-list {
