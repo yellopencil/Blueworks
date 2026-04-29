@@ -69,14 +69,6 @@ const ARCHIVE_NOTE_COLORS = [
   { id: "ink", label: "먹색", bg: "#eef0f2", border: "#aeb6c0" },
 ];
 
-const DIARY_MOOD_META = {
-  good: "좋음",
-  normal: "보통",
-  hard: "힘듦",
-  learned: "배움",
-  decision: "결심",
-};
-
 function getArchiveNoteColor(colorId) {
   return ARCHIVE_NOTE_COLORS.find((color) => color.id === colorId) || ARCHIVE_NOTE_COLORS[14];
 }
@@ -191,8 +183,6 @@ const els = {
   newArchiveDiaryBtn: document.querySelector("#newArchiveDiaryBtn"),
   archiveDiarySearchInput: document.querySelector("#archiveDiarySearchInput"),
   archiveDiaryPeriodFilter: document.querySelector("#archiveDiaryPeriodFilter"),
-  archiveDiaryTopicFilter: document.querySelector("#archiveDiaryTopicFilter"),
-  archiveDiaryMoodFilter: document.querySelector("#archiveDiaryMoodFilter"),
   archiveDiarySortSelect: document.querySelector("#archiveDiarySortSelect"),
   archiveDiaryClearFiltersBtn: document.querySelector("#archiveDiaryClearFiltersBtn"),
   archiveDiaryList: document.querySelector("#archiveDiaryList"),
@@ -1056,10 +1046,6 @@ function normalizeDiaryTags(value) {
 
 function formatDiaryTagsInput(tags) {
   return normalizeDiaryTags(tags).join(", ");
-}
-
-function getDiaryMoodLabel(mood) {
-  return DIARY_MOOD_META[mood] || "";
 }
 
 function serializeArchiveDiaryForSupabase(diary, index = 0) {
@@ -2412,21 +2398,15 @@ function bindEvents() {
   [
     els.archiveDiarySearchInput,
     els.archiveDiaryPeriodFilter,
-    els.archiveDiaryTopicFilter,
-    els.archiveDiaryMoodFilter,
     els.archiveDiarySortSelect,
   ].forEach((field) => field?.addEventListener("input", renderArchiveDiaries));
   [
     els.archiveDiaryPeriodFilter,
-    els.archiveDiaryTopicFilter,
-    els.archiveDiaryMoodFilter,
     els.archiveDiarySortSelect,
   ].forEach((field) => field?.addEventListener("change", renderArchiveDiaries));
   els.archiveDiaryClearFiltersBtn?.addEventListener("click", () => {
     if (els.archiveDiarySearchInput) els.archiveDiarySearchInput.value = "";
     if (els.archiveDiaryPeriodFilter) els.archiveDiaryPeriodFilter.value = "";
-    if (els.archiveDiaryTopicFilter) els.archiveDiaryTopicFilter.value = "";
-    if (els.archiveDiaryMoodFilter) els.archiveDiaryMoodFilter.value = "";
     if (els.archiveDiarySortSelect) els.archiveDiarySortSelect.value = "entryDesc";
     syncAllCustomSelects();
     renderArchiveDiaries();
@@ -3421,7 +3401,7 @@ function switchView(view) {
   if (view === "members" && !canManageMembers()) return;
   if (view === "settings" && !canManageSiteSettings()) return;
   state.currentView = view;
-  if (["archiveNotes", "archiveCodes", "archiveDiary"].includes(view)) state.archiveMenuOpen = true;
+  if (["archiveNotes", "archiveCodes"].includes(view)) state.archiveMenuOpen = true;
   saveState({ history: false });
   syncCurrentView();
   refreshDataForView(view).catch((error) => {
@@ -3457,7 +3437,7 @@ function syncCurrentView() {
   els.navCustomersBtn.classList.toggle("active", activeView === "customers");
   els.navSalesBtn.classList.toggle("active", activeView === "sales");
   els.navQuotesBtn.classList.toggle("active", activeView === "quotes");
-  els.navArchiveBtn?.classList.toggle("active", ["archiveNotes", "archiveCodes", "archiveDiary"].includes(activeView));
+  els.navArchiveBtn?.classList.toggle("active", ["archiveNotes", "archiveCodes"].includes(activeView));
   els.navArchiveNotesBtn?.classList.toggle("active", activeView === "archiveNotes");
   els.navArchiveCodesBtn?.classList.toggle("active", activeView === "archiveCodes");
   els.navArchiveDiaryBtn?.classList.toggle("active", activeView === "archiveDiary");
@@ -3496,12 +3476,12 @@ function closeMobileNav() {
 
 function toggleArchiveMenu() {
   state.archiveMenuOpen = !state.archiveMenuOpen;
-  if (state.archiveMenuOpen && !["archiveNotes", "archiveCodes", "archiveDiary"].includes(state.currentView)) {
+  if (state.archiveMenuOpen && !["archiveNotes", "archiveCodes"].includes(state.currentView)) {
     state.currentView = "archiveNotes";
   }
   saveState({ history: false });
   syncCurrentView();
-  if (state.archiveMenuOpen && ["archiveNotes", "archiveCodes", "archiveDiary"].includes(state.currentView)) {
+  if (state.archiveMenuOpen && ["archiveNotes", "archiveCodes"].includes(state.currentView)) {
     refreshDataForView(state.currentView).catch((error) => {
       console.warn(`${state.currentView} 화면 데이터를 새로고침하지 못했습니다.`, error);
     });
@@ -4186,8 +4166,6 @@ function getArchiveDiaryFilterState() {
   return {
     keyword: String(els.archiveDiarySearchInput?.value || "").trim().toLowerCase(),
     period: String(els.archiveDiaryPeriodFilter?.value || ""),
-    topic: String(els.archiveDiaryTopicFilter?.value || ""),
-    mood: String(els.archiveDiaryMoodFilter?.value || ""),
     sort: String(els.archiveDiarySortSelect?.value || "entryDesc"),
   };
 }
@@ -4201,36 +4179,16 @@ function isDiaryInPeriod(diary, period) {
   return true;
 }
 
-function populateArchiveDiaryTopicFilter() {
-  if (!els.archiveDiaryTopicFilter) return;
-  const currentValue = els.archiveDiaryTopicFilter.value;
-  const topics = Array.from(new Set(
-    (state.archiveDiaries || [])
-      .map((item) => String(item.topic || "").trim())
-      .filter(Boolean),
-  )).sort((a, b) => a.localeCompare(b, "ko-KR"));
-  els.archiveDiaryTopicFilter.innerHTML = '<option value="">전체</option>' + topics
-    .map((topic) => `<option value="${escapeHtml(topic)}">${escapeHtml(topic)}</option>`)
-    .join("");
-  els.archiveDiaryTopicFilter.value = topics.includes(currentValue) ? currentValue : "";
-  refreshCustomSelect(els.archiveDiaryTopicFilter);
-}
-
 function getFilteredArchiveDiaries() {
   const filters = getArchiveDiaryFilterState();
   const diaries = [...(state.archiveDiaries || [])]
     .filter((diary) => {
       if (filters.period && !isDiaryInPeriod(diary, filters.period)) return false;
-      if (filters.topic && diary.topic !== filters.topic) return false;
-      if (filters.mood && diary.mood !== filters.mood) return false;
       if (filters.keyword) {
         const haystack = [
           diary.entryDate,
           diary.title,
           diary.content,
-          diary.topic,
-          getDiaryMoodLabel(diary.mood),
-          ...(diary.tags || []),
         ].join(" ").toLowerCase();
         if (!haystack.includes(filters.keyword)) return false;
       }
@@ -4255,14 +4213,13 @@ function getFilteredArchiveDiaries() {
 function renderArchiveDiaries() {
   if (!els.archiveDiaryList) return;
   const diaries = state.archiveDiaries || [];
-  populateArchiveDiaryTopicFilter();
 
   if (!diaries.length) {
     els.archiveDiaryList.innerHTML = `
       <div class="archive-empty muted small">
         아직 등록된 다이어리가 없습니다. 오늘 느낀 점부터 짧게 남겨보세요.
         <div class="diary-empty-actions">
-          <button type="button" class="secondary small-btn" data-diary-empty-new>새 기록</button>
+          <button type="button" class="secondary small-btn" data-diary-empty-new>다이어리 작성</button>
         </div>
       </div>
     `;
@@ -4278,25 +4235,15 @@ function renderArchiveDiaries() {
 
   els.archiveDiaryList.innerHTML = filteredDiaries.map((item) => {
     const color = getArchiveNoteColor(item.color);
-    const moodLabel = getDiaryMoodLabel(item.mood);
-    const moodClass = DIARY_MOOD_META[item.mood] ? ` mood-${item.mood}` : "";
-    const visibleTags = normalizeDiaryTags(item.tags || []).slice(0, 4);
-    const extraTagCount = Math.max(0, normalizeDiaryTags(item.tags || []).length - visibleTags.length);
     return `
       <article class="archive-card archive-note-card diary-card" data-diary-id="${item.id}" style="--note-card-bg:${color.bg}; --note-card-border:${color.border};">
         <div class="diary-card-top">
           <span class="diary-card-date">${escapeHtml(item.entryDate ? formatDateOnly(item.entryDate) : "-")}</span>
-          ${item.topic ? `<span class="diary-chip">${escapeHtml(item.topic)}</span>` : ""}
-          ${moodLabel ? `<span class="diary-chip${moodClass}">${escapeHtml(moodLabel)}</span>` : ""}
         </div>
         <div class="archive-card-head">
           <strong>${escapeHtml(item.title || "제목 없음")}</strong>
         </div>
         <p class="archive-card-preview">${escapeHtml(item.content || "내용 없음")}</p>
-        <div class="diary-card-tags">
-          ${visibleTags.map((tag) => `<span class="diary-tag">#${escapeHtml(tag)}</span>`).join("")}
-          ${extraTagCount ? `<span class="diary-tag">+${extraTagCount}</span>` : ""}
-        </div>
         <span class="archive-card-meta">수정 ${escapeHtml(formatDateTime(item.updatedAt || item.createdAt))}</span>
       </article>
     `;
@@ -5563,7 +5510,7 @@ function setArchiveCodeEditing(editable) {
 
 function setArchiveDiaryEditing(editable) {
   archiveDiaryEditing = editable;
-  const fields = els.archiveDiaryForm?.querySelectorAll('input[name="entryDate"], input[name="title"], input[name="topic"], input[name="tags"], textarea[name="content"], select[name="mood"]') || [];
+  const fields = els.archiveDiaryForm?.querySelectorAll('input[name="entryDate"], input[name="title"], textarea[name="content"]') || [];
   fields.forEach((field) => {
     if (field.tagName === "SELECT") {
       field.disabled = !editable;
@@ -5725,16 +5672,12 @@ function openArchiveDiaryModal(diaryId = null) {
   els.archiveDiaryForm.elements.id.value = diary?.id || "";
   els.archiveDiaryForm.elements.entryDate.value = diary?.entryDate || formatDateKey(new Date());
   els.archiveDiaryForm.elements.title.value = diary?.title || "";
-  els.archiveDiaryForm.elements.mood.value = diary?.mood || "";
-  els.archiveDiaryForm.elements.topic.value = diary?.topic || "";
-  els.archiveDiaryForm.elements.tags.value = formatDiaryTagsInput(diary?.tags || []);
   els.archiveDiaryForm.elements.color.value = diary?.color || "gray";
   els.archiveDiaryForm.elements.content.value = diary?.content || "";
-  els.archiveDiaryModalTitle.textContent = diary ? "다이어리 상세" : "새 기록";
+  els.archiveDiaryModalTitle.textContent = diary ? "다이어리 상세" : "다이어리 작성";
   els.archiveDiaryDeleteBtn?.classList.toggle("hidden", !diary);
   setArchiveDiaryEditing(!diary);
   renderArchiveDiaryColorPalette(diary?.color || "gray");
-  refreshCustomSelect(els.archiveDiaryForm.elements.mood);
   els.archiveDiaryModal.classList.remove("hidden");
   setModalSnapshot("archiveDiary", captureArchiveDiaryModalState());
 }
@@ -5820,9 +5763,9 @@ async function handleArchiveDiarySave(event) {
       entryDate,
       title,
       content: String(formData.get("content") || "").trim(),
-      mood: String(formData.get("mood") || ""),
-      topic: String(formData.get("topic") || "").trim(),
-      tags: normalizeDiaryTags(formData.get("tags")),
+      mood: "",
+      topic: "",
+      tags: [],
       color: String(formData.get("color") || "gray"),
       createdAt: now,
       updatedAt: now,

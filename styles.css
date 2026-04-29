@@ -1093,7 +1093,7 @@ body[data-theme="dark"] .rich-editor-toolbar {
 
 .diary-filter-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   gap: 10px;
   align-items: end;
 }
@@ -1107,8 +1107,7 @@ body[data-theme="dark"] .rich-editor-toolbar {
   min-height: 208px;
 }
 
-.diary-card-top,
-.diary-card-tags {
+.diary-card-top {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1121,26 +1120,6 @@ body[data-theme="dark"] .rich-editor-toolbar {
   font-weight: 800;
 }
 
-.diary-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: rgba(61, 124, 255, 0.08);
-  color: #466285;
-  border: 1px solid rgba(61, 124, 255, 0.14);
-  font-size: 0.76rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.diary-chip.mood-good { background: #edf8f2; color: #397557; border-color: #c4e4d2; }
-.diary-chip.mood-normal { background: #eef3fb; color: #52657f; border-color: #ccd7e7; }
-.diary-chip.mood-hard { background: #fff5e5; color: #8a6732; border-color: #ead0a7; }
-.diary-chip.mood-learned { background: #eef7ff; color: #3d6b9f; border-color: #bfd8f2; }
-.diary-chip.mood-decision { background: #f3f0ff; color: #6150a3; border-color: #d5ccf4; }
-
 .diary-card .archive-card-head {
   align-items: flex-start;
 }
@@ -1148,16 +1127,6 @@ body[data-theme="dark"] .rich-editor-toolbar {
 .diary-card .archive-card-head strong {
   color: var(--text);
   font-size: 1rem;
-}
-
-.diary-card-tags {
-  min-height: 24px;
-}
-
-.diary-tag {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
 }
 
 .diary-empty-actions {
@@ -1819,9 +1788,7 @@ body[data-theme="dark"] .diary-toolbar {
   background: var(--surface-soft);
 }
 
-body[data-theme="dark"] .diary-card-date,
-body[data-theme="dark"] .diary-chip,
-body[data-theme="dark"] .diary-tag {
+body[data-theme="dark"] .diary-card-date {
   color: var(--muted);
 }
 
