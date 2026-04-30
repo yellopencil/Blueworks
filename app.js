@@ -7061,8 +7061,9 @@ function getWorklogTaskSourceId(task = {}) {
 }
 
 function getWorklogCarryDismissKey(task = {}) {
-  const sourceTaskId = getWorklogTaskSourceId(task);
+  const sourceTaskId = task.sourceTaskId || (task.carriedFromDate ? task.id : "");
   if (sourceTaskId) return `source:${sourceTaskId}`;
+  if (task.scheduleId) return `schedule:${task.scheduleId}`;
   const contentKey = getWorklogTaskContentKey(task);
   return contentKey === "|" ? "" : `content:${contentKey}`;
 }
@@ -7077,7 +7078,6 @@ function getDismissedWorklogCarryKeys(tasks = []) {
 }
 
 function addWorklogCarryDismissMarker(tasks = [], task = {}) {
-  if (!task.carriedFromDate && !task.sourceTaskId) return;
   const dismissKey = getWorklogCarryDismissKey(task);
   if (!dismissKey) return;
   const markerText = `${WORKLOG_CARRY_DISMISS_PREFIX}${dismissKey}`;
@@ -7137,6 +7137,12 @@ function syncScheduleToWorklog(schedule, previousSchedule = null) {
 
   const worklog = state.worklogs[schedule.date] || { date: schedule.date, tasks: [], notes: "" };
   worklog.tasks = Array.isArray(worklog.tasks) ? worklog.tasks : [];
+  const dismissedCarryKeys = getDismissedWorklogCarryKeys(worklog.tasks);
+  const scheduleDismissKey = getWorklogCarryDismissKey({ text, scheduleId: schedule.id });
+  if (scheduleDismissKey && dismissedCarryKeys.has(scheduleDismissKey)) {
+    state.worklogs[schedule.date] = worklog;
+    return deletedDateKeys;
+  }
   const linkedTask = worklog.tasks.find((task) => task.scheduleId === schedule.id);
   if (linkedTask) {
     linkedTask.text = text;
