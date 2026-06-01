@@ -969,6 +969,10 @@ body[data-theme="dark"] .rich-editor-toolbar {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+#archiveCodesList.archive-list {
+  gap: 28px;
+}
+
 .archive-code-group {
   display: grid;
   gap: 14px;
