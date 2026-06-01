@@ -950,7 +950,18 @@ body[data-theme="dark"] .rich-editor-toolbar {
 }
 
 .archive-code-group-head h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-size: 1.05rem;
+}
+
+.archive-code-group-head h4::before {
+  content: "";
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--archive-code-accent, var(--line-strong));
 }
 
 .archive-category-card-meta {

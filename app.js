@@ -4463,7 +4463,7 @@ function renderArchiveCodes() {
   }));
 
   els.archiveCodesList.innerHTML = grouped.map((group) => `
-    <section class="archive-code-group" data-archive-group-id="${group.id}">
+    <section class="archive-code-group" data-archive-group-id="${group.id}" style="--archive-code-accent:${getArchiveNoteColor(group.color).border};">
       <div class="archive-code-group-head">
         <h4>${escapeHtml(group.name)}</h4>
         <span>${group.items.length}개</span>
