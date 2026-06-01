@@ -949,6 +949,10 @@ body[data-theme="dark"] .rich-editor-toolbar {
   line-height: 1.4;
 }
 
+.archive-code-group-head h4 {
+  font-size: 1.05rem;
+}
+
 .archive-category-card-meta {
   font-size: 0.78rem;
   color: var(--muted);
