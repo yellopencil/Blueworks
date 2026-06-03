@@ -175,7 +175,9 @@ const els = {
   customerList: document.querySelector("#customerList"),
   customerListMeta: document.querySelector("#customerListMeta"),
   newArchiveNoteBtn: document.querySelector("#newArchiveNoteBtn"),
+  newArchivePromptBtn: document.querySelector("#newArchivePromptBtn"),
   archiveNotesList: document.querySelector("#archiveNotesList"),
+  archivePromptsList: document.querySelector("#archivePromptsList"),
   newArchiveCodeBtn: document.querySelector("#newArchiveCodeBtn"),
   archiveCodesList: document.querySelector("#archiveCodesList"),
   newArchiveCategoryBtn: document.querySelector("#newArchiveCategoryBtn"),
@@ -345,6 +347,7 @@ let currentSalesMonthKey = "";
 let currentRichLinkContext = null;
 let pendingUnsavedLeaveAction = null;
 let currentArchiveNoteId = null;
+let currentArchiveNoteKind = "memo";
 let currentArchiveCodeId = null;
 let currentArchiveCategoryId = null;
 let currentArchiveDiaryId = null;
@@ -527,6 +530,7 @@ function normalizeState(source) {
       title: item.title || "",
       content: item.content || "",
       color: item.color || "gray",
+      kind: normalizeArchiveNoteKind(item.kind),
       createdAt: item.createdAt || new Date().toISOString(),
       updatedAt: item.updatedAt || new Date().toISOString(),
     })),
@@ -959,12 +963,26 @@ function deserializeYearGoalFromSupabase(row) {
   };
 }
 
+function normalizeArchiveNoteKind(kind = "") {
+  return kind === "prompt" ? "prompt" : "memo";
+}
+
+function getArchiveNoteKindLabel(kind = "memo") {
+  return normalizeArchiveNoteKind(kind) === "prompt" ? "프롬프트" : "메모";
+}
+
+function getArchiveNotesByKind(kind = "memo") {
+  const normalizedKind = normalizeArchiveNoteKind(kind);
+  return (state.archiveNotes || []).filter((item) => normalizeArchiveNoteKind(item.kind) === normalizedKind);
+}
+
 function serializeArchiveNoteForSupabase(note, index = 0) {
   return {
     id: note.id,
     title: note.title || "",
     content: note.content || "",
     color: note.color || "gray",
+    kind: normalizeArchiveNoteKind(note.kind),
     sort_order: index,
     created_at: note.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -977,6 +995,7 @@ function deserializeArchiveNoteFromSupabase(row) {
     title: row.title || "",
     content: row.content || "",
     color: row.color || "gray",
+    kind: normalizeArchiveNoteKind(row.kind),
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
   };
@@ -1126,7 +1145,7 @@ function deserializeSiteSettingsFromSupabase(row = {}) {
 function updateSupabaseStatusSummary(prefix = "") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return;
-  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건, 다이어리 ${state.archiveDiaries.length}건을 Supabase에서 확인했어요.`;
+  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모/프롬프트 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건, 다이어리 ${state.archiveDiaries.length}건을 Supabase에서 확인했어요.`;
   bridge.statusDetail = prefix ? `${prefix} ${summary}` : summary;
   renderSiteSettings();
 }
@@ -2300,7 +2319,8 @@ function bindEvents() {
   els.newCustomerProjectBtn?.addEventListener("click", () => openProjectModal());
   els.newMemberBtn.addEventListener("click", () => openMemberModal());
   els.openScheduleModalBtn.addEventListener("click", () => openScheduleEditorModal());
-  els.newArchiveNoteBtn?.addEventListener("click", () => openArchiveNoteModal());
+  els.newArchiveNoteBtn?.addEventListener("click", () => openArchiveNoteModal(null, "memo"));
+  els.newArchivePromptBtn?.addEventListener("click", () => openArchiveNoteModal(null, "prompt"));
   els.newArchiveCodeBtn?.addEventListener("click", () => openArchiveCodeModal());
   els.newArchiveCategoryBtn?.addEventListener("click", () => openArchiveCategoryModal());
   els.newArchiveDiaryBtn?.addEventListener("click", () => openArchiveDiaryModal());
@@ -4146,22 +4166,30 @@ function renderCustomers() {
 }
 
 function renderArchiveNotes() {
-  if (!els.archiveNotesList) return;
-  if (!state.archiveNotes.length) {
-    els.archiveNotesList.innerHTML = '<div class="archive-empty muted small">등록된 메모가 없습니다. 새 메모로 첫 기록을 남겨보세요.</div>';
+  renderArchiveNoteList(els.archiveNotesList, "memo");
+  renderArchiveNoteList(els.archivePromptsList, "prompt");
+}
+
+function renderArchiveNoteList(container, kind = "memo") {
+  if (!container) return;
+  const normalizedKind = normalizeArchiveNoteKind(kind);
+  const label = getArchiveNoteKindLabel(normalizedKind);
+  const items = getArchiveNotesByKind(normalizedKind);
+  if (!items.length) {
+    container.innerHTML = `<div class="archive-empty muted small">등록된 ${escapeHtml(label)}가 없습니다. 새 ${escapeHtml(label)}로 첫 기록을 남겨보세요.</div>`;
     return;
   }
 
-  els.archiveNotesList.innerHTML = state.archiveNotes.map((item) => `
-    <article class="archive-card archive-note-card" data-archive-type="note" data-archive-id="${item.id}" style="--note-card-bg:${getArchiveNoteColor(item.color).bg}; --note-card-border:${getArchiveNoteColor(item.color).border};">
+  container.innerHTML = items.map((item) => `
+    <article class="archive-card archive-note-card" data-archive-type="note" data-archive-kind="${normalizedKind}" data-archive-id="${item.id}" style="--note-card-bg:${getArchiveNoteColor(item.color).bg}; --note-card-border:${getArchiveNoteColor(item.color).border};">
       <div class="archive-card-head">
         <strong>${escapeHtml(item.title || "제목 없음")}</strong>
-        <button type="button" class="archive-drag-handle" data-archive-drag="note" aria-label="메모 순서 변경">⋮⋮</button>
+        <button type="button" class="archive-drag-handle" data-archive-drag="note" aria-label="${escapeHtml(label)} 순서 변경">⋮⋮</button>
       </div>
     </article>
   `).join("");
 
-  bindArchiveListInteractions("note");
+  bindArchiveListInteractions("note", container);
 }
 
 function getArchiveDiaryFilterState() {
@@ -4511,10 +4539,14 @@ function getArchiveCardAfterElement(container, x, y, selector) {
 
 function persistArchiveCardOrder(type, container) {
   if (type === "note") {
+    const noteKind = normalizeArchiveNoteKind(container?.dataset?.archiveNoteKind || "memo");
     const orderedIds = [...container.querySelectorAll('[data-archive-type="note"]')].map((item) => item.dataset.archiveId);
-    state.archiveNotes = orderedIds
+    const orderedNotes = orderedIds
       .map((id) => state.archiveNotes.find((item) => item.id === id))
       .filter(Boolean);
+    const memoNotes = noteKind === "memo" ? orderedNotes : getArchiveNotesByKind("memo");
+    const promptNotes = noteKind === "prompt" ? orderedNotes : getArchiveNotesByKind("prompt");
+    state.archiveNotes = [...memoNotes, ...promptNotes];
     return;
   }
 
@@ -4535,9 +4567,12 @@ function persistArchiveCardOrder(type, container) {
 function startArchiveCardDrag(event, card, type) {
   event.preventDefault();
   const container = type === "note"
-    ? els.archiveNotesList
+    ? card.closest(".archive-list")
     : card.closest(".archive-code-group-list");
   if (!container) return;
+  const archiveNoteKindLabel = type === "note"
+    ? getArchiveNoteKindLabel(container.dataset.archiveNoteKind || card.dataset.archiveKind || "memo")
+    : "";
 
   const dragId = card.dataset.archiveId;
   if (type === "note") draggedArchiveNoteId = dragId;
@@ -4552,7 +4587,7 @@ function startArchiveCardDrag(event, card, type) {
   card.classList.add("is-dragging");
 
   const selector = type === "note"
-    ? '[data-archive-type="note"]'
+    ? `[data-archive-type="note"][data-archive-kind="${card.dataset.archiveKind || "memo"}"]`
     : `[data-archive-type="code"][data-archive-category="${card.dataset.archiveCategory}"]`;
 
   const onMove = (moveEvent) => {
@@ -4574,7 +4609,7 @@ function startArchiveCardDrag(event, card, type) {
     persistArchiveCardOrder(type, container);
     draggedArchiveNoteId = null;
     draggedArchiveCodeId = null;
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: type === "note" ? "메모 순서 저장 실패" : "코드 순서 저장 실패" });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: type === "note" ? `${archiveNoteKindLabel} 순서 저장 실패` : "코드 순서 저장 실패" });
     if (!persistResult.ok) {
       if (previousNotes) state.archiveNotes = previousNotes;
       if (previousCodes) state.archiveCodes = previousCodes;
@@ -4588,14 +4623,14 @@ function startArchiveCardDrag(event, card, type) {
   window.addEventListener("pointerup", onUp, { passive: false });
 }
 
-function bindArchiveListInteractions(type) {
-  const container = type === "note" ? els.archiveNotesList : els.archiveCodesList;
+function bindArchiveListInteractions(type, containerOverride = null) {
+  const container = containerOverride || (type === "note" ? els.archiveNotesList : els.archiveCodesList);
   if (!container) return;
   const selector = `[data-archive-type="${type}"]`;
   container.querySelectorAll(selector).forEach((card) => {
     card.addEventListener("click", (event) => {
       if (event.target.closest("[data-archive-drag]")) return;
-      if (type === "note") openArchiveNoteModal(card.dataset.archiveId);
+      if (type === "note") openArchiveNoteModal(card.dataset.archiveId, card.dataset.archiveKind || "memo");
       else openArchiveCodeModal(card.dataset.archiveId);
     });
     const handle = card.querySelector("[data-archive-drag]");
@@ -5586,15 +5621,18 @@ function closeArchiveCategoryModal() {
   els.archiveCategoryModal?.classList.add("hidden");
 }
 
-function openArchiveNoteModal(noteId = null) {
+function openArchiveNoteModal(noteId = null, kind = "memo") {
   currentArchiveNoteId = noteId;
+  currentArchiveNoteKind = normalizeArchiveNoteKind(kind);
   const note = noteId ? state.archiveNotes.find((item) => item.id === noteId) : null;
+  if (note) currentArchiveNoteKind = normalizeArchiveNoteKind(note.kind);
+  const label = getArchiveNoteKindLabel(currentArchiveNoteKind);
   els.archiveNoteForm?.reset();
   els.archiveNoteForm.elements.id.value = note?.id || "";
   els.archiveNoteForm.elements.title.value = note?.title || "";
   els.archiveNoteForm.elements.color.value = note?.color || "gray";
   els.archiveNoteForm.elements.content.value = note?.content || "";
-  els.archiveNoteModalTitle.textContent = note ? "메모 상세" : "새 메모";
+  els.archiveNoteModalTitle.textContent = note ? `${label} 상세` : `새 ${label}`;
   els.archiveNoteDeleteBtn?.classList.toggle("hidden", !note);
   setArchiveNoteEditing(!note);
   renderArchiveNoteColorPalette(note?.color || "gray");
@@ -5604,6 +5642,7 @@ function openArchiveNoteModal(noteId = null) {
 
 function closeArchiveNoteModal() {
   currentArchiveNoteId = null;
+  currentArchiveNoteKind = "memo";
   archiveNoteEditing = false;
   els.archiveNoteModal.classList.add("hidden");
 }
@@ -5634,10 +5673,14 @@ async function handleArchiveNoteSave(event) {
       title: String(formData.get("title") || "").trim(),
       content: String(formData.get("content") || "").trim(),
       color: String(formData.get("color") || "gray"),
+      kind: currentArchiveNoteId
+        ? normalizeArchiveNoteKind(state.archiveNotes.find((item) => item.id === currentArchiveNoteId)?.kind || currentArchiveNoteKind)
+        : currentArchiveNoteKind,
       createdAt: now,
       updatedAt: now,
     };
-    if (!(await ensureFreshDataForAction(["archives"], "메모 저장"))) return;
+    const label = getArchiveNoteKindLabel(payload.kind);
+    if (!(await ensureFreshDataForAction(["archives"], `${label} 저장`))) return;
     const previousNotes = structuredClone(state.archiveNotes);
     const existing = state.archiveNotes.find((item) => item.id === payload.id);
     if (existing) {
@@ -5646,7 +5689,7 @@ async function handleArchiveNoteSave(event) {
     } else {
       state.archiveNotes.unshift(payload);
     }
-    const persistResult = await persistArchiveChanges({ errorMessagePrefix: "메모 저장 실패", upsertNoteIds: [payload.id] });
+    const persistResult = await persistArchiveChanges({ errorMessagePrefix: `${label} 저장 실패`, upsertNoteIds: [payload.id] });
     if (!persistResult.ok) {
       state.archiveNotes = previousNotes;
       renderArchiveNotes();
@@ -5663,12 +5706,13 @@ async function handleArchiveNoteSave(event) {
 function deleteCurrentArchiveNote() {
   if (!currentArchiveNoteId) return;
   const note = state.archiveNotes.find((item) => item.id === currentArchiveNoteId);
+  const label = getArchiveNoteKindLabel(note?.kind || currentArchiveNoteKind);
   openConfirmModal(async () => {
-    if (!(await ensureFreshDataForAction(["archives"], "메모 삭제"))) return;
+    if (!(await ensureFreshDataForAction(["archives"], `${label} 삭제`))) return;
     const previousNotes = structuredClone(state.archiveNotes);
     state.archiveNotes = state.archiveNotes.filter((item) => item.id !== currentArchiveNoteId);
     const persistResult = await persistArchiveChanges({
-      errorMessagePrefix: "메모 삭제 실패",
+      errorMessagePrefix: `${label} 삭제 실패`,
       upsertNoteIds: [],
       upsertCategoryIds: [],
       upsertCodeIds: [],
@@ -5681,7 +5725,7 @@ function deleteCurrentArchiveNote() {
     }
     renderArchiveNotes();
     closeArchiveNoteModal();
-  }, note ? `[${note.title}] 메모를 삭제할까요?` : "메모를 삭제할까요?");
+  }, note ? `[${note.title}] ${label}를 삭제할까요?` : `${label}를 삭제할까요?`);
 }
 
 function openArchiveCodeModal(codeId = null) {
@@ -6758,7 +6802,7 @@ function getHistorySnapshotSummary(snapshotJson) {
     return [
       `프로젝트 ${snapshot.projects?.length || 0}건`,
       `일정 ${snapshot.schedules?.length || 0}건`,
-      `메모 ${snapshot.archiveNotes?.length || 0}건`,
+      `메모/프롬프트 ${snapshot.archiveNotes?.length || 0}건`,
       `코드 ${snapshot.archiveCodes?.length || 0}건`,
       `다이어리 ${snapshot.archiveDiaries?.length || 0}건`,
     ].join(" · ");

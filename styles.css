@@ -976,7 +976,8 @@ body[data-theme="dark"] .rich-editor-toolbar {
   gap: 12px;
 }
 
-#archiveNotesList.archive-list {
+#archiveNotesList.archive-list,
+#archivePromptsList.archive-list {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -4306,7 +4307,8 @@ body[data-theme="dark"] .sales-chart-value {
     min-height: 0;
   }
 
-  #archiveNotesList.archive-list {
+  #archiveNotesList.archive-list,
+  #archivePromptsList.archive-list {
     grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: minmax(248px, 84vw);
@@ -4318,11 +4320,13 @@ body[data-theme="dark"] .sales-chart-value {
     scrollbar-width: none;
   }
 
-  #archiveNotesList.archive-list::-webkit-scrollbar {
+  #archiveNotesList.archive-list::-webkit-scrollbar,
+  #archivePromptsList.archive-list::-webkit-scrollbar {
     display: none;
   }
 
-  #archiveNotesList .archive-card {
+  #archiveNotesList .archive-card,
+  #archivePromptsList .archive-card {
     height: 100%;
   }
 
