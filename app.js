@@ -977,19 +977,16 @@ function getArchiveNotesByKind(kind = "memo") {
 }
 
 function serializeArchiveNoteForSupabase(note, index = 0) {
-  const payload = {
+  return {
     id: note.id,
     title: note.title || "",
     content: note.content || "",
     color: note.color || "gray",
+    kind: normalizeArchiveNoteKind(note.kind),
     sort_order: index,
     created_at: note.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-  if (normalizeArchiveNoteKind(note.kind) === "prompt") {
-    payload.kind = "prompt";
-  }
-  return payload;
 }
 
 function deserializeArchiveNoteFromSupabase(row) {
