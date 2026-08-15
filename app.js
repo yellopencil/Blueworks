@@ -18,6 +18,12 @@ const PROGRESS_STAGE_META = {
   mobileDone: "모바일 · SEO 작업 완료",
 };
 
+const OTHER_REVENUE_CATEGORY_META = {
+  imweb_points: "아임웹 포인트",
+  ebook: "전자책",
+  other: "기타",
+};
+
 const CALENDAR_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const HOLIDAY_MAP = {
   "2026-01-01": "신정",
@@ -192,6 +198,14 @@ const els = {
   salesMonthlyChart: document.querySelector("#salesMonthlyChart"),
   salesYearlySummary: document.querySelector("#salesYearlySummary"),
   salesYearlyChart: document.querySelector("#salesYearlyChart"),
+  newOtherRevenueBtn: document.querySelector("#newOtherRevenueBtn"),
+  otherRevenueSummary: document.querySelector("#otherRevenueSummary"),
+  otherRevenueList: document.querySelector("#otherRevenueList"),
+  otherRevenueModal: document.querySelector("#otherRevenueModal"),
+  otherRevenueModalTitle: document.querySelector("#otherRevenueModalTitle"),
+  otherRevenueForm: document.querySelector("#otherRevenueForm"),
+  otherRevenueCloseBtn: document.querySelector("#otherRevenueCloseBtn"),
+  otherRevenueDeleteBtn: document.querySelector("#otherRevenueDeleteBtn"),
   newMemberBtn: document.querySelector("#newMemberBtn"),
   scheduleModalForm: document.querySelector("#scheduleModalForm"),
   scheduleList: document.querySelector("#scheduleList"),
@@ -344,6 +358,7 @@ let currentMemberId = null;
 let currentCustomerPage = 1;
 let currentSalesYear = "";
 let currentSalesMonthKey = "";
+let currentOtherRevenueId = null;
 let currentRichLinkContext = null;
 let pendingUnsavedLeaveAction = null;
 let currentArchiveNoteId = null;
@@ -448,6 +463,7 @@ function loadState() {
       },
     ],
     projects: [],
+    otherRevenues: [],
     schedules: [],
     worklogs: {},
     yearGoals: [],
@@ -499,6 +515,16 @@ function normalizeState(source) {
       paybackAmount: project.paybackAmount || "",
       paybackNote: project.paybackNote || "",
       kmongFee: project.kmongFee || "",
+    })),
+    otherRevenues: (source.otherRevenues || []).map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      revenueDate: item.revenueDate || formatDateKey(new Date()),
+      category: OTHER_REVENUE_CATEGORY_META[item.category] ? item.category : "other",
+      title: item.title || "",
+      amount: Math.max(0, Number(item.amount || 0)),
+      notes: item.notes || "",
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || new Date().toISOString(),
     })),
     schedules: source.schedules || [],
     worklogs: Object.fromEntries(
@@ -963,6 +989,38 @@ function deserializeYearGoalFromSupabase(row) {
   };
 }
 
+function serializeOtherRevenueForSupabase(item) {
+  return {
+    id: item.id,
+    revenue_date: item.revenueDate || formatDateKey(new Date()),
+    category: OTHER_REVENUE_CATEGORY_META[item.category] ? item.category : "other",
+    title: item.title || "",
+    amount: Number(item.amount || 0),
+    notes: item.notes || "",
+    created_by: state.sessionUserId || null,
+    created_at: item.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeOtherRevenueFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    revenueDate: row.revenue_date || formatDateKey(new Date()),
+    category: OTHER_REVENUE_CATEGORY_META[row.category] ? row.category : "other",
+    title: row.title || "",
+    amount: Math.max(0, Number(row.amount || 0)),
+    notes: row.notes || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function isOtherRevenueTableMissingError(error) {
+  const message = String(error?.message || error?.details || error?.hint || "");
+  return /other_revenues|schema cache|does not exist/i.test(message);
+}
+
 function normalizeArchiveNoteKind(kind = "") {
   return kind === "prompt" ? "prompt" : "memo";
 }
@@ -1208,12 +1266,14 @@ async function syncProjectsAndSchedulesFromSupabase() {
   bridge.statusDetail = "Supabase에서 프로젝트와 일정을 확인하는 중입니다.";
   renderSiteSettings();
 
-  const [projectResult, scheduleResult, documentResult] = await Promise.all([
+  const [projectResult, scheduleResult, documentResult, otherRevenueResult] = await Promise.all([
     bridge.fetchProjects(),
     bridge.fetchSchedules(),
     bridge.fetchProjectDocuments(),
+    bridge.fetchOtherRevenues(),
   ]);
 
+  const otherRevenueUnavailable = Boolean(otherRevenueResult.error);
   if (projectResult.error || scheduleResult.error || documentResult.error) {
     bridge.mode = "supabase-error";
     bridge.error = projectResult.error || scheduleResult.error || documentResult.error;
@@ -1237,8 +1297,11 @@ async function syncProjectsAndSchedulesFromSupabase() {
     return project;
   });
   const remoteSchedules = (scheduleResult.data || []).map(deserializeScheduleFromSupabase);
-  const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0;
-  const hasLocalData = state.projects.length > 0 || state.schedules.length > 0;
+  const remoteOtherRevenues = otherRevenueUnavailable
+    ? (state.otherRevenues || [])
+    : (otherRevenueResult.data || []).map(deserializeOtherRevenueFromSupabase);
+  const hasRemoteData = remoteProjects.length > 0 || remoteSchedules.length > 0 || remoteOtherRevenues.length > 0;
+  const hasLocalData = state.projects.length > 0 || state.schedules.length > 0 || state.otherRevenues.length > 0;
 
   if (!hasRemoteData && hasLocalData) {
     const seedResult = await seedSupabaseFromLocalState();
@@ -1256,6 +1319,7 @@ async function syncProjectsAndSchedulesFromSupabase() {
 
   state.projects = remoteProjects;
   state.schedules = remoteSchedules;
+  state.otherRevenues = remoteOtherRevenues;
   saveState({ history: false });
   updateSupabaseStatusSummary();
   render();
@@ -1282,6 +1346,11 @@ async function seedSupabaseFromLocalState() {
   for (const schedule of state.schedules) {
     const result = await bridge.upsertSchedule(serializeScheduleForSupabase(schedule));
     if (result.error) return { ok: false, error: result.error };
+  }
+
+  for (const item of state.otherRevenues || []) {
+    const result = await bridge.upsertOtherRevenue(serializeOtherRevenueForSupabase(item));
+    if (result.error && !isOtherRevenueTableMissingError(result.error)) return { ok: false, error: result.error };
   }
 
   return { ok: true };
@@ -2324,6 +2393,11 @@ function bindEvents() {
   els.newArchiveCodeBtn?.addEventListener("click", () => openArchiveCodeModal());
   els.newArchiveCategoryBtn?.addEventListener("click", () => openArchiveCategoryModal());
   els.newArchiveDiaryBtn?.addEventListener("click", () => openArchiveDiaryModal());
+  els.newOtherRevenueBtn?.addEventListener("click", () => openOtherRevenueModal());
+  els.otherRevenueCloseBtn?.addEventListener("click", closeOtherRevenueModal);
+  els.otherRevenueForm?.addEventListener("submit", handleOtherRevenueSave);
+  els.otherRevenueDeleteBtn?.addEventListener("click", deleteCurrentOtherRevenue);
+  els.otherRevenueForm?.elements?.amount?.addEventListener("input", handleContractAmountInput);
 
   els.projectModalCloseBtn.addEventListener("click", closeProjectModal);
   els.projectForm.addEventListener("submit", handleProjectSave);
@@ -3048,7 +3122,7 @@ function ensureSalesFilterPanel() {
           <input id="salesFilterEndDate" type="date" class="picker-date">
         </label>
         <label>검색
-          <input id="salesFilterKeyword" type="search" placeholder="고객사명 또는 프로젝트명">
+          <input id="salesFilterKeyword" type="search" placeholder="프로젝트 또는 기타 수익 내역">
         </label>
       </div>
       <div id="salesFilterMetrics" class="sales-metrics sales-filter-metrics"></div>
@@ -3103,6 +3177,10 @@ function populateSalesFilterYears() {
   const yearSet = new Set([String(new Date().getFullYear())]);
   state.projects.forEach((project) => {
     const year = String(project.startDate || "").slice(0, 4);
+    if (year) yearSet.add(year);
+  });
+  state.otherRevenues.forEach((item) => {
+    const year = String(item.revenueDate || "").slice(0, 4);
     if (year) yearSet.add(year);
   });
   const options = Array.from(yearSet).sort((a, b) => a.localeCompare(b));
@@ -3219,6 +3297,10 @@ function captureArchiveCategoryModalState() {
   return serializeFormControls(els.archiveCategoryForm);
 }
 
+function captureOtherRevenueModalState() {
+  return serializeFormControls(els.otherRevenueForm);
+}
+
 function setModalSnapshot(key, value) {
   modalSnapshots[key] = value;
 }
@@ -3241,6 +3323,8 @@ function hasUnsavedChanges(key) {
       return modalSnapshots.archiveDiary !== captureArchiveDiaryModalState();
     case "archiveCategory":
       return modalSnapshots.archiveCategory !== captureArchiveCategoryModalState();
+    case "otherRevenue":
+      return modalSnapshots.otherRevenue !== captureOtherRevenueModalState();
     default:
       return false;
   }
@@ -3256,6 +3340,7 @@ function getOpenDirtyModalKey() {
     [els.archiveCodeModal, "archiveCode"],
     [els.archiveDiaryModal, "archiveDiary"],
     [els.archiveCategoryModal, "archiveCategory"],
+    [els.otherRevenueModal, "otherRevenue"],
   ];
 
   return modalEntries.find(([overlay, key]) => {
@@ -3276,6 +3361,7 @@ function getOpenEditingModalKey() {
     [els.archiveCategoryModal, "archiveCategory"],
     [els.annualGoalAddModal, "annualGoal"],
     [els.myProfileModal, "myProfile"],
+    [els.otherRevenueModal, "otherRevenue"],
   ];
 
   const openEntry = modalEntries.find(([overlay, key]) => {
@@ -3311,6 +3397,9 @@ function saveAndCloseDirtyModal(key) {
     case "archiveCategory":
       els.archiveCategoryForm?.requestSubmit();
       break;
+    case "otherRevenue":
+      els.otherRevenueForm?.requestSubmit();
+      break;
     default:
       break;
   }
@@ -3335,6 +3424,7 @@ function bindOverlayDismissals() {
     [els.archiveCodeModal, closeArchiveCodeModal, "archiveCode"],
     [els.archiveDiaryModal, closeArchiveDiaryModal, "archiveDiary"],
     [els.archiveCategoryModal, closeArchiveCategoryModal, "archiveCategory"],
+    [els.otherRevenueModal, closeOtherRevenueModal, "otherRevenue"],
   ];
 
   overlayClosers.forEach(([overlay, close, dirtyKey]) => {
@@ -3906,7 +3996,10 @@ function renderSummary() {
     const sourceDate = project.startDate || project.createdAt || "";
     return sourceDate.startsWith(String(currentYear));
   });
-  const yearlySales = yearlyProjects.reduce((sum, project) => sum + getProjectNetAmount(project), 0);
+  const yearlyOtherRevenue = getOtherRevenueTotal(
+    state.otherRevenues.filter((item) => String(item.revenueDate || "").startsWith(String(currentYear))),
+  );
+  const yearlySales = yearlyProjects.reduce((sum, project) => sum + getProjectNetAmount(project), 0) + yearlyOtherRevenue;
   if (els.yearSalesLabel) {
     els.yearSalesLabel.textContent = `${currentYear}년 매출`;
   }
@@ -4638,6 +4731,149 @@ function bindArchiveListInteractions(type, containerOverride = null) {
   });
 }
 
+function getOtherRevenueCategoryLabel(category) {
+  return OTHER_REVENUE_CATEGORY_META[category] || OTHER_REVENUE_CATEGORY_META.other;
+}
+
+function getOtherRevenueTotal(items = []) {
+  return items.reduce((sum, item) => sum + Math.max(0, Number(item.amount || 0)), 0);
+}
+
+function renderOtherRevenues() {
+  if (!els.otherRevenueList) return;
+  const items = [...(state.otherRevenues || [])].sort((a, b) => {
+    const dateCompare = String(b.revenueDate || "").localeCompare(String(a.revenueDate || ""));
+    if (dateCompare) return dateCompare;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+  const currentYear = String(new Date().getFullYear());
+  const currentYearItems = items.filter((item) => String(item.revenueDate || "").startsWith(currentYear));
+  if (els.otherRevenueSummary) {
+    els.otherRevenueSummary.innerHTML = `
+      <span>${currentYear}년 기타 수익</span>
+      <strong>${getOtherRevenueTotal(currentYearItems).toLocaleString("ko-KR")}원</strong>
+      <small>${currentYearItems.length}건</small>
+    `;
+  }
+  if (!items.length) {
+    els.otherRevenueList.innerHTML = '<div class="other-revenue-empty">등록된 기타 수익이 없습니다.</div>';
+    return;
+  }
+  els.otherRevenueList.innerHTML = items.map((item) => `
+    <button type="button" class="other-revenue-row" data-other-revenue-id="${item.id}">
+      <span class="other-revenue-date">${escapeHtml(String(item.revenueDate || "").replaceAll("-", "."))}</span>
+      <span class="other-revenue-category category-${escapeHtml(item.category)}">${escapeHtml(getOtherRevenueCategoryLabel(item.category))}</span>
+      <span class="other-revenue-title">
+        <strong>${escapeHtml(item.title || "내역 없음")}</strong>
+        ${item.notes ? `<small>${escapeHtml(item.notes)}</small>` : ""}
+      </span>
+      <strong class="other-revenue-amount">${Number(item.amount || 0).toLocaleString("ko-KR")}원</strong>
+      <span class="other-revenue-edit">수정</span>
+    </button>
+  `).join("");
+  els.otherRevenueList.querySelectorAll("[data-other-revenue-id]").forEach((button) => {
+    button.addEventListener("click", () => openOtherRevenueModal(button.dataset.otherRevenueId));
+  });
+}
+
+function openOtherRevenueModal(itemId = null) {
+  currentOtherRevenueId = itemId;
+  const item = itemId ? state.otherRevenues.find((entry) => entry.id === itemId) : null;
+  els.otherRevenueForm?.reset();
+  els.otherRevenueForm.elements.id.value = item?.id || "";
+  els.otherRevenueForm.elements.revenueDate.value = item?.revenueDate || formatDateKey(new Date());
+  els.otherRevenueForm.elements.category.value = item?.category || "imweb_points";
+  els.otherRevenueForm.elements.title.value = item?.title || "";
+  els.otherRevenueForm.elements.amount.value = item?.amount ? formatAmount(String(item.amount)) : "";
+  els.otherRevenueForm.elements.notes.value = item?.notes || "";
+  els.otherRevenueModalTitle.textContent = item ? "기타 수익 수정" : "기타 수익 등록";
+  els.otherRevenueDeleteBtn?.classList.toggle("hidden", !item);
+  refreshCustomSelect(els.otherRevenueForm.elements.category);
+  els.otherRevenueModal?.classList.remove("hidden");
+  setModalSnapshot("otherRevenue", captureOtherRevenueModalState());
+}
+
+function closeOtherRevenueModal() {
+  currentOtherRevenueId = null;
+  els.otherRevenueModal?.classList.add("hidden");
+}
+
+async function handleOtherRevenueSave(event) {
+  event.preventDefault();
+  const finishBusyToast = startDelayedBusyToast("기타 수익을 저장하고 있어요...");
+  try {
+    const formData = new FormData(event.currentTarget);
+    const amount = parseAmount(String(formData.get("amount") || ""));
+    if (amount <= 0) {
+      openNoticeModal("실제 받은 금액을 0원보다 크게 입력해주세요.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      revenueDate: String(formData.get("revenueDate") || formatDateKey(new Date())),
+      category: OTHER_REVENUE_CATEGORY_META[formData.get("category")] ? String(formData.get("category")) : "other",
+      title: String(formData.get("title") || "").trim(),
+      amount,
+      notes: String(formData.get("notes") || "").trim(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!payload.title) {
+      openNoticeModal("기타 수익 내역을 입력해주세요.");
+      return;
+    }
+    const bridge = getSupabaseBridge();
+    if (!bridge?.isReady()) {
+      openNoticeModal("Supabase 연결을 확인한 뒤 다시 저장해주세요.");
+      return;
+    }
+    const existing = state.otherRevenues.find((item) => item.id === payload.id);
+    if (existing) payload.createdAt = existing.createdAt || now;
+    const result = await bridge.upsertOtherRevenue(serializeOtherRevenueForSupabase(payload));
+    if (result.error) {
+      const detail = isOtherRevenueTableMissingError(result.error)
+        ? "Supabase SQL 편집기에서 022_other_revenues.sql을 먼저 실행해주세요."
+        : result.error.message;
+      openNoticeModal(`기타 수익 저장에 실패했어요.\n${detail}`);
+      return;
+    }
+    const savedItem = result.data ? deserializeOtherRevenueFromSupabase(result.data) : payload;
+    if (existing) Object.assign(existing, savedItem);
+    else state.otherRevenues.unshift(savedItem);
+    saveState();
+    renderSummary();
+    renderSales();
+    closeOtherRevenueModal();
+    openNoticeModal("기타 수익이 저장되었어요!");
+  } finally {
+    finishBusyToast();
+  }
+}
+
+function deleteCurrentOtherRevenue() {
+  if (!currentOtherRevenueId) return;
+  const item = state.otherRevenues.find((entry) => entry.id === currentOtherRevenueId);
+  openConfirmModal(async () => {
+    const bridge = getSupabaseBridge();
+    if (!bridge?.isReady()) {
+      openNoticeModal("Supabase 연결을 확인한 뒤 다시 삭제해주세요.");
+      return;
+    }
+    const result = await bridge.deleteOtherRevenue(currentOtherRevenueId);
+    if (result.error) {
+      openNoticeModal(`기타 수익 삭제에 실패했어요.\n${result.error.message}`);
+      return;
+    }
+    state.otherRevenues = state.otherRevenues.filter((entry) => entry.id !== currentOtherRevenueId);
+    saveState();
+    renderSummary();
+    renderSales();
+    closeOtherRevenueModal();
+    openNoticeModal("기타 수익이 삭제되었어요!");
+  }, item ? `[${item.title}] 기타 수익을 삭제할까요?` : "기타 수익을 삭제할까요?");
+}
+
 
 function renderSales() {
   if (!els.salesMonthlyChart || !els.salesYearlyChart) return;
@@ -4650,6 +4886,15 @@ function renderSales() {
     const baseDate = String(project.startDate || "").trim();
     if (!baseDate) return;
     const amount = getProjectNetAmount(project);
+    const monthKey = baseDate.slice(0, 7);
+    const yearKey = baseDate.slice(0, 4);
+    monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + amount);
+    yearlyTotals.set(yearKey, (yearlyTotals.get(yearKey) || 0) + amount);
+  });
+  state.otherRevenues.forEach((item) => {
+    const baseDate = String(item.revenueDate || "").trim();
+    if (!baseDate) return;
+    const amount = Math.max(0, Number(item.amount || 0));
     const monthKey = baseDate.slice(0, 7);
     const yearKey = baseDate.slice(0, 4);
     monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + amount);
@@ -4675,12 +4920,16 @@ function renderSales() {
   const currentMonthProjects = state.projects.filter((project) => String(project.startDate || "").startsWith(currentMonthKey));
   const selectedYearProjects = state.projects.filter((project) => String(project.startDate || "").startsWith(currentSalesYear));
   const selectedMonthProjects = state.projects.filter((project) => String(project.startDate || "").startsWith(currentSalesMonthKey));
-  const monthBreakdown = getSalesBreakdown(currentMonthProjects);
-  const yearBreakdown = getSalesBreakdown(selectedYearProjects);
-  const selectedMonthBreakdown = getSalesBreakdown(selectedMonthProjects);
+  const currentMonthOtherRevenues = state.otherRevenues.filter((item) => String(item.revenueDate || "").startsWith(currentMonthKey));
+  const selectedYearOtherRevenues = state.otherRevenues.filter((item) => String(item.revenueDate || "").startsWith(currentSalesYear));
+  const selectedMonthOtherRevenues = state.otherRevenues.filter((item) => String(item.revenueDate || "").startsWith(currentSalesMonthKey));
+  const monthBreakdown = getSalesBreakdown(currentMonthProjects, currentMonthOtherRevenues);
+  const yearBreakdown = getSalesBreakdown(selectedYearProjects, selectedYearOtherRevenues);
+  const selectedMonthBreakdown = getSalesBreakdown(selectedMonthProjects, selectedMonthOtherRevenues);
   const salesFilters = getSalesFilterState();
   const filteredProjects = state.projects.filter((project) => matchesSalesFilters(project, salesFilters));
-  const filteredBreakdown = getSalesBreakdown(filteredProjects);
+  const filteredOtherRevenues = state.otherRevenues.filter((item) => matchesOtherRevenueFilters(item, salesFilters));
+  const filteredBreakdown = getSalesBreakdown(filteredProjects, filteredOtherRevenues);
 
   renderSalesChart(
     els.salesMonthlyChart,
@@ -4749,6 +4998,7 @@ function renderSales() {
   renderSalesFilterResults(filteredProjects, filteredBreakdown, salesFilters);
   const detailPanel = document.querySelector("#salesDetailPanel");
   if (detailPanel) detailPanel.remove();
+  renderOtherRevenues();
 
   els.salesYearlyChart.querySelectorAll("[data-sales-year]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -4802,8 +5052,8 @@ function renderSalesFilterResults(filteredProjects, breakdown, filters) {
   }
 }
 
-function getSalesBreakdown(projects) {
-  return projects.reduce((acc, project) => {
+function getSalesBreakdown(projects, otherRevenues = []) {
+  const breakdown = projects.reduce((acc, project) => {
     const net = getProjectNetAmount(project);
     const payback = project.paybackStatus === "enabled" ? parseAmount(project.paybackAmount) : 0;
     const kmongRevenue = project.paymentMethod === "kmong" ? parseAmount(project.kmongFee) : 0;
@@ -4816,7 +5066,28 @@ function getSalesBreakdown(projects) {
     acc.kmongFee += kmongRevenue;
     acc.net += net;
     return acc;
-  }, { card: 0, cash: 0, kmong: 0, taxIssued: 0, taxNotIssued: 0, payback: 0, kmongFee: 0, net: 0 });
+  }, { card: 0, cash: 0, kmong: 0, other: 0, taxIssued: 0, taxNotIssued: 0, payback: 0, kmongFee: 0, net: 0 });
+  breakdown.other = getOtherRevenueTotal(otherRevenues);
+  breakdown.net += breakdown.other;
+  return breakdown;
+}
+
+function matchesOtherRevenueFilters(item, filters) {
+  const baseDate = String(item.revenueDate || "");
+  if (filters.year && !baseDate.startsWith(filters.year)) return false;
+  if (filters.month && baseDate.slice(5, 7) !== filters.month) return false;
+  if (filters.payment || filters.tax || filters.payback) return false;
+  if (filters.startDate && baseDate && baseDate < filters.startDate) return false;
+  if (filters.endDate && baseDate && baseDate > filters.endDate) return false;
+  if (filters.keyword) {
+    const blob = [
+      item.title,
+      item.notes,
+      getOtherRevenueCategoryLabel(item.category),
+    ].filter(Boolean).join(" ").toLowerCase();
+    if (!blob.includes(filters.keyword)) return false;
+  }
+  return true;
 }
 
 function renderSalesMetrics(target, breakdown, labels = {}) {
@@ -4839,6 +5110,10 @@ function renderSalesMetrics(target, breakdown, labels = {}) {
       <strong>${breakdown.kmong.toLocaleString("ko-KR")}원</strong>
     </article>
     <article class="sales-metric-card">
+      <span>${labels.otherLabel || "기타 수익"}</span>
+      <strong>${breakdown.other.toLocaleString("ko-KR")}원</strong>
+    </article>
+    <article class="sales-metric-card">
       <span>${labels.taxLabel || "세금계산서 발행"}</span>
       <strong>${breakdown.taxIssued.toLocaleString("ko-KR")}원</strong>
     </article>
@@ -4855,12 +5130,13 @@ function renderSalesMetrics(target, breakdown, labels = {}) {
 
 function renderSalesMix(target, breakdown, title = "매출 비율") {
   if (!target) return;
-  const paymentTotal = breakdown.card + breakdown.cash + breakdown.kmong;
+  const paymentTotal = breakdown.card + breakdown.cash + breakdown.kmong + breakdown.other;
   const taxTotal = breakdown.taxIssued + breakdown.taxNotIssued;
   const paymentItems = [
     { label: "현금 매출", value: breakdown.cash, color: "#4f7fe0" },
     { label: "카드 매출", value: breakdown.card, color: "#8fb0f2" },
     { label: "크몽 매출", value: breakdown.kmong, color: "#c3b4f4" },
+    { label: "기타 수익", value: breakdown.other, color: "#74b6a4" },
   ];
   const taxItems = [
     { label: "세금계산서 발행", value: breakdown.taxIssued, color: "#6b95ea" },

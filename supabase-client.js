@@ -282,6 +282,15 @@
         "코드 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
+    async fetchOtherRevenues() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("other_revenues").select("*").order("revenue_date", { ascending: false }).order("created_at", { ascending: false }),
+        "기타 수익 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
     async fetchArchiveDiaries() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -802,6 +811,24 @@
       return this.runClientQuery(
         this.client.from("archive_codes").delete().in("id", ids),
         "코드 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async upsertOtherRevenue(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("other_revenues").upsert(payload).select().single(),
+        "기타 수익 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async deleteOtherRevenue(id) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("other_revenues").delete().eq("id", id),
+        "기타 수익 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
     async upsertArchiveDiaries(payload) {

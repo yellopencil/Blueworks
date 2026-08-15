@@ -357,6 +357,19 @@
               <section class="panel sales-total-panel">
                 <div id="salesTotalSummary" class="sales-total-summary"></div>
               </section>
+              <section class="panel other-revenue-panel">
+                <div class="section-head">
+                  <div>
+                    <h3>기타 수익</h3>
+                    <p class="muted small">프로젝트 외 수익을 실제 받은 금액으로 등록합니다.</p>
+                  </div>
+                  <div class="board-tools">
+                    <button type="button" id="newOtherRevenueBtn" class="primary">기타 수익 등록</button>
+                  </div>
+                </div>
+                <div id="otherRevenueSummary" class="other-revenue-summary"></div>
+                <div id="otherRevenueList" class="other-revenue-list"></div>
+              </section>
             </section>
 
             <section id="quotesView" class="hidden">
@@ -1312,6 +1325,40 @@
     </div>
   </div>
 
+  <div id="otherRevenueModal" class="modal-overlay hidden">
+    <div class="modal-card other-revenue-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Other Revenue</p>
+          <h3 id="otherRevenueModalTitle">기타 수익 등록</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="otherRevenueForm" class="primary">저장</button>
+          <button type="button" id="otherRevenueCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="otherRevenueForm" class="form-stack">
+        <input type="hidden" name="id">
+        <div class="two-col">
+          <label>수익 발생일<input name="revenueDate" type="date" class="picker-date" required></label>
+          <label>수익 구분
+            <select name="category" required>
+              <option value="imweb_points">아임웹 포인트</option>
+              <option value="ebook">전자책</option>
+              <option value="other">기타</option>
+            </select>
+          </label>
+        </div>
+        <label>내역<input name="title" type="text" required placeholder="예: 7월 아임웹 적립금 정산"></label>
+        <label>실제 받은 금액<input name="amount" type="text" inputmode="numeric" required placeholder="예: 150,000"></label>
+        <label>메모<textarea name="notes" rows="4" placeholder="필요한 내용을 적어주세요."></textarea></label>
+      </form>
+      <div class="button-row">
+        <button type="button" id="otherRevenueDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
   <div id="archiveDiaryModal" class="modal-overlay hidden">
     <div class="modal-card archive-modal-card diary-modal-card">
       <div class="modal-head">
@@ -1384,8 +1431,8 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./supabase-client.js?v=20260427-auth-callback-defer1"></script>
-  <script src="./app.js?v=20260427-auth-callback-defer1"></script>
+  <script src="./supabase-client.js?v=20260815-other-revenue1"></script>
+  <script src="./app.js?v=20260815-other-revenue1"></script>
   <script src="./quote-generator.js?v=20260428-agreement-heading1"></script>
 </body>
 </html>
