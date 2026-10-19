@@ -282,6 +282,14 @@ const els = {
   worklogProgressText: document.querySelector("#worklogProgressText"),
   worklogProgressSummary: document.querySelector("#worklogProgressSummary"),
   worklogProgressFill: document.querySelector("#worklogProgressFill"),
+  dashboardWorklogDate: document.querySelector("#dashboardWorklogDate"),
+  dashboardWorklogList: document.querySelector("#dashboardWorklogList"),
+  dashboardWorklogAddBtn: document.querySelector("#dashboardWorklogAddBtn"),
+  dashboardWorklogOpenBtn: document.querySelector("#dashboardWorklogOpenBtn"),
+  dashboardWorklogMoreBtn: document.querySelector("#dashboardWorklogMoreBtn"),
+  dashboardWorklogProgressText: document.querySelector("#dashboardWorklogProgressText"),
+  dashboardWorklogProgressSummary: document.querySelector("#dashboardWorklogProgressSummary"),
+  dashboardWorklogProgressFill: document.querySelector("#dashboardWorklogProgressFill"),
   memberModal: document.querySelector("#memberModal"),
   memberModalTitle: document.querySelector("#memberModalTitle"),
   memberModalCloseBtn: document.querySelector("#memberModalCloseBtn"),
@@ -1586,6 +1594,7 @@ async function syncWorklogsFromSupabase() {
   state.worklogs = buildWorklogStateMap(remoteWorklogs);
   saveState({ history: false });
   renderCalendar();
+  renderDashboardWorklog();
   return { ok: true };
 }
 
@@ -2655,6 +2664,16 @@ function bindEvents() {
     currentWorklogDraft.tasks.push(createWorklogTask({ status: "waiting" }));
     renderWorklogTasks();
   });
+  els.dashboardWorklogOpenBtn?.addEventListener("click", openTodayWorklogModal);
+  els.dashboardWorklogMoreBtn?.addEventListener("click", openTodayWorklogModal);
+  els.dashboardWorklogAddBtn?.addEventListener("click", () => {
+    openTodayWorklogModal();
+    els.addWorklogTaskBtn?.click();
+    requestAnimationFrame(() => {
+      const inputs = els.worklogTasks?.querySelectorAll("[data-worklog-input]");
+      inputs?.[inputs.length - 1]?.focus();
+    });
+  });
   els.worklogForm.addEventListener("submit", handleWorklogSave);
   els.memberModalCloseBtn.addEventListener("click", closeMemberModal);
   els.memberForm.addEventListener("submit", handleMemberSave);
@@ -3678,6 +3697,7 @@ function render() {
   }
 
   renderSummary();
+  renderDashboardWorklog();
   renderBoard();
   renderSchedules();
   renderCalendar();
@@ -7768,6 +7788,120 @@ function getWorklogProgress(dateKey) {
   return Math.round((doneCount / actionableTasks.length) * 100);
 }
 
+function getTodayWorklogContext() {
+  const dateKey = formatDateKey(new Date());
+  syncSchedulesForDateToWorklog(dateKey);
+  carryForwardIncompleteWorklogTasks(dateKey);
+  const worklog = state.worklogs?.[dateKey] || { date: dateKey, tasks: [], notes: "" };
+  const tasks = getWorklogTasksByStatus(worklog.tasks, "active")
+    .filter((task) => String(task.text || "").trim());
+  return { dateKey, worklog, tasks };
+}
+
+function formatDashboardWorklogDate(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${weekday})`;
+}
+
+function openTodayWorklogModal() {
+  openWorklogModal(formatDateKey(new Date()));
+}
+
+function renderDashboardWorklog() {
+  if (!els.dashboardWorklogList) return;
+  const { dateKey, tasks } = getTodayWorklogContext();
+  const orderedTasks = tasks.slice().sort((a, b) => Number(a.done) - Number(b.done));
+  const visibleTasks = orderedTasks.slice(0, 6);
+  const doneCount = tasks.filter((task) => task.done).length;
+  const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+
+  els.dashboardWorklogDate.textContent = formatDashboardWorklogDate(dateKey);
+  els.dashboardWorklogProgressText.textContent = `${progress}%`;
+  els.dashboardWorklogProgressSummary.textContent = `${doneCount} / ${tasks.length} 완료`;
+  els.dashboardWorklogProgressFill.style.width = `${progress}%`;
+
+  if (!visibleTasks.length) {
+    els.dashboardWorklogList.innerHTML = `
+      <div class="dashboard-worklog-empty">
+        <span>오늘 등록된 업무가 없습니다.</span>
+        <button type="button" class="secondary small-btn" data-dashboard-worklog-empty-add>업무 추가</button>
+      </div>
+    `;
+    els.dashboardWorklogList.querySelector("[data-dashboard-worklog-empty-add]")?.addEventListener("click", () => {
+      els.dashboardWorklogAddBtn?.click();
+    });
+  } else {
+    els.dashboardWorklogList.innerHTML = visibleTasks.map((task) => `
+      <div class="dashboard-worklog-item ${task.done ? "is-done" : ""}">
+        <button
+          type="button"
+          class="dashboard-worklog-check"
+          data-dashboard-worklog-toggle="${task.id}"
+          aria-label="${task.done ? "처리 완료 취소" : "처리 완료"}"
+          title="${task.done ? "처리 완료 취소" : "처리 완료"}"
+        >
+          <i class="fa fa-check" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="dashboard-worklog-text" data-dashboard-worklog-open>${escapeHtml(task.text)}</button>
+      </div>
+    `).join("");
+    els.dashboardWorklogList.querySelectorAll("[data-dashboard-worklog-toggle]").forEach((button) => {
+      button.addEventListener("click", () => toggleDashboardWorklogTask(button.dataset.dashboardWorklogToggle));
+    });
+    els.dashboardWorklogList.querySelectorAll("[data-dashboard-worklog-open]").forEach((button) => {
+      button.addEventListener("click", openTodayWorklogModal);
+    });
+  }
+
+  const remainingCount = Math.max(0, orderedTasks.length - visibleTasks.length);
+  els.dashboardWorklogMoreBtn.classList.toggle("hidden", remainingCount === 0);
+  els.dashboardWorklogMoreBtn.textContent = remainingCount ? `업무 ${remainingCount}개 더 보기` : "";
+}
+
+async function toggleDashboardWorklogTask(taskId) {
+  if (!taskId) return;
+  const finishBusyToast = startDelayedBusyToast("업무 상태를 저장하고 있어요...");
+  try {
+    const initialContext = getTodayWorklogContext();
+    const initialTask = initialContext.worklog.tasks.find((item) => item.id === taskId);
+    const initialSourceTaskId = initialTask ? getWorklogTaskSourceId(initialTask) : "";
+    const initialContentKey = initialTask ? getWorklogTaskContentKey(initialTask) : "";
+    if (!(await ensureFreshDataForAction(["worklogs"], "업무 상태 변경"))) return;
+    const { dateKey, worklog } = getTodayWorklogContext();
+    const previousWorklogs = structuredClone(state.worklogs || {});
+    const task = worklog.tasks.find((item) => {
+      if (item.id === taskId) return true;
+      if (initialSourceTaskId && getWorklogTaskSourceId(item) === initialSourceTaskId) return true;
+      return initialContentKey && initialContentKey !== "|" && getWorklogTaskContentKey(item) === initialContentKey;
+    });
+    if (!task || normalizeWorklogTaskStatus(task.status) !== "active") {
+      renderDashboardWorklog();
+      return;
+    }
+
+    task.done = !task.done;
+    state.worklogs[dateKey] = sanitizeWorklogForPersistence(worklog, dateKey);
+    saveState();
+    renderDashboardWorklog();
+    renderCalendar();
+
+    const syncResult = await syncWorklogsStateToSupabase(previousWorklogs);
+    if (!syncResult.ok) {
+      renderDashboardWorklog();
+      renderCalendar();
+      const message = `업무 상태 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
+      openNoticeModal(message);
+      toast("업무 상태를 저장하지 못했어요.");
+      return;
+    }
+    renderDashboardWorklog();
+    toast(task.done ? "업무를 완료 처리했어요." : "업무를 다시 진행 상태로 바꿨어요.");
+  } finally {
+    finishBusyToast();
+  }
+}
+
 function formatWorklogTitle(dateKey) {
   const date = new Date(`${dateKey}T00:00:00`);
   const weekday = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"][date.getDay()];
@@ -8000,6 +8134,7 @@ async function handleWorklogSave(event) {
       return;
     }
     renderCalendar();
+    renderDashboardWorklog();
     closeWorklogModal();
     openNoticeModal("저장이 완료되었어요!");
   } finally {

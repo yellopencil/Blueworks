@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20261020-backup2">
+  <link rel="stylesheet" href="./styles.css?v=20261020-dashboard-worklog">
   <link rel="stylesheet" href="./quote-generator.css?v=20260428-agreement-heading1">
 </head>
 <body>
@@ -172,6 +172,30 @@
                   <h2 id="welcomeText">차민석 대표님, 블루웍스에 오신 것을 환영해요!</h2>
                 </div>
               </div>
+
+              <section class="panel dashboard-worklog-panel" aria-labelledby="dashboardWorklogTitle">
+                <div class="section-head dashboard-worklog-head">
+                  <div>
+                    <h3 id="dashboardWorklogTitle">오늘의 업무</h3>
+                    <p id="dashboardWorklogDate" class="dashboard-worklog-date"></p>
+                  </div>
+                  <div class="board-tools dashboard-worklog-tools">
+                    <button id="dashboardWorklogAddBtn" class="secondary" type="button">업무 추가</button>
+                    <button id="dashboardWorklogOpenBtn" class="ghost" type="button">전체 보기</button>
+                  </div>
+                </div>
+                <div class="dashboard-worklog-progress" aria-label="오늘의 업무 진행률">
+                  <div class="dashboard-worklog-progress-meta">
+                    <strong id="dashboardWorklogProgressText">0%</strong>
+                    <span id="dashboardWorklogProgressSummary">0 / 0 완료</span>
+                  </div>
+                  <div class="dashboard-worklog-progress-track" aria-hidden="true">
+                    <span id="dashboardWorklogProgressFill"></span>
+                  </div>
+                </div>
+                <div id="dashboardWorklogList" class="dashboard-worklog-list"></div>
+                <button id="dashboardWorklogMoreBtn" class="dashboard-worklog-more hidden" type="button"></button>
+              </section>
 
               <div class="summary-grid">
                 <article class="panel summary-card summary-ready">
@@ -1489,7 +1513,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabase-client.js?v=20260815-other-revenue1"></script>
   <script src="./backup-export.js?v=20261020-backup2"></script>
-  <script src="./app.js?v=20261020-backup2"></script>
+  <script src="./app.js?v=20261020-dashboard-worklog"></script>
   <script src="./quote-generator.js?v=20260428-agreement-heading1"></script>
 </body>
 </html>

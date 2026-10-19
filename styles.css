@@ -2118,6 +2118,149 @@ body[data-theme="dark"] .primary { color: #111418; }
   letter-spacing: -0.04em;
 }
 
+.dashboard-worklog-panel {
+  margin-bottom: 22px;
+  padding: 22px 26px 18px;
+}
+
+.dashboard-worklog-head {
+  margin-bottom: 14px;
+}
+
+.dashboard-worklog-head h3 {
+  margin: 0;
+}
+
+.dashboard-worklog-date {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.dashboard-worklog-progress {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 280px);
+  align-items: center;
+  justify-content: end;
+  gap: 12px;
+  margin: -45px 216px 20px 0;
+}
+
+.dashboard-worklog-progress-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dashboard-worklog-progress-meta strong {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.dashboard-worklog-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.dashboard-worklog-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.dashboard-worklog-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+
+.dashboard-worklog-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-top: 1px solid var(--line);
+}
+
+.dashboard-worklog-item:nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.dashboard-worklog-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: transparent;
+  font-size: 11px;
+}
+
+.dashboard-worklog-check:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.dashboard-worklog-item.is-done .dashboard-worklog-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.dashboard-worklog-text {
+  width: 100%;
+  padding: 13px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.dashboard-worklog-item.is-done .dashboard-worklog-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.dashboard-worklog-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 74px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.dashboard-worklog-more {
+  display: block;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .board-tools {
   display: flex;
   align-items: center;
@@ -4238,6 +4381,31 @@ body[data-theme="dark"] .sales-chart-value {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .dashboard-worklog-panel {
+    padding: 18px;
+  }
+
+  .dashboard-worklog-progress {
+    grid-template-columns: auto minmax(100px, 1fr);
+    margin: 0 0 14px;
+  }
+
+  .dashboard-worklog-list {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-worklog-item:nth-child(2) {
+    border-top: 1px solid var(--line);
+  }
+
+  .dashboard-worklog-tools {
+    width: 100%;
+  }
+
+  .dashboard-worklog-tools button {
+    flex: 1 1 0;
   }
 
   .summary-card {
