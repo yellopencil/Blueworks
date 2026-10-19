@@ -2131,6 +2131,11 @@ body[data-theme="dark"] .primary { color: #111418; }
   margin: 0;
 }
 
+#dashboardWorklogSaveBtn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .dashboard-worklog-date {
   margin: 7px 0 0;
   color: var(--muted);
@@ -2144,7 +2149,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: center;
   justify-content: end;
   gap: 12px;
-  margin: -45px 216px 20px 0;
+  margin: -45px 306px 20px 0;
 }
 
 .dashboard-worklog-progress-meta {
