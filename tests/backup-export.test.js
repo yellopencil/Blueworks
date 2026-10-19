@@ -147,12 +147,20 @@ async function loadDownloadedWorkbook(options) {
   assert.equal(fullProjects.rowCount, 6, "전체 백업에는 프로젝트 2건이 들어가야 합니다.");
   assert.equal(fullProjects.views[0].ySplit, 4, "제목 행을 고정해야 합니다.");
   assert.ok(fullProjects.autoFilter, "필터가 적용되어야 합니다.");
+  const autoFilterRange = typeof fullProjects.autoFilter === "string"
+    ? fullProjects.autoFilter
+    : JSON.stringify(fullProjects.autoFilter);
+  assert.match(autoFilterRange, /4.*6/, "필터 범위에 전체 데이터 행이 포함되어야 합니다.");
   const passwordColumn = fullProjects.getRow(4).values.findIndex((value) => value === "아임웹 비밀번호");
+  const contractDateColumn = fullProjects.getRow(4).values.findIndex((value) => value === "계약일");
   assert.ok(passwordColumn > 0, "아임웹 비밀번호 열이 있어야 합니다.");
-  assert.equal(fullProjects.getCell(5, passwordColumn).value, "secret-2025");
+  assert.equal(fullProjects.getCell(5, passwordColumn).value, "secret-2026", "최근 계약 프로젝트가 위에 와야 합니다.");
+  assert.ok(fullProjects.getCell(5, contractDateColumn).value instanceof Date, "계약일은 엑셀 날짜 형식이어야 합니다.");
+  assert.equal(fullProjects.getCell(5, contractDateColumn).numFmt, "yyyy-mm-dd");
 
   const yearlyWorkbook = await loadDownloadedWorkbook({ scope: "year", year: 2025 });
   assert.equal(yearlyWorkbook.getWorksheet("프로젝트").rowCount, 5, "2025년 백업에는 2025년 프로젝트만 들어가야 합니다.");
+  assert.equal(yearlyWorkbook.getWorksheet("프로젝트").getCell(5, passwordColumn).value, "secret-2025");
   assert.equal(yearlyWorkbook.getWorksheet("부수입").rowCount, 5);
   assert.equal(yearlyWorkbook.getWorksheet("일정").rowCount, 5);
   assert.equal(yearlyWorkbook.getWorksheet("업무일지").rowCount, 5);

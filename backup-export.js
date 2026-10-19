@@ -92,6 +92,13 @@
     return Number.isFinite(number) ? number : 0;
   }
 
+  function excelDate(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
   function jsonText(value) {
     if (value === null || value === undefined || value === "") return "";
     try {
@@ -134,7 +141,7 @@
     worksheet.views = [{ state: "frozen", ySplit: 4 }];
     worksheet.autoFilter = {
       from: { row: 4, column: 1 },
-      to: { row: 4, column: lastColumn },
+      to: { row: Math.max(4, worksheet.rowCount), column: lastColumn },
     };
     worksheet.pageSetup = {
       orientation: columns.length > 7 ? "landscape" : "portrait",
@@ -177,6 +184,10 @@
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
         if (definition.kind === "money") cell.numFmt = '#,##0"원"';
         if (definition.kind === "number") cell.numFmt = "#,##0";
+        if (definition.kind === "date") {
+          cell.numFmt = "yyyy-mm-dd";
+          cell.alignment.horizontal = "center";
+        }
       });
     }
   }
@@ -194,6 +205,7 @@
         worksheet.addRow(definition.columns.map((column) => {
           const value = item[column.key];
           if (column.kind === "money" || column.kind === "number") return safeNumber(value);
+          if (column.kind === "date") return excelDate(value);
           return cleanString(value);
         }));
       });
@@ -207,7 +219,14 @@
   function buildDefinitions(datasets, options) {
     const scope = options.scope === "year" ? "year" : "all";
     const year = Number(options.year || new Date().getFullYear());
-    const projects = (datasets.projects || []).filter((row) => isInScope(row.start_date, scope, year));
+    const projects = (datasets.projects || [])
+      .filter((row) => isInScope(row.start_date, scope, year))
+      .slice()
+      .sort((a, b) => {
+        const dateOrder = String(b.start_date || "").localeCompare(String(a.start_date || ""));
+        if (dateOrder !== 0) return dateOrder;
+        return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+      });
     const projectIds = new Set(projects.map((row) => row.id));
     const projectNames = new Map((datasets.projects || []).map((row) => [row.id, row.title || ""]));
     const schedules = (datasets.schedules || []).filter((row) => isInScope(row.date, scope, year));
@@ -264,8 +283,8 @@
         { header: "웹사이트 URL", key: "websiteUrl", width: 30 },
         { header: "상태", key: "status", width: 13 },
         { header: "세부 단계", key: "progressStage", width: 20 },
-        { header: "계약일", key: "startDate", width: 13 },
-        { header: "마감일", key: "dueDate", width: 13 },
+        { header: "계약일", key: "startDate", width: 13, kind: "date" },
+        { header: "마감일", key: "dueDate", width: 13, kind: "date" },
         { header: "패키지", key: "packageType", width: 17 },
         { header: "사이트 유형", key: "siteType", width: 17 },
         { header: "언어 수", key: "languageCount", width: 10, kind: "number" },
@@ -330,7 +349,7 @@
       title: "부수입",
       subtitle: commonSubtitle,
       columns: [
-        { header: "발생일", key: "date", width: 13 },
+        { header: "발생일", key: "date", width: 13, kind: "date" },
         { header: "구분", key: "category", width: 17 },
         { header: "내용", key: "title", width: 30 },
         { header: "금액", key: "amount", width: 18, kind: "money" },
@@ -360,7 +379,7 @@
       title: "일정",
       subtitle: commonSubtitle,
       columns: [
-        { header: "날짜", key: "date", width: 13 },
+        { header: "날짜", key: "date", width: 13, kind: "date" },
         { header: "일정명", key: "title", width: 28 },
         { header: "연결 프로젝트", key: "projectTitle", width: 26 },
         { header: "메모", key: "notes", width: 48 },
@@ -388,7 +407,7 @@
       title: "업무일지",
       subtitle: commonSubtitle,
       columns: [
-        { header: "날짜", key: "date", width: 13 },
+        { header: "날짜", key: "date", width: 13, kind: "date" },
         { header: "특이사항", key: "notes", width: 72 },
         { header: "업무 수", key: "taskCount", width: 11, kind: "number" },
         { header: "생성일", key: "createdAt", width: 20 },
@@ -412,12 +431,12 @@
       title: "업무일지 항목",
       subtitle: commonSubtitle,
       columns: [
-        { header: "업무일지 날짜", key: "date", width: 15 },
+        { header: "업무일지 날짜", key: "date", width: 15, kind: "date" },
         { header: "구분", key: "status", width: 14 },
         { header: "업무 내용", key: "text", width: 58 },
         { header: "처리완료", key: "done", width: 12 },
         { header: "자동 등록", key: "auto", width: 12 },
-        { header: "이월 출처 날짜", key: "carriedFromDate", width: 16 },
+        { header: "이월 출처 날짜", key: "carriedFromDate", width: 16, kind: "date" },
         { header: "정렬 순서", key: "sortOrder", width: 12, kind: "number" },
         { header: "생성일", key: "createdAt", width: 20 },
         { header: "업무 ID", key: "id", width: 38, internal: true },
@@ -569,7 +588,7 @@
       title: "다이어리",
       subtitle: commonSubtitle,
       columns: [
-        { header: "날짜", key: "date", width: 13 },
+        { header: "날짜", key: "date", width: 13, kind: "date" },
         { header: "제목", key: "title", width: 30 },
         { header: "본문", key: "contentText", width: 72 },
         { header: "생성일", key: "createdAt", width: 20 },
@@ -713,7 +732,7 @@
       title: "지난 견적 · 계약서 기록",
       subtitle: `${commonSubtitle} · PDF 파일 원본은 백업에 포함하지 않음`,
       columns: [
-        { header: "작성일", key: "date", width: 13 },
+        { header: "작성일", key: "date", width: 13, kind: "date" },
         { header: "문서 구분", key: "type", width: 16 },
         { header: "제목", key: "title", width: 30 },
         { header: "고객사", key: "company", width: 22 },

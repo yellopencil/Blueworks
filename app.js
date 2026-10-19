@@ -346,6 +346,8 @@ const els = {
 
 let state = loadState();
 let lastHistorySnapshotJson = serializeStateForHistory(state);
+let dataBackupPreparedDatasets = null;
+let dataBackupPreparePromise = null;
 let currentMonth = new Date();
 let pendingConfirmAction = null;
 let currentScheduleDetailId = null;
@@ -1910,45 +1912,50 @@ function getDataBackupScope() {
   return document.querySelector('input[name="dataBackupScope"]:checked')?.value === "year" ? "year" : "all";
 }
 
-function populateDataBackupYears() {
+function populateDataBackupYears(datasets = null) {
   if (!els.dataBackupYearSelect) return;
   const currentYear = new Date().getFullYear();
-  const years = new Set();
-  for (let year = currentYear; year >= currentYear - 10; year -= 1) years.add(year);
-  (state.projects || []).forEach((item) => {
-    const year = Number(String(item.startDate || "").slice(0, 4));
-    if (year) years.add(year);
-  });
-  (state.otherRevenues || []).forEach((item) => {
-    const year = Number(String(item.revenueDate || "").slice(0, 4));
-    if (year) years.add(year);
-  });
-  (state.schedules || []).forEach((item) => {
-    const year = Number(String(item.date || "").slice(0, 4));
-    if (year) years.add(year);
-  });
-  Object.keys(state.worklogs || {}).forEach((dateKey) => {
-    const year = Number(String(dateKey).slice(0, 4));
-    if (year) years.add(year);
-  });
-  (state.yearGoals || []).forEach((item) => {
-    const year = Number(item.year);
-    if (year) years.add(year);
-  });
-  (state.archiveDiaries || []).forEach((item) => {
-    const year = Number(String(item.entryDate || "").slice(0, 4));
-    if (year) years.add(year);
-  });
+  const years = new Set([currentYear]);
+  const addPastOrCurrentYear = (value) => {
+    const year = Number(String(value || "").slice(0, 4));
+    if (year > 0 && year <= currentYear) years.add(year);
+  };
+  if (datasets) {
+    (datasets.projects || []).forEach((item) => addPastOrCurrentYear(item.start_date));
+    (datasets.otherRevenues || []).forEach((item) => addPastOrCurrentYear(item.revenue_date));
+    (datasets.schedules || []).forEach((item) => addPastOrCurrentYear(item.date));
+    (datasets.worklogs || []).forEach((item) => addPastOrCurrentYear(item.worklog_date));
+    (datasets.yearGoals || []).forEach((item) => {
+      const year = Number(item.year);
+      if (year > 0 && year <= currentYear) years.add(year);
+    });
+    (datasets.archiveDiaries || []).forEach((item) => addPastOrCurrentYear(item.entry_date));
+    (datasets.quoteHistory || []).forEach((item) => addPastOrCurrentYear(item.quote_date || item.created_at));
+  } else {
+    (state.projects || []).forEach((item) => addPastOrCurrentYear(item.startDate));
+    (state.otherRevenues || []).forEach((item) => addPastOrCurrentYear(item.revenueDate));
+    (state.schedules || []).forEach((item) => addPastOrCurrentYear(item.date));
+    Object.keys(state.worklogs || {}).forEach(addPastOrCurrentYear);
+    (state.yearGoals || []).forEach((item) => {
+      const year = Number(item.year);
+      if (year > 0 && year <= currentYear) years.add(year);
+    });
+    (state.archiveDiaries || []).forEach((item) => addPastOrCurrentYear(item.entryDate));
+  }
   els.dataBackupYearSelect.innerHTML = [...years]
     .sort((a, b) => b - a)
     .map((year) => `<option value="${year}"${year === currentYear ? " selected" : ""}>${year}년</option>`)
     .join("");
+  refreshCustomSelect(els.dataBackupYearSelect);
 }
 
 function updateDataBackupScope() {
   const yearly = getDataBackupScope() === "year";
   els.dataBackupYearField?.classList.toggle("hidden", !yearly);
-  if (els.dataBackupYearSelect) els.dataBackupYearSelect.disabled = !yearly;
+  if (els.dataBackupYearSelect) {
+    els.dataBackupYearSelect.disabled = !yearly;
+    refreshCustomSelect(els.dataBackupYearSelect);
+  }
 }
 
 function openDataBackupModal() {
@@ -1959,6 +1966,20 @@ function openDataBackupModal() {
   populateDataBackupYears();
   updateDataBackupScope();
   els.dataBackupModal?.classList.remove("hidden");
+  dataBackupPreparedDatasets = null;
+  const preparePromise = fetchDataBackupDatasets();
+  dataBackupPreparePromise = preparePromise;
+  preparePromise
+    .then((datasets) => {
+      if (dataBackupPreparePromise !== preparePromise) return;
+      dataBackupPreparedDatasets = datasets;
+      populateDataBackupYears(datasets);
+      updateDataBackupScope();
+    })
+    .catch((error) => {
+      if (dataBackupPreparePromise === preparePromise) dataBackupPreparePromise = null;
+      console.warn("백업 연도 목록을 미리 불러오지 못했습니다.", error);
+    });
 }
 
 function closeDataBackupModal(options = {}) {
@@ -2031,7 +2052,9 @@ async function handleDataBackupDownload() {
     button.textContent = "데이터 불러오는 중...";
   }
   try {
-    const datasets = await fetchDataBackupDatasets();
+    let datasets = dataBackupPreparedDatasets;
+    if (!datasets && dataBackupPreparePromise) datasets = await dataBackupPreparePromise;
+    if (!datasets) datasets = await fetchDataBackupDatasets();
     if (button) button.textContent = "엑셀 파일 생성 중...";
     const scope = getDataBackupScope();
     const year = Number(els.dataBackupYearSelect?.value || new Date().getFullYear());
