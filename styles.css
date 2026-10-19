@@ -3705,6 +3705,114 @@ body[data-theme="dark"] .sales-metric-card-total span {
   border-style: solid;
 }
 
+.settings-data-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0 2px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-data-actions p {
+  margin: 5px 0 0;
+  line-height: 1.5;
+}
+
+.settings-data-actions button,
+.data-backup-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.data-backup-modal-card {
+  width: min(calc(100vw - 40px), 560px);
+}
+
+.data-backup-body {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.data-backup-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.data-backup-fieldset legend {
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.data-backup-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.data-backup-scope label {
+  position: relative;
+  cursor: pointer;
+}
+
+.data-backup-scope input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.data-backup-scope span {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.data-backup-scope input:checked + span {
+  color: #1f5fd6;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(25, 43, 78, 0.12);
+}
+
+.data-backup-scope input:focus-visible + span {
+  outline: 2px solid rgba(61, 124, 255, 0.35);
+  outline-offset: 1px;
+}
+
+.data-backup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #f0c7cd;
+  border-radius: 8px;
+  color: #8e3441;
+  background: #fff7f8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.data-backup-warning i {
+  margin-top: 3px;
+}
+
+.data-backup-download-btn {
+  min-height: 46px;
+  width: 100%;
+}
+
 .change-history-modal-card {
   width: min(calc(100vw - 48px), 760px);
   max-height: calc(100vh - 64px);
@@ -3876,6 +3984,13 @@ body[data-theme="dark"] .sales-chart-value {
   }
   .settings-upload-grid {
     grid-template-columns: 1fr;
+  }
+  .settings-data-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-data-actions button {
+    width: 100%;
   }
   .hero-banner {
     padding: 20px;

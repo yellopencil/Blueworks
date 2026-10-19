@@ -333,6 +333,12 @@ const els = {
   supabaseStatusText: document.querySelector("#supabaseStatusText"),
   supabaseStatusDetail: document.querySelector("#supabaseStatusDetail"),
   openChangeHistoryBtn: document.querySelector("#openChangeHistoryBtn"),
+  openDataBackupBtn: document.querySelector("#openDataBackupBtn"),
+  dataBackupModal: document.querySelector("#dataBackupModal"),
+  dataBackupCloseBtn: document.querySelector("#dataBackupCloseBtn"),
+  dataBackupYearField: document.querySelector("#dataBackupYearField"),
+  dataBackupYearSelect: document.querySelector("#dataBackupYearSelect"),
+  dataBackupDownloadBtn: document.querySelector("#dataBackupDownloadBtn"),
   changeHistoryModal: document.querySelector("#changeHistoryModal"),
   changeHistoryCloseBtn: document.querySelector("#changeHistoryCloseBtn"),
   changeHistoryList: document.querySelector("#changeHistoryList"),
@@ -1900,6 +1906,156 @@ async function handleSiteSettingsSave(event) {
   }
 }
 
+function getDataBackupScope() {
+  return document.querySelector('input[name="dataBackupScope"]:checked')?.value === "year" ? "year" : "all";
+}
+
+function populateDataBackupYears() {
+  if (!els.dataBackupYearSelect) return;
+  const currentYear = new Date().getFullYear();
+  const years = new Set();
+  for (let year = currentYear; year >= currentYear - 10; year -= 1) years.add(year);
+  (state.projects || []).forEach((item) => {
+    const year = Number(String(item.startDate || "").slice(0, 4));
+    if (year) years.add(year);
+  });
+  (state.otherRevenues || []).forEach((item) => {
+    const year = Number(String(item.revenueDate || "").slice(0, 4));
+    if (year) years.add(year);
+  });
+  (state.schedules || []).forEach((item) => {
+    const year = Number(String(item.date || "").slice(0, 4));
+    if (year) years.add(year);
+  });
+  Object.keys(state.worklogs || {}).forEach((dateKey) => {
+    const year = Number(String(dateKey).slice(0, 4));
+    if (year) years.add(year);
+  });
+  (state.yearGoals || []).forEach((item) => {
+    const year = Number(item.year);
+    if (year) years.add(year);
+  });
+  (state.archiveDiaries || []).forEach((item) => {
+    const year = Number(String(item.entryDate || "").slice(0, 4));
+    if (year) years.add(year);
+  });
+  els.dataBackupYearSelect.innerHTML = [...years]
+    .sort((a, b) => b - a)
+    .map((year) => `<option value="${year}"${year === currentYear ? " selected" : ""}>${year}년</option>`)
+    .join("");
+}
+
+function updateDataBackupScope() {
+  const yearly = getDataBackupScope() === "year";
+  els.dataBackupYearField?.classList.toggle("hidden", !yearly);
+  if (els.dataBackupYearSelect) els.dataBackupYearSelect.disabled = !yearly;
+}
+
+function openDataBackupModal() {
+  if (!canManageSiteSettings()) {
+    openNoticeModal("데이터 백업은 대표 계정에서만 사용할 수 있어요.");
+    return;
+  }
+  populateDataBackupYears();
+  updateDataBackupScope();
+  els.dataBackupModal?.classList.remove("hidden");
+}
+
+function closeDataBackupModal(options = {}) {
+  if (els.dataBackupDownloadBtn?.disabled && !options.force) return;
+  els.dataBackupModal?.classList.add("hidden");
+}
+
+async function fetchDataBackupDatasets() {
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady() || !state.sessionUserId) {
+    throw new Error("Supabase 연결 또는 로그인 상태를 확인해주세요.");
+  }
+
+  await bridge.refreshCachedSession?.();
+  const operations = [
+    ["projects", "프로젝트", () => bridge.fetchProjects()],
+    ["projectDocuments", "프로젝트 문서 목록", () => bridge.fetchProjectDocuments()],
+    ["schedules", "일정", () => bridge.fetchSchedules()],
+    ["worklogs", "업무일지", () => bridge.fetchWorklogs()],
+    ["yearGoals", "연간 목표", () => bridge.fetchYearGoals()],
+    ["archiveNotes", "메모·프롬프트", () => bridge.fetchArchiveNotes()],
+    ["archiveCodeCategories", "코드 카테고리", () => bridge.fetchArchiveCodeCategories()],
+    ["archiveCodes", "코드", () => bridge.fetchArchiveCodes()],
+    ["otherRevenues", "부수입", () => bridge.fetchOtherRevenues()],
+    ["archiveDiaries", "다이어리", () => bridge.fetchArchiveDiaries()],
+    ["profiles", "멤버", () => bridge.fetchProfiles()],
+    ["siteSettings", "환경설정", () => bridge.fetchSiteSettings()],
+    ["quoteSettings", "견적 설정", () => bridge.fetchQuoteSettings()],
+    ["quoteHistory", "견적 기록", () => bridge.fetchQuotePdfHistory()],
+  ];
+
+  let results = await Promise.all(operations.map(async ([key, label, fetcher]) => ({
+    key,
+    label,
+    fetcher,
+    result: await fetcher(),
+  })));
+  const failed = results.filter((item) => item.result?.error);
+  if (failed.length) {
+    await bridge.refreshCachedSession?.(true);
+    const retryEntries = await Promise.all(failed.map(async (item) => ({
+      ...item,
+      result: await item.fetcher(),
+    })));
+    const retryMap = new Map(retryEntries.map((item) => [item.key, item]));
+    results = results.map((item) => retryMap.get(item.key) || item);
+  }
+
+  const unresolved = results.find((item) => item.result?.error);
+  if (unresolved) {
+    throw new Error(`${unresolved.label} 데이터를 불러오지 못했습니다: ${unresolved.result.error.message || "Supabase 오류"}`);
+  }
+  return Object.fromEntries(results.map((item) => [item.key, item.result?.data ?? null]));
+}
+
+async function handleDataBackupDownload() {
+  if (!canManageSiteSettings()) {
+    openNoticeModal("데이터 백업은 대표 계정에서만 사용할 수 있어요.");
+    return;
+  }
+  if (!window.BlueworksExcelBackup?.download) {
+    openNoticeModal("엑셀 백업 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+    return;
+  }
+
+  const button = els.dataBackupDownloadBtn;
+  const previousHtml = button?.innerHTML || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "데이터 불러오는 중...";
+  }
+  try {
+    const datasets = await fetchDataBackupDatasets();
+    if (button) button.textContent = "엑셀 파일 생성 중...";
+    const scope = getDataBackupScope();
+    const year = Number(els.dataBackupYearSelect?.value || new Date().getFullYear());
+    const result = await window.BlueworksExcelBackup.download({
+      datasets,
+      scope,
+      year,
+      generatedAt: new Date().toISOString(),
+    });
+    closeDataBackupModal({ force: true });
+    openNoticeModal(`${result.filename} 파일을 내려받았습니다.`);
+  } catch (error) {
+    console.error("엑셀 데이터 백업 실패", error);
+    const message = `엑셀 백업 실패: ${error?.message || "알 수 없는 오류"}`;
+    toast(message);
+    openNoticeModal(message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = previousHtml;
+    }
+  }
+}
+
 function currentUser() {
   return state.users.find((user) => user.id === state.sessionUserId) || null;
 }
@@ -2433,6 +2589,12 @@ function bindEvents() {
   els.annualGoalAddCancelBtn?.addEventListener("click", closeAnnualGoalAddModal);
   els.openChangeHistoryBtn?.addEventListener("click", openChangeHistoryModal);
   els.changeHistoryCloseBtn?.addEventListener("click", closeChangeHistoryModal);
+  els.openDataBackupBtn?.addEventListener("click", openDataBackupModal);
+  els.dataBackupCloseBtn?.addEventListener("click", closeDataBackupModal);
+  els.dataBackupDownloadBtn?.addEventListener("click", handleDataBackupDownload);
+  document.querySelectorAll('input[name="dataBackupScope"]').forEach((input) => {
+    input.addEventListener("change", updateDataBackupScope);
+  });
 
   els.scheduleModalForm.addEventListener("submit", handleScheduleSave);
   els.scheduleEditorCloseBtn.addEventListener("click", closeScheduleEditorModal);
