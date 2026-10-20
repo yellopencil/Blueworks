@@ -2139,10 +2139,12 @@ body[data-theme="dark"] .primary { color: #111418; }
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.42);
 }
 
-.dashboard-hero-stars {
+.hero-banner > .dashboard-hero-stars {
   position: absolute;
   z-index: 0;
   inset: 0 -140px;
+  width: auto;
+  display: block;
   overflow: hidden;
   pointer-events: none;
   -webkit-mask-image: linear-gradient(90deg, transparent 2%, rgba(0, 0, 0, 0.12) 34%, #000 64%, #000 100%);
@@ -2156,7 +2158,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   position: absolute;
   display: block;
   top: var(--star-top, 0);
-  right: -144px;
+  right: -24px;
   width: var(--star-size);
   height: var(--star-size);
   border: 0;
