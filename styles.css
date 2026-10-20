@@ -2147,7 +2147,7 @@ body[data-theme="dark"] .primary { color: #111418; }
 .dashboard-worklog-date {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: calc(0.82rem + 1px);
   font-weight: 650;
 }
 
@@ -2203,11 +2203,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: center;
   gap: 12px;
   min-height: 68px;
-  border-top: 1px solid var(--line);
-}
-
-.dashboard-worklog-item:nth-child(-n + 2) {
-  border-top: 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .dashboard-worklog-check-frame {
@@ -4460,10 +4456,6 @@ body[data-theme="dark"] .sales-chart-value {
 
   .dashboard-worklog-list {
     grid-template-columns: 1fr;
-  }
-
-  .dashboard-worklog-item:nth-child(2) {
-    border-top: 1px solid var(--line);
   }
 
   .dashboard-worklog-tools {
