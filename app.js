@@ -7919,7 +7919,13 @@ function renderDashboardWorklog() {
       button.addEventListener("click", () => toggleDashboardWorklogDraftTask(button.dataset.dashboardWorklogToggle));
     });
     els.dashboardWorklogList.querySelectorAll("[data-dashboard-worklog-open]").forEach((button) => {
-      button.addEventListener("click", openTodayWorklogModal);
+      button.addEventListener("click", () => {
+        const item = button.closest(".dashboard-worklog-item");
+        const toggleButton = item?.querySelector("[data-dashboard-worklog-toggle]");
+        if (toggleButton?.dataset.dashboardWorklogToggle) {
+          toggleDashboardWorklogDraftTask(toggleButton.dataset.dashboardWorklogToggle);
+        }
+      });
     });
   }
 

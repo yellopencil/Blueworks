@@ -2202,7 +2202,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  min-height: 58px;
+  min-height: 68px;
   border-top: 1px solid var(--line);
 }
 
@@ -2292,7 +2292,7 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-text {
   width: 100%;
-  padding: 17px 0;
+  padding: 21px 0;
   border: 0;
   background: transparent;
   color: var(--text);
