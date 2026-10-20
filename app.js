@@ -287,7 +287,6 @@ const els = {
   dashboardWorklogSaveBtn: document.querySelector("#dashboardWorklogSaveBtn"),
   dashboardWorklogAddBtn: document.querySelector("#dashboardWorklogAddBtn"),
   dashboardWorklogOpenBtn: document.querySelector("#dashboardWorklogOpenBtn"),
-  dashboardWorklogMoreBtn: document.querySelector("#dashboardWorklogMoreBtn"),
   dashboardWorklogProgressText: document.querySelector("#dashboardWorklogProgressText"),
   dashboardWorklogProgressSummary: document.querySelector("#dashboardWorklogProgressSummary"),
   dashboardWorklogProgressFill: document.querySelector("#dashboardWorklogProgressFill"),
@@ -2705,7 +2704,6 @@ function bindEvents() {
     renderWorklogTasks();
   });
   els.dashboardWorklogOpenBtn?.addEventListener("click", openTodayWorklogModal);
-  els.dashboardWorklogMoreBtn?.addEventListener("click", openTodayWorklogModal);
   els.dashboardWorklogSaveBtn?.addEventListener("click", saveDashboardWorklogDraft);
   els.dashboardWorklogAddBtn?.addEventListener("click", () => {
     openTodayWorklogModal();
@@ -7880,8 +7878,6 @@ function renderDashboardWorklog() {
   const { dateKey, worklog } = getDashboardWorklogDraft();
   const tasks = getWorklogTasksByStatus(worklog.tasks, "active")
     .filter((task) => String(task.text || "").trim());
-  const orderedTasks = tasks.slice().sort((a, b) => Number(a.done) - Number(b.done));
-  const visibleTasks = orderedTasks.slice(0, 6);
   const doneCount = tasks.filter((task) => task.done).length;
   const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
@@ -7892,7 +7888,7 @@ function renderDashboardWorklog() {
   els.dashboardWorklogSaveBtn.disabled = !dashboardWorklogDraftDirty || dashboardWorklogSaveInFlight;
   els.dashboardWorklogSaveBtn.textContent = dashboardWorklogSaveInFlight ? "저장 중..." : "저장";
 
-  if (!visibleTasks.length) {
+  if (!tasks.length) {
     els.dashboardWorklogList.innerHTML = `
       <div class="dashboard-worklog-empty">
         <span>오늘 등록된 업무가 없습니다.</span>
@@ -7903,7 +7899,7 @@ function renderDashboardWorklog() {
       els.dashboardWorklogAddBtn?.click();
     });
   } else {
-    els.dashboardWorklogList.innerHTML = visibleTasks.map((task) => `
+    els.dashboardWorklogList.innerHTML = tasks.map((task) => `
       <div class="dashboard-worklog-item ${task.done ? "is-done" : ""}">
         <span class="dashboard-worklog-check-frame">
           <button
@@ -7927,9 +7923,6 @@ function renderDashboardWorklog() {
     });
   }
 
-  const remainingCount = Math.max(0, orderedTasks.length - visibleTasks.length);
-  els.dashboardWorklogMoreBtn.classList.toggle("hidden", remainingCount === 0);
-  els.dashboardWorklogMoreBtn.textContent = remainingCount ? `업무 ${remainingCount}개 더 보기` : "";
 }
 
 function toggleDashboardWorklogDraftTask(taskId) {

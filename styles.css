@@ -2277,7 +2277,6 @@ body[data-theme="dark"] .primary { color: #111418; }
 .dashboard-worklog-check:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
-  transform: translateY(-1px);
 }
 
 .dashboard-worklog-item.is-done .dashboard-worklog-check {
@@ -2324,17 +2323,6 @@ body[data-theme="dark"] .primary { color: #111418; }
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.88rem;
-}
-
-.dashboard-worklog-more {
-  display: block;
-  margin: 12px auto 0;
-  padding: 7px 12px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
 }
 
 .board-tools {
