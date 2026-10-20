@@ -2120,7 +2120,7 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-panel {
   margin-bottom: 22px;
-  padding: 28px 30px 24px;
+  padding: 34px 36px 30px;
 }
 
 .dashboard-worklog-head {
@@ -2162,7 +2162,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: center;
   gap: 16px;
   margin: 0;
-  padding: 0 0 18px;
+  padding: 0 0 26px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -4449,7 +4449,7 @@ body[data-theme="dark"] .sales-chart-value {
   }
 
   .dashboard-worklog-panel {
-    padding: 20px 18px 18px;
+    padding: 24px 22px 22px;
   }
 
   #dashboardWorklogTitle {
@@ -4460,7 +4460,7 @@ body[data-theme="dark"] .sales-chart-value {
     grid-template-columns: auto minmax(100px, 1fr);
     gap: 12px;
     margin: 0;
-    padding-bottom: 14px;
+    padding-bottom: 20px;
   }
 
   .dashboard-worklog-list {
