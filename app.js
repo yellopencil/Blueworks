@@ -433,10 +433,23 @@ const modalSnapshots = {
   archiveCategory: "",
 };
 
+initializeSharedHeroBanners();
 bindEvents();
 normalizeAppLayout();
 render();
 initializeSupabaseAuth();
+
+function initializeSharedHeroBanners() {
+  const template = document.querySelector("#dashboardView .dashboard-hero-stars");
+  if (!template) return;
+
+  document.querySelectorAll(".hero-banner-subtle").forEach((banner) => {
+    banner.classList.add("dashboard-hero-banner");
+    if (!banner.querySelector(".dashboard-hero-stars")) {
+      banner.appendChild(template.cloneNode(true));
+    }
+  });
+}
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
