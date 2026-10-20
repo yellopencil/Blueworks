@@ -2248,9 +2248,8 @@ body[data-theme="dark"] .primary { color: #111418; }
   box-sizing: border-box;
   padding: 0 !important;
   margin: 0 !important;
-  border: 1.5px solid color-mix(in srgb, var(--muted) 48%, var(--line));
-  border-radius: 9999px !important;
-  clip-path: circle(50% at 50% 50%);
+  border: 1px solid color-mix(in srgb, var(--muted) 48%, var(--line));
+  border-radius: 50% !important;
   -webkit-appearance: none;
   appearance: none;
   background: var(--surface);
