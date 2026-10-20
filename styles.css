@@ -2124,11 +2124,16 @@ body[data-theme="dark"] .primary { color: #111418; }
 }
 
 .dashboard-worklog-head {
-  margin-bottom: 18px;
+  margin-bottom: 26px;
 }
 
 .dashboard-worklog-head h3 {
   margin: 0;
+}
+
+#dashboardWorklogTitle {
+  font-size: 1.38rem;
+  line-height: 1.3;
 }
 
 #dashboardWorklogSaveBtn:disabled {
@@ -4445,6 +4450,10 @@ body[data-theme="dark"] .sales-chart-value {
 
   .dashboard-worklog-panel {
     padding: 20px 18px 18px;
+  }
+
+  #dashboardWorklogTitle {
+    font-size: 1.2rem;
   }
 
   .dashboard-worklog-progress {
