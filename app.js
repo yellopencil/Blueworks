@@ -367,6 +367,7 @@ let currentCalendarDayKey = "";
 let currentWorklogDate = "";
 let currentWorklogDraft = null;
 let dashboardWorklogDraft = null;
+let dashboardWorklogDraftBaseline = "";
 let dashboardWorklogDraftDirty = false;
 let dashboardWorklogSaveInFlight = false;
 let currentAnnualGoalEditId = null;
@@ -7858,8 +7859,22 @@ function openTodayWorklogModal() {
 
 function resetDashboardWorklogDraft() {
   dashboardWorklogDraft = null;
+  dashboardWorklogDraftBaseline = "";
   dashboardWorklogDraftDirty = false;
   dashboardWorklogSaveInFlight = false;
+}
+
+function serializeDashboardWorklogStatuses(worklog = {}) {
+  return JSON.stringify(
+    getWorklogTasksByStatus(worklog.tasks, "active")
+      .filter((task) => String(task.text || "").trim())
+      .map((task) => ({
+        id: task.id || "",
+        sourceTaskId: getWorklogTaskSourceId(task),
+        contentKey: getWorklogTaskContentKey(task),
+        done: Boolean(task.done),
+      })),
+  );
 }
 
 function getDashboardWorklogDraft() {
@@ -7869,6 +7884,7 @@ function getDashboardWorklogDraft() {
       structuredClone(context.worklog),
       context.dateKey,
     );
+    dashboardWorklogDraftBaseline = serializeDashboardWorklogStatuses(dashboardWorklogDraft);
     dashboardWorklogDraftDirty = false;
   }
   return { dateKey: context.dateKey, worklog: dashboardWorklogDraft };
@@ -7942,7 +7958,7 @@ function toggleDashboardWorklogDraftTask(taskId) {
   const task = worklog.tasks.find((item) => item.id === taskId);
   if (!task || normalizeWorklogTaskStatus(task.status) !== "active") return;
   task.done = !task.done;
-  dashboardWorklogDraftDirty = true;
+  dashboardWorklogDraftDirty = serializeDashboardWorklogStatuses(worklog) !== dashboardWorklogDraftBaseline;
   renderDashboardWorklog();
 }
 
