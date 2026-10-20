@@ -434,6 +434,7 @@ const modalSnapshots = {
 };
 
 initializeSharedHeroBanners();
+initializePixelAssistant();
 bindEvents();
 normalizeAppLayout();
 render();
@@ -449,6 +450,115 @@ function initializeSharedHeroBanners() {
       banner.appendChild(template.cloneNode(true));
     }
   });
+}
+
+function initializePixelAssistant() {
+  const wrap = document.querySelector("[data-ypx-sec]");
+  const canvas = wrap?.querySelector(".ypx-sec-cv");
+  const context = canvas?.getContext?.("2d");
+  if (!wrap || !canvas || !context || wrap.dataset.ypxSecReady === "1") return;
+
+  wrap.dataset.ypxSecReady = "1";
+  const cols = 22;
+  const rows = 31;
+  const head = [
+    "....hhhhhhhh....", "..hhHHHHHHHHhh..", ".hHHHHHHHHHHHHh.", ".hHHHHHHHHHHHHh.",
+    "hHHHHHHHHHHHHHHh", "hHHHHHHHHHHHHHHh", "hHHHHhHHHHhHHHHh", "hHSHHHSHHSHHHSHh",
+    "hHSSSSSSSSSSSSHh", "hHSSSESSSSESSSHh", "hHSSSESSSSESSSHh", "hHSSCSSSSSSCSSHh",
+    "hHHSSSSMMSSSSHHh", "hHHHSSSSSSSSHHHh",
+  ];
+  const body = [
+    ".hHHHgGWSSWGgHHHh.", ".hHHgGGWWWWGGgHHh.", ".hHgGGGGWWGGGGgHh.", ".hHgGGGGGGGGGGgHh.",
+    "..hgGGGGGGGGGGgh..", "...SkKKKKKKKKkS...", "....kKKKKKKKKk....", "....kKKKKKKKKk....",
+    ".....kkkkkkkk.....", "......SS..SS......", "......SS..SS......", ".....QQQ..QQQ.....",
+  ];
+  const map = head.map((row) => `.${row}.`).concat(body);
+  const palette = {
+    h: "#1f3a7a", H: "#2f56a8", S: "#f9d3a8", C: "#f4a3a3", E: "#22203a", M: "#d98a80",
+    G: "#a9cdf5", g: "#7fa9d9", W: "#ffffff", K: "#eadfcd", k: "#c4b49b", Q: "#8a6a50",
+  };
+  const jumpFrames = [1, 2, 3, 3, 2, 1, 0];
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  let cell = 1;
+  let tickCount = 0;
+  let jumpFrame = -1;
+  let timer = null;
+  let inView = true;
+  let resizeTimer = null;
+
+  function draw(bob, blink, jump) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    for (let rowIndex = map.length - 1; rowIndex >= 0; rowIndex -= 1) {
+      const row = map[rowIndex];
+      const y = 4 - jump + (rowIndex <= 22 ? rowIndex + bob : rowIndex);
+      for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
+        let pixel = row.charAt(columnIndex);
+        if (pixel === ".") continue;
+        if (blink && rowIndex === 9 && pixel === "E") pixel = "S";
+        context.fillStyle = palette[pixel];
+        context.fillRect((columnIndex + 2) * cell, y * cell, cell, cell);
+      }
+    }
+  }
+
+  function resize() {
+    const width = canvas.getBoundingClientRect().width || 24;
+    const dpr = window.devicePixelRatio || 1;
+    cell = Math.max(1, Math.round((width / cols) * dpr));
+    canvas.width = cols * cell;
+    canvas.height = rows * cell;
+    context.imageSmoothingEnabled = false;
+    draw(0, false, 0);
+  }
+
+  function tick() {
+    tickCount += 1;
+    let jump = 0;
+    let bob = 0;
+    if (jumpFrame >= 0) {
+      jump = jumpFrames[jumpFrame];
+      jumpFrame += 1;
+      if (jumpFrame >= jumpFrames.length) jumpFrame = -1;
+    } else {
+      bob = Math.floor(tickCount / 4) % 2;
+    }
+    draw(bob, tickCount % 30 === 0 || tickCount % 30 === 1, jump);
+  }
+
+  function stop() {
+    if (!timer) return;
+    window.clearInterval(timer);
+    timer = null;
+  }
+
+  function start() {
+    if (reduceMotion || timer || !inView || document.hidden) return;
+    timer = window.setInterval(tick, 110);
+  }
+
+  resize();
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(resize, 150);
+  });
+  canvas.addEventListener("click", () => {
+    if (!reduceMotion && jumpFrame < 0) jumpFrame = 0;
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stop();
+    else start();
+  });
+
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(([entry]) => {
+      inView = entry.isIntersecting;
+      if (inView) start();
+      else stop();
+    });
+    observer.observe(canvas);
+  } else {
+    start();
+  }
 }
 
 function loadState() {
