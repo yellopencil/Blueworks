@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20261020-pixel-assistant3">
+  <link rel="stylesheet" href="./styles.css?v=20261020-worklog-layout1">
   <link rel="stylesheet" href="./quote-generator.css?v=20260428-agreement-heading1">
 </head>
 <body>
@@ -193,7 +193,7 @@
 
               <section class="panel dashboard-worklog-panel" aria-labelledby="dashboardWorklogTitle">
                 <div class="section-head dashboard-worklog-head">
-                  <div>
+                  <div class="dashboard-worklog-heading">
                     <div class="dashboard-worklog-title-row">
                       <div class="ypx-sec-wrap" data-ypx-sec>
                         <canvas class="ypx-sec-cv" role="img" aria-label="파란 머리 비서 캐릭터"></canvas>
@@ -202,19 +202,21 @@
                     </div>
                     <p id="dashboardWorklogDate" class="dashboard-worklog-date"></p>
                   </div>
-                  <div class="board-tools dashboard-worklog-tools">
-                    <button id="dashboardWorklogSaveBtn" class="primary" type="button" disabled>저장</button>
-                    <button id="dashboardWorklogAddBtn" class="secondary" type="button">업무 추가</button>
-                    <button id="dashboardWorklogOpenBtn" class="ghost" type="button">전체 보기</button>
-                  </div>
-                </div>
-                <div class="dashboard-worklog-progress" aria-label="오늘의 업무 진행률">
-                  <div class="dashboard-worklog-progress-meta">
-                    <strong id="dashboardWorklogProgressText">0%</strong>
-                    <span id="dashboardWorklogProgressSummary">0 / 0 완료</span>
-                  </div>
-                  <div class="dashboard-worklog-progress-track" aria-hidden="true">
-                    <span id="dashboardWorklogProgressFill"></span>
+                  <div class="dashboard-worklog-actions">
+                    <div class="board-tools dashboard-worklog-tools">
+                      <button id="dashboardWorklogSaveBtn" class="primary" type="button" disabled>저장</button>
+                      <button id="dashboardWorklogAddBtn" class="secondary" type="button">업무 추가</button>
+                      <button id="dashboardWorklogOpenBtn" class="ghost" type="button">전체 보기</button>
+                    </div>
+                    <div class="dashboard-worklog-progress" aria-label="오늘의 업무 진행률">
+                      <div class="dashboard-worklog-progress-meta">
+                        <strong id="dashboardWorklogProgressText">0%</strong>
+                        <span id="dashboardWorklogProgressSummary">0 / 0 완료</span>
+                      </div>
+                      <div class="dashboard-worklog-progress-track" aria-hidden="true">
+                        <span id="dashboardWorklogProgressFill"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div id="dashboardWorklogCompleteMessage" class="dashboard-worklog-complete-message hidden">

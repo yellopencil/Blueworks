@@ -2282,7 +2282,10 @@ body[data-theme="dark"] .primary { color: #111418; }
 }
 
 .dashboard-worklog-head {
+  align-items: stretch;
   margin-bottom: 26px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--line);
 }
 
 .dashboard-worklog-head h3 {
@@ -2295,6 +2298,25 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+}
+
+.dashboard-worklog-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dashboard-worklog-actions {
+  display: flex;
+  flex: 0 1 540px;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 360px;
+}
+
+.dashboard-worklog-tools {
+  justify-content: flex-end;
 }
 
 .ypx-sec-wrap {
@@ -2353,17 +2375,17 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-progress {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr);
-  align-items: center;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+  width: 100%;
   margin: 0;
-  padding: 0 0 26px;
-  border-bottom: 1px solid var(--line);
+  padding: 0;
 }
 
 .dashboard-worklog-progress-meta {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
   color: var(--muted);
   font-size: 0.8rem;
@@ -4715,11 +4737,36 @@ body[data-theme="dark"] .sales-chart-value {
     font-size: 1.26rem;
   }
 
+  .dashboard-worklog-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+
+  .dashboard-worklog-actions {
+    flex-basis: auto;
+    align-items: stretch;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    gap: 16px;
+  }
+
   .dashboard-worklog-progress {
-    grid-template-columns: auto minmax(100px, 1fr);
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
     margin: 0;
-    padding-bottom: 20px;
+    padding: 0;
+  }
+
+  .dashboard-worklog-progress-meta {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .dashboard-worklog-progress-meta span {
+    min-width: 0;
+    text-align: right;
   }
 
   .dashboard-worklog-list {
@@ -4728,12 +4775,14 @@ body[data-theme="dark"] .sales-chart-value {
 
   .dashboard-worklog-tools {
     width: 100%;
+    min-width: 0;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-worklog-tools button {
     width: 100%;
+    min-width: 0;
     padding-inline: 8px;
   }
 
