@@ -502,7 +502,7 @@ function initializePixelAssistant() {
   }
 
   function resize() {
-    const width = canvas.getBoundingClientRect().width || 24;
+    const width = canvas.getBoundingClientRect().width || 44;
     const dpr = window.devicePixelRatio || 1;
     cell = Math.max(1, Math.round((width / cols) * dpr));
     canvas.width = cols * cell;
