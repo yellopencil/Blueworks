@@ -7905,15 +7905,17 @@ function renderDashboardWorklog() {
   } else {
     els.dashboardWorklogList.innerHTML = visibleTasks.map((task) => `
       <div class="dashboard-worklog-item ${task.done ? "is-done" : ""}">
-        <button
-          type="button"
-          class="dashboard-worklog-check"
-          data-dashboard-worklog-toggle="${task.id}"
-          aria-label="${task.done ? "처리 완료 취소" : "처리 완료"}"
-          title="${task.done ? "처리 완료 취소" : "처리 완료"}"
-        >
-          <i class="fa fa-check" aria-hidden="true"></i>
-        </button>
+        <span class="dashboard-worklog-check-frame">
+          <button
+            type="button"
+            class="dashboard-worklog-check"
+            data-dashboard-worklog-toggle="${task.id}"
+            aria-label="${task.done ? "처리 완료 취소" : "처리 완료"}"
+            title="${task.done ? "처리 완료 취소" : "처리 완료"}"
+          >
+            <i class="fa fa-check" aria-hidden="true"></i>
+          </button>
+        </span>
         <button type="button" class="dashboard-worklog-text" data-dashboard-worklog-open>${escapeHtml(task.text)}</button>
       </div>
     `).join("");

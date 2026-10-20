@@ -2210,20 +2210,48 @@ body[data-theme="dark"] .primary { color: #111418; }
   border-top: 0;
 }
 
-.dashboard-worklog-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.dashboard-worklog-check-frame {
+  position: relative;
+  display: block;
+  place-self: center;
   flex: 0 0 28px;
   width: 28px;
   min-width: 28px;
+  max-width: 28px;
   height: 28px;
   min-height: 28px;
+  max-height: 28px;
   aspect-ratio: 1 / 1;
+  overflow: visible;
+  contain: layout paint;
+}
+
+.dashboard-worklog-check {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+  max-inline-size: 28px !important;
+  block-size: 28px !important;
+  min-block-size: 28px !important;
+  max-block-size: 28px !important;
   box-sizing: border-box;
-  padding: 0;
+  padding: 0 !important;
+  margin: 0 !important;
   border: 1.5px solid color-mix(in srgb, var(--muted) 48%, var(--line));
-  border-radius: 50%;
+  border-radius: 9999px !important;
+  clip-path: circle(50% at 50% 50%);
+  -webkit-appearance: none;
+  appearance: none;
   background: var(--surface);
   color: #ffffff;
   line-height: 1;
