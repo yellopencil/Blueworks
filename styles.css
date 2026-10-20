@@ -2120,11 +2120,11 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-panel {
   margin-bottom: 22px;
-  padding: 22px 26px 18px;
+  padding: 28px 30px 24px;
 }
 
 .dashboard-worklog-head {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 .dashboard-worklog-head h3 {
@@ -2132,8 +2132,16 @@ body[data-theme="dark"] .primary { color: #111418; }
 }
 
 #dashboardWorklogSaveBtn:disabled {
-  opacity: 0.42;
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  opacity: 0.72;
   cursor: not-allowed;
+}
+
+#dashboardWorklogSaveBtn:not(:disabled) {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .dashboard-worklog-date {
@@ -2145,11 +2153,12 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-progress {
   display: grid;
-  grid-template-columns: auto minmax(160px, 280px);
+  grid-template-columns: auto minmax(180px, 1fr);
   align-items: center;
-  justify-content: end;
-  gap: 12px;
-  margin: -45px 306px 20px 0;
+  gap: 16px;
+  margin: 0;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
 }
 
 .dashboard-worklog-progress-meta {
@@ -2157,12 +2166,13 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: baseline;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .dashboard-worklog-progress-meta strong {
   color: var(--accent);
-  font-size: 0.9rem;
+  font-size: 0.94rem;
 }
 
 .dashboard-worklog-progress-track {
@@ -2184,15 +2194,15 @@ body[data-theme="dark"] .primary { color: #111418; }
 .dashboard-worklog-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 24px;
+  column-gap: 36px;
 }
 
 .dashboard-worklog-item {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
+  gap: 12px;
+  min-height: 58px;
   border-top: 1px solid var(--line);
 }
 
@@ -2204,19 +2214,42 @@ body[data-theme="dark"] .primary { color: #111418; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 25px;
-  height: 25px;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   padding: 0;
-  border: 1px solid var(--line-strong);
+  border: 1.5px solid color-mix(in srgb, var(--muted) 48%, var(--line));
   border-radius: 50%;
   background: var(--surface);
-  color: transparent;
-  font-size: 11px;
+  color: #ffffff;
+  line-height: 1;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+.dashboard-worklog-check i {
+  display: none;
+}
+
+.dashboard-worklog-check::after {
+  content: "";
+  width: 8px;
+  height: 4px;
+  margin-top: -2px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.7);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 .dashboard-worklog-check:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  transform: translateY(-1px);
 }
 
 .dashboard-worklog-item.is-done .dashboard-worklog-check {
@@ -2225,16 +2258,26 @@ body[data-theme="dark"] .primary { color: #111418; }
   color: #ffffff;
 }
 
+.dashboard-worklog-item.is-done .dashboard-worklog-check::after {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+
 .dashboard-worklog-text {
   width: 100%;
-  padding: 13px 0;
+  padding: 17px 0;
   border: 0;
   background: transparent;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.94rem;
   font-weight: 650;
   line-height: 1.45;
   text-align: left;
+  transition: color 0.16s ease;
+}
+
+.dashboard-worklog-text:hover {
+  color: var(--accent);
 }
 
 .dashboard-worklog-item.is-done .dashboard-worklog-text {
@@ -2257,8 +2300,8 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-worklog-more {
   display: block;
-  margin: 10px auto 0;
-  padding: 6px 10px;
+  margin: 12px auto 0;
+  padding: 7px 12px;
   border: 0;
   background: transparent;
   color: var(--accent);
@@ -4389,12 +4432,14 @@ body[data-theme="dark"] .sales-chart-value {
   }
 
   .dashboard-worklog-panel {
-    padding: 18px;
+    padding: 20px 18px 18px;
   }
 
   .dashboard-worklog-progress {
     grid-template-columns: auto minmax(100px, 1fr);
-    margin: 0 0 14px;
+    gap: 12px;
+    margin: 0;
+    padding-bottom: 14px;
   }
 
   .dashboard-worklog-list {
@@ -4407,10 +4452,13 @@ body[data-theme="dark"] .sales-chart-value {
 
   .dashboard-worklog-tools {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-worklog-tools button {
-    flex: 1 1 0;
+    width: 100%;
+    padding-inline: 8px;
   }
 
   .summary-card {
