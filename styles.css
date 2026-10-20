@@ -2139,7 +2139,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.42);
 }
 
-.dashboard-hero-shapes {
+.dashboard-hero-stars {
   position: absolute;
   z-index: 0;
   inset: 0 -140px;
@@ -2147,81 +2147,56 @@ body[data-theme="dark"] .primary { color: #111418; }
   pointer-events: none;
 }
 
-.hero-shape {
-  --shape-size: 16px;
-  --shape-opacity: 0.34;
+.hero-star {
+  --star-size: 7px;
+  --star-opacity: 0.5;
   position: absolute;
   display: block;
-  top: var(--shape-top, 0%);
-  right: -80px;
-  width: var(--shape-size);
-  height: var(--shape-size);
-  opacity: var(--shape-opacity);
-  color: #8cb0ff;
-  animation: dashboardHeroShapeFall var(--shape-speed, 10s) linear infinite;
-  animation-delay: var(--shape-delay, 0s);
+  top: var(--star-top, 0);
+  right: -24px;
+  width: var(--star-size);
+  height: var(--star-size);
+  opacity: var(--star-opacity);
+  background: #9ebcff;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  filter: drop-shadow(0 0 4px rgba(111, 154, 255, 0.42));
+  animation: dashboardHeroStarFall var(--star-speed, 10s) linear infinite;
+  animation-delay: var(--star-delay, 0s);
   will-change: transform;
 }
 
-.hero-shape-square {
-  border: 1px solid currentColor;
-}
+.hero-star:nth-child(8n + 1) { --star-top: -42px; --star-size: 5px; --star-speed: 8.2s; --star-opacity: 0.42; }
+.hero-star:nth-child(8n + 2) { --star-top: -28px; --star-size: 9px; --star-speed: 10.6s; --star-opacity: 0.68; }
+.hero-star:nth-child(8n + 3) { --star-top: -15px; --star-size: 4px; --star-speed: 7.4s; --star-opacity: 0.34; }
+.hero-star:nth-child(8n + 4) { --star-top: -2px; --star-size: 7px; --star-speed: 11.4s; --star-opacity: 0.56; }
+.hero-star:nth-child(8n + 5) { --star-top: 10px; --star-size: 11px; --star-speed: 9.2s; --star-opacity: 0.74; }
+.hero-star:nth-child(8n + 6) { --star-top: 22px; --star-size: 6px; --star-speed: 12.2s; --star-opacity: 0.46; }
+.hero-star:nth-child(8n + 7) { --star-top: 32px; --star-size: 8px; --star-speed: 8.8s; --star-opacity: 0.62; }
+.hero-star:nth-child(8n) { --star-top: -34px; --star-size: 4px; --star-speed: 10s; --star-opacity: 0.38; }
 
-.hero-shape-diamond {
-  border: 1px solid currentColor;
-  transform: rotate(45deg);
-}
+.hero-star:nth-child(10n + 1) { --star-delay: -0.8s; }
+.hero-star:nth-child(10n + 2) { --star-delay: -7.1s; }
+.hero-star:nth-child(10n + 3) { --star-delay: -3.6s; }
+.hero-star:nth-child(10n + 4) { --star-delay: -9.4s; }
+.hero-star:nth-child(10n + 5) { --star-delay: -5.2s; }
+.hero-star:nth-child(10n + 6) { --star-delay: -1.9s; }
+.hero-star:nth-child(10n + 7) { --star-delay: -8.3s; }
+.hero-star:nth-child(10n + 8) { --star-delay: -4.5s; }
+.hero-star:nth-child(10n + 9) { --star-delay: -10.7s; }
+.hero-star:nth-child(10n) { --star-delay: -6.2s; }
+.hero-star:nth-child(n + 41) { animation-delay: calc(var(--star-delay) - 2.7s); }
 
-.hero-shape-line {
-  width: calc(var(--shape-size) * 2.6);
-  height: 2px;
-  background: currentColor;
-}
-
-.hero-shape-plus::before,
-.hero-shape-plus::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100%;
-  height: 2px;
-  background: currentColor;
-  transform: translate(-50%, -50%);
-}
-
-.hero-shape-plus::after {
-  transform: translate(-50%, -50%) rotate(90deg);
-}
-
-.hero-shape:nth-child(1) { --shape-top: -42px; --shape-size: 20px; --shape-speed: 9s; --shape-delay: -1.5s; --shape-opacity: 0.58; }
-.hero-shape:nth-child(2) { --shape-top: -28px; --shape-size: 14px; --shape-speed: 12s; --shape-delay: -8.4s; --shape-opacity: 0.42; }
-.hero-shape:nth-child(3) { --shape-top: -16px; --shape-size: 12px; --shape-speed: 8.5s; --shape-delay: -5.7s; --shape-opacity: 0.62; }
-.hero-shape:nth-child(4) { --shape-top: -4px; --shape-size: 17px; --shape-speed: 11s; --shape-delay: -3.2s; --shape-opacity: 0.46; }
-.hero-shape:nth-child(5) { --shape-top: 8px; --shape-size: 10px; --shape-speed: 10s; --shape-delay: -7.2s; --shape-opacity: 0.58; }
-.hero-shape:nth-child(6) { --shape-top: 20px; --shape-size: 18px; --shape-speed: 13s; --shape-delay: -2.6s; --shape-opacity: 0.38; }
-.hero-shape:nth-child(7) { --shape-top: 30px; --shape-size: 19px; --shape-speed: 9.5s; --shape-delay: -6.8s; --shape-opacity: 0.5; }
-.hero-shape:nth-child(8) { --shape-top: -35px; --shape-size: 12px; --shape-speed: 11.5s; --shape-delay: -9.4s; --shape-opacity: 0.6; }
-.hero-shape:nth-child(9) { --shape-top: -20px; --shape-size: 9px; --shape-speed: 14s; --shape-delay: -11.2s; --shape-opacity: 0.38; }
-.hero-shape:nth-child(10) { --shape-top: -8px; --shape-size: 20px; --shape-speed: 10.5s; --shape-delay: -4.1s; --shape-opacity: 0.54; }
-.hero-shape:nth-child(11) { --shape-top: 4px; --shape-size: 15px; --shape-speed: 12.5s; --shape-delay: -10.8s; --shape-opacity: 0.46; }
-.hero-shape:nth-child(12) { --shape-top: 16px; --shape-size: 10px; --shape-speed: 8s; --shape-delay: -6.1s; --shape-opacity: 0.66; }
-.hero-shape:nth-child(13) { --shape-top: 28px; --shape-size: 14px; --shape-speed: 13.5s; --shape-delay: -12.2s; --shape-opacity: 0.4; }
-.hero-shape:nth-child(14) { --shape-top: -30px; --shape-size: 12px; --shape-speed: 9s; --shape-delay: -3.8s; --shape-opacity: 0.52; }
-.hero-shape:nth-child(15) { --shape-top: -12px; --shape-size: 18px; --shape-speed: 11s; --shape-delay: -8.1s; --shape-opacity: 0.58; }
-.hero-shape:nth-child(16) { --shape-top: 12px; --shape-size: 13px; --shape-speed: 12s; --shape-delay: -5.3s; --shape-opacity: 0.44; }
-
-@keyframes dashboardHeroShapeFall {
+@keyframes dashboardHeroStarFall {
   0% {
     transform: translate3d(0, -45px, 0) rotate(0deg);
   }
   100% {
-    transform: translate3d(calc(-100vw - 360px), 245px, 0) rotate(250deg);
+    transform: translate3d(calc(-100vw - 360px), 245px, 0) rotate(180deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-shape {
+  .hero-star {
     animation: none;
     display: none;
   }
@@ -2232,8 +2207,8 @@ body[data-theme="dark"] .primary { color: #111418; }
     background: rgba(23, 26, 32, 0.5);
   }
 
-  .dashboard-hero-shapes .hero-shape {
-    --shape-opacity: 0.22;
+  .dashboard-hero-stars .hero-star {
+    --star-opacity: 0.28;
   }
 }
 
