@@ -2279,6 +2279,12 @@ body[data-theme="dark"] .primary { color: #111418; }
 .dashboard-worklog-panel {
   margin-bottom: 22px;
   padding: 34px 36px 30px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 6%, var(--surface)) 0%,
+    var(--surface) 44%,
+    var(--surface) 100%
+  );
 }
 
 .dashboard-worklog-head {
