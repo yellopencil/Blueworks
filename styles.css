@@ -2118,6 +2118,148 @@ body[data-theme="dark"] .primary { color: #111418; }
   letter-spacing: -0.04em;
 }
 
+.dashboard-hero-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.dashboard-hero-banner::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: -56px -20px -56px 42%;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(rgba(125, 160, 230, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 160, 230, 0.28) 1px, transparent 1px);
+  background-size: 38px 38px;
+  transform: perspective(420px) rotateY(-16deg) rotateZ(-4deg);
+  animation: dashboardHeroGrid 22s linear infinite;
+}
+
+.dashboard-hero-banner::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(90deg, #171a20 0%, rgba(23, 26, 32, 0.98) 42%, rgba(23, 26, 32, 0.48) 78%, rgba(23, 26, 32, 0.12) 100%);
+}
+
+.dashboard-hero-banner > div:first-child {
+  position: relative;
+  z-index: 2;
+}
+
+.dashboard-hero-motion {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(48%, 620px);
+  pointer-events: none;
+}
+
+.dashboard-hero-object {
+  position: absolute;
+  display: block;
+  border: 1px solid rgba(143, 175, 239, 0.38);
+  border-left: 3px solid rgba(83, 132, 255, 0.78);
+  background: rgba(49, 61, 83, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.dashboard-hero-object::before,
+.dashboard-hero-object::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  height: 1px;
+  background: rgba(180, 202, 244, 0.34);
+}
+
+.dashboard-hero-object::before {
+  top: 19px;
+  width: 42%;
+}
+
+.dashboard-hero-object::after {
+  top: 29px;
+  width: 25%;
+}
+
+.dashboard-hero-object-a {
+  top: 15px;
+  right: 52px;
+  width: 260px;
+  height: 58px;
+  transform: rotate(-5deg);
+  animation: dashboardHeroFloatA 9s ease-in-out infinite;
+}
+
+.dashboard-hero-object-b {
+  right: 180px;
+  bottom: 10px;
+  width: 205px;
+  height: 52px;
+  transform: rotate(4deg);
+  animation: dashboardHeroFloatB 11s ease-in-out infinite;
+}
+
+.dashboard-hero-object-c {
+  top: 51px;
+  right: -82px;
+  width: 190px;
+  height: 46px;
+  transform: rotate(-2deg);
+  animation: dashboardHeroFloatC 12s ease-in-out infinite;
+}
+
+@keyframes dashboardHeroGrid {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 38px 38px, 38px 38px; }
+}
+
+@keyframes dashboardHeroFloatA {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-5deg); }
+  50% { transform: translate3d(-18px, 7px, 0) rotate(-3deg); }
+}
+
+@keyframes dashboardHeroFloatB {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(4deg); }
+  50% { transform: translate3d(20px, -8px, 0) rotate(2deg); }
+}
+
+@keyframes dashboardHeroFloatC {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
+  50% { transform: translate3d(-24px, 9px, 0) rotate(1deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-hero-banner::before,
+  .dashboard-hero-object {
+    animation: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-hero-banner::before {
+    left: 58%;
+    opacity: 0.08;
+  }
+
+  .dashboard-hero-banner::after {
+    background: linear-gradient(90deg, #171a20 0%, rgba(23, 26, 32, 0.99) 68%, rgba(23, 26, 32, 0.72) 100%);
+  }
+
+  .dashboard-hero-motion {
+    opacity: 0.34;
+    transform: scale(0.72);
+    transform-origin: right center;
+  }
+}
+
 .dashboard-worklog-panel {
   margin-bottom: 22px;
   padding: 34px 36px 30px;
