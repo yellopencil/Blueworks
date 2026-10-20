@@ -290,6 +290,7 @@ const els = {
   dashboardWorklogProgressText: document.querySelector("#dashboardWorklogProgressText"),
   dashboardWorklogProgressSummary: document.querySelector("#dashboardWorklogProgressSummary"),
   dashboardWorklogProgressFill: document.querySelector("#dashboardWorklogProgressFill"),
+  dashboardWorklogCompleteMessage: document.querySelector("#dashboardWorklogCompleteMessage"),
   memberModal: document.querySelector("#memberModal"),
   memberModalTitle: document.querySelector("#memberModalTitle"),
   memberModalCloseBtn: document.querySelector("#memberModalCloseBtn"),
@@ -7879,12 +7880,16 @@ function renderDashboardWorklog() {
   const tasks = getWorklogTasksByStatus(worklog.tasks, "active")
     .filter((task) => String(task.text || "").trim());
   const doneCount = tasks.filter((task) => task.done).length;
+  const remainingCount = Math.max(0, tasks.length - doneCount);
   const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
   els.dashboardWorklogDate.textContent = formatDashboardWorklogDate(dateKey);
   els.dashboardWorklogProgressText.textContent = `${progress}%`;
-  els.dashboardWorklogProgressSummary.textContent = `${doneCount} / ${tasks.length} 완료`;
+  els.dashboardWorklogProgressSummary.textContent = tasks.length
+    ? `오늘 ${tasks.length}개 중 ${doneCount}개 완료 · ${remainingCount}개 남았습니다.`
+    : "등록된 업무가 없습니다.";
   els.dashboardWorklogProgressFill.style.width = `${progress}%`;
+  els.dashboardWorklogCompleteMessage?.classList.toggle("hidden", !tasks.length || remainingCount > 0);
   els.dashboardWorklogSaveBtn.disabled = !dashboardWorklogDraftDirty || dashboardWorklogSaveInFlight;
   els.dashboardWorklogSaveBtn.textContent = dashboardWorklogSaveInFlight ? "저장 중..." : "저장";
 
