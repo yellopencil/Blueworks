@@ -2156,7 +2156,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   position: absolute;
   display: block;
   top: var(--star-top, 0);
-  right: -24px;
+  right: -144px;
   width: var(--star-size);
   height: var(--star-size);
   border: 0;
