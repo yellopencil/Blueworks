@@ -2340,12 +2340,23 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-assistant-rank {
   position: absolute;
-  top: 45px;
+  top: 39px;
   left: 103px;
-  color: var(--muted);
-  font-size: 0.67rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  height: 22px;
+  max-height: 22px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  font-size: 0.66rem;
   font-weight: 600;
   line-height: 1;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
