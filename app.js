@@ -2369,7 +2369,7 @@ function resetGamificationProfile() {
 function getGamificationRank(level) {
   return getGamificationApi()?.getRankForLevel(level) || {
     key: "trainee",
-    title: "견습 비서",
+    title: "🌱 견습 비서",
     cosmeticStage: 0,
   };
 }

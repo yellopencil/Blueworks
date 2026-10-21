@@ -21,9 +21,12 @@ const level99Total = gamification.getTotalXpForLevel(99);
 assert.equal(level99Total, 57330);
 assert.equal(gamification.getLevelState(level99Total).level, 99);
 assert.equal(gamification.getLevelState(level99Total).isMaxLevel, true);
-assert.equal(gamification.getRankForLevel(1).title, "견습 비서");
-assert.equal(gamification.getRankForLevel(29).title, "업무 비서");
-assert.equal(gamification.getRankForLevel(30).title, "선임 비서");
+assert.equal(gamification.getRankForLevel(1).title, "🌱 견습 비서");
+assert.equal(gamification.getRankForLevel(29).title, "📋 업무 비서");
+assert.equal(gamification.getRankForLevel(30).title, "⭐ 선임 비서");
+assert.equal(gamification.getRankForLevel(50).title, "🏅 수석 비서");
+assert.equal(gamification.getRankForLevel(70).title, "👑 비서실장");
+assert.equal(gamification.getRankForLevel(99).title, "✨ 전설의 김비서");
 assert.equal(gamification.getRankForLevel(99).cosmeticStage, 5);
 
 const newXpEvents = gamification.getNewXpEvents(

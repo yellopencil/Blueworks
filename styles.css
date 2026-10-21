@@ -2340,11 +2340,11 @@ body[data-theme="dark"] .primary { color: #111418; }
 
 .dashboard-assistant-rank {
   position: absolute;
-  top: 44px;
+  top: 45px;
   left: 103px;
   color: var(--muted);
   font-size: 0.67rem;
-  font-weight: 750;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }

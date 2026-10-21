@@ -8,12 +8,12 @@
   const BASE_LEVEL_XP = 100;
   const LEVEL_XP_STEP = 10;
   const RANKS = Object.freeze([
-    { minLevel: 1, key: "trainee", title: "견습 비서", cosmeticStage: 0 },
-    { minLevel: 10, key: "assistant", title: "업무 비서", cosmeticStage: 1 },
-    { minLevel: 30, key: "senior", title: "선임 비서", cosmeticStage: 2 },
-    { minLevel: 50, key: "chief", title: "수석 비서", cosmeticStage: 3 },
-    { minLevel: 70, key: "director", title: "비서실장", cosmeticStage: 4 },
-    { minLevel: 99, key: "legend", title: "전설의 김비서", cosmeticStage: 5 },
+    { minLevel: 1, key: "trainee", title: "🌱 견습 비서", cosmeticStage: 0 },
+    { minLevel: 10, key: "assistant", title: "📋 업무 비서", cosmeticStage: 1 },
+    { minLevel: 30, key: "senior", title: "⭐ 선임 비서", cosmeticStage: 2 },
+    { minLevel: 50, key: "chief", title: "🏅 수석 비서", cosmeticStage: 3 },
+    { minLevel: 70, key: "director", title: "👑 비서실장", cosmeticStage: 4 },
+    { minLevel: 99, key: "legend", title: "✨ 전설의 김비서", cosmeticStage: 5 },
   ]);
 
   function normalizeTotalXp(value) {
