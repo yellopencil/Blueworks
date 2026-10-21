@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>옐로펜슬 업무 관리 데모</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20261020-worklog-gradient2">
+  <link rel="stylesheet" href="./styles.css?v=20261021-gamification6">
   <link rel="stylesheet" href="./quote-generator.css?v=20260428-agreement-heading1">
 </head>
 <body>
@@ -198,6 +198,8 @@
                       <div class="ypx-sec-wrap" data-ypx-sec>
                         <span class="ypx-sec-bubble">김비서에요.</span>
                         <canvas class="ypx-sec-cv" role="img" aria-label="파란 머리 비서 캐릭터"></canvas>
+                        <button id="dashboardLevelBadge" class="dashboard-level-badge" type="button" title="김비서 성장 기록 보기">LV. 1</button>
+                        <span id="dashboardAssistantRank" class="dashboard-assistant-rank">견습 비서</span>
                       </div>
                       <h3 id="dashboardWorklogTitle">대표님! 오늘 처리하실 스케줄이에요.</h3>
                     </div>
@@ -209,9 +211,9 @@
                       <button id="dashboardWorklogAddBtn" class="secondary" type="button">업무 추가</button>
                       <button id="dashboardWorklogOpenBtn" class="ghost" type="button">전체 보기</button>
                     </div>
-                    <div class="dashboard-worklog-progress" aria-label="오늘의 업무 진행률">
+                    <div id="dashboardGamificationOpenBtn" class="dashboard-worklog-progress" role="button" tabindex="0" aria-label="김비서 성장 기록 보기">
                       <div class="dashboard-worklog-progress-meta">
-                        <strong id="dashboardWorklogProgressText">0%</strong>
+                        <strong id="dashboardWorklogProgressText">0 / 100 XP</strong>
                         <span id="dashboardWorklogProgressSummary">0 / 0 완료</span>
                       </div>
                       <div class="dashboard-worklog-progress-track" aria-hidden="true">
@@ -1192,6 +1194,41 @@
     </div>
   </div>
 
+  <div id="gamificationModal" class="modal-overlay hidden">
+    <div class="modal-card gamification-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Secretary Growth</p>
+          <h3>김비서 성장 기록</h3>
+        </div>
+        <button type="button" id="gamificationCloseBtn" class="ghost">닫기</button>
+      </div>
+      <div class="gamification-profile-summary">
+        <div class="gamification-level-mark">
+          <span>LEVEL</span>
+          <strong id="gamificationModalLevel">1</strong>
+        </div>
+        <div class="gamification-profile-copy">
+          <span id="gamificationModalRank">견습 비서</span>
+          <strong id="gamificationModalXp">누적 0 XP</strong>
+          <p id="gamificationModalNext">다음 레벨까지 100 XP</p>
+        </div>
+      </div>
+      <section class="gamification-section" aria-labelledby="gamificationHistoryTitle">
+        <div class="gamification-section-head">
+          <h4 id="gamificationHistoryTitle">최근 경험치 기록</h4>
+        </div>
+        <div id="gamificationHistoryList" class="gamification-history-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="dashboardLevelUpBurst" class="dashboard-level-up-burst hidden" aria-live="polite">
+    <span>LEVEL UP!</span>
+    <strong id="dashboardLevelUpText">LV. 2</strong>
+    <small id="dashboardLevelUpRank">견습 비서</small>
+  </div>
+
   <div id="worklogModal" class="modal-overlay hidden">
     <div class="modal-card worklog-modal-card">
       <div class="modal-head">
@@ -1541,9 +1578,10 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="./assets/exceljs-4.4.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./supabase-client.js?v=20260815-other-revenue1"></script>
+  <script src="./supabase-client.js?v=20261021-gamification3"></script>
   <script src="./backup-export.js?v=20261020-backup2"></script>
-  <script src="./app.js?v=20261020-pixel-assistant2"></script>
+  <script src="./gamification.js?v=20261021-gamification4"></script>
+  <script src="./app.js?v=20261021-gamification5"></script>
   <script src="./quote-generator.js?v=20260428-agreement-heading1"></script>
 </body>
 </html>

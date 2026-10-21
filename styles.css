@@ -2306,6 +2306,49 @@ body[data-theme="dark"] .primary { color: #111418; }
   min-width: 0;
 }
 
+.dashboard-level-badge {
+  position: absolute;
+  top: 39px;
+  left: 52px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  width: auto;
+  max-width: none;
+  min-height: 22px;
+  height: 22px;
+  max-height: 22px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--accent);
+  box-shadow: none;
+  color: #ffffff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.dashboard-level-badge:hover,
+.dashboard-level-badge:focus-visible {
+  background: color-mix(in srgb, var(--accent) 88%, #111827);
+}
+
+.dashboard-assistant-rank {
+  position: absolute;
+  top: 44px;
+  left: 103px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .dashboard-worklog-heading {
   flex: 1 1 auto;
   min-width: 0;
@@ -2367,6 +2410,15 @@ body[data-theme="dark"] .primary { color: #111418; }
   transform: rotate(45deg);
 }
 
+.ypx-sec-bubble.is-reacting {
+  animation: ypx-bubble-pop 0.32s ease both;
+}
+
+@keyframes ypx-bubble-pop {
+  0% { opacity: 0; transform: translateY(3px) scale(0.92); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .ypx-sec-cv {
   display: block;
   width: 44px;
@@ -2417,6 +2469,24 @@ body[data-theme="dark"] .primary { color: #111418; }
   width: 100%;
   margin: 0;
   padding: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  white-space: normal;
+}
+
+.dashboard-worklog-progress:hover,
+.dashboard-worklog-progress:focus-visible {
+  background: transparent;
+}
+
+.dashboard-worklog-progress:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 5px;
 }
 
 .dashboard-worklog-progress-meta {
@@ -2432,6 +2502,7 @@ body[data-theme="dark"] .primary { color: #111418; }
 .dashboard-worklog-progress-meta strong {
   color: var(--accent);
   font-size: 0.94rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .dashboard-worklog-progress-track {
@@ -2448,6 +2519,210 @@ body[data-theme="dark"] .primary { color: #111418; }
   border-radius: inherit;
   background: var(--accent);
   transition: width 0.2s ease;
+}
+
+.gamification-modal-card {
+  width: min(100%, 560px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.gamification-profile-summary {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+  margin: 24px 0 30px;
+  padding: 24px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--accent) 8%, var(--surface)) 100%);
+}
+
+.gamification-level-mark {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.gamification-level-mark span {
+  align-self: end;
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.gamification-level-mark strong {
+  align-self: start;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.gamification-profile-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.gamification-profile-copy > span {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.gamification-profile-copy > strong {
+  font-size: 1.24rem;
+}
+
+.gamification-profile-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.gamification-section + .gamification-section {
+  margin-top: 30px;
+}
+
+.gamification-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gamification-section-head h4 {
+  margin: 0;
+}
+
+.gamification-section-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.gamification-history-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.gamification-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gamification-history-copy strong,
+.gamification-history-copy span {
+  display: block;
+}
+
+.gamification-history-copy strong {
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gamification-history-copy span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.gamification-history-points {
+  align-self: center;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.gamification-empty {
+  padding: 22px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.dashboard-level-up-burst {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  min-width: 240px;
+  padding: 28px 34px;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, #ffffff);
+  border-radius: 8px;
+  background: rgba(20, 24, 30, 0.94);
+  box-shadow: 0 20px 70px rgba(20, 24, 30, 0.3);
+  color: #ffffff;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: dashboard-level-up 2.1s ease both;
+}
+
+.dashboard-level-up-burst > span {
+  color: #8fb3ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.dashboard-level-up-burst > strong {
+  margin-top: 8px;
+  font-size: 2rem;
+}
+
+.dashboard-level-up-burst > small {
+  margin-top: 7px;
+  color: #d7e3ff;
+  font-weight: 750;
+}
+
+@keyframes dashboard-level-up {
+  0% { opacity: 0; transform: translate(-50%, -44%) scale(0.86); }
+  16%, 76% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -56%) scale(1.04); }
+}
+
+@media (max-width: 640px) {
+  .dashboard-assistant-rank {
+    left: 101px;
+  }
+
+  .gamification-modal-card {
+    width: min(100%, calc(100vw - 20px));
+    max-height: calc(100dvh - 20px);
+  }
+
+  .gamification-profile-summary {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .gamification-level-mark {
+    width: 72px;
+    height: 72px;
+  }
+
+  .gamification-level-mark strong {
+    font-size: 1.6rem;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ypx-sec-bubble.is-reacting,
+  .dashboard-level-up-burst {
+    animation: none;
+  }
 }
 
 .dashboard-worklog-list {

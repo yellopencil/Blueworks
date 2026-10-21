@@ -271,6 +271,16 @@ const els = {
   noticeModal: document.querySelector("#noticeModal"),
   noticeMessage: document.querySelector("#noticeMessage"),
   noticeOkBtn: document.querySelector("#noticeOkBtn"),
+  gamificationModal: document.querySelector("#gamificationModal"),
+  gamificationCloseBtn: document.querySelector("#gamificationCloseBtn"),
+  gamificationModalLevel: document.querySelector("#gamificationModalLevel"),
+  gamificationModalRank: document.querySelector("#gamificationModalRank"),
+  gamificationModalXp: document.querySelector("#gamificationModalXp"),
+  gamificationModalNext: document.querySelector("#gamificationModalNext"),
+  gamificationHistoryList: document.querySelector("#gamificationHistoryList"),
+  dashboardLevelUpBurst: document.querySelector("#dashboardLevelUpBurst"),
+  dashboardLevelUpText: document.querySelector("#dashboardLevelUpText"),
+  dashboardLevelUpRank: document.querySelector("#dashboardLevelUpRank"),
   worklogModal: document.querySelector("#worklogModal"),
   worklogForm: document.querySelector("#worklogForm"),
   worklogTitle: document.querySelector("#worklogTitle"),
@@ -287,6 +297,9 @@ const els = {
   dashboardWorklogSaveBtn: document.querySelector("#dashboardWorklogSaveBtn"),
   dashboardWorklogAddBtn: document.querySelector("#dashboardWorklogAddBtn"),
   dashboardWorklogOpenBtn: document.querySelector("#dashboardWorklogOpenBtn"),
+  dashboardLevelBadge: document.querySelector("#dashboardLevelBadge"),
+  dashboardAssistantRank: document.querySelector("#dashboardAssistantRank"),
+  dashboardGamificationOpenBtn: document.querySelector("#dashboardGamificationOpenBtn"),
   dashboardWorklogProgressText: document.querySelector("#dashboardWorklogProgressText"),
   dashboardWorklogProgressSummary: document.querySelector("#dashboardWorklogProgressSummary"),
   dashboardWorklogProgressFill: document.querySelector("#dashboardWorklogProgressFill"),
@@ -370,6 +383,15 @@ let dashboardWorklogDraft = null;
 let dashboardWorklogDraftBaseline = "";
 let dashboardWorklogDraftDirty = false;
 let dashboardWorklogSaveInFlight = false;
+let gamificationProfile = {
+  totalXp: 0,
+  loaded: false,
+  eventKeys: [],
+  history: [],
+};
+let pixelAssistantReactionTimer = null;
+let levelUpAnimationTimer = null;
+let gamificationRevision = 0;
 let currentAnnualGoalEditId = null;
 let draggedWorklogTaskId = null;
 let worklogTaskDragGhost = null;
@@ -407,6 +429,8 @@ const ACTION_DATA_MAX_AGE_MS = 10 * 60 * 1000;
 const APP_RESUME_IDLE_THRESHOLD_MS = 5 * 60 * 1000;
 const APP_RESUME_MIN_INTERVAL_MS = 10 * 1000;
 const APP_HARD_RELOAD_IDLE_THRESHOLD_MS = 20 * 60 * 1000;
+const GAMIFICATION_PREVIEW_STORAGE_KEY = "blueworks-gamification-preview-v1";
+const IS_LOCAL_GAMIFICATION_PREVIEW = window.location.protocol === "file:";
 const REFRESH_DOMAIN_LABELS = {
   projects: "프로젝트와 일정",
   yearGoals: "연간 목표",
@@ -485,6 +509,39 @@ function initializePixelAssistant() {
   let timer = null;
   let inView = true;
   let resizeTimer = null;
+  let cosmeticStage = 0;
+
+  function fillPixels(x, y, width, height, color) {
+    context.fillStyle = color;
+    context.fillRect(x * cell, y * cell, width * cell, height * cell);
+  }
+
+  function drawCosmetics(jump) {
+    if (cosmeticStage >= 1) {
+      fillPixels(14, 20 - jump, 3, 2, "#ffd166");
+      fillPixels(15, 20 - jump, 1, 1, "#ffffff");
+    }
+    if (cosmeticStage >= 2) {
+      fillPixels(7, 13 - jump, 4, 1, "#29354f");
+      fillPixels(13, 13 - jump, 4, 1, "#29354f");
+      fillPixels(11, 13 - jump, 2, 1, "#29354f");
+    }
+    if (cosmeticStage >= 3) {
+      fillPixels(11, 21 - jump, 2, 3, "#3467f6");
+      fillPixels(11, 24 - jump, 2, 1, "#244ec4");
+    }
+    if (cosmeticStage >= 4) {
+      fillPixels(18, 25 - jump, 4, 4, "#755844");
+      fillPixels(19, 24 - jump, 2, 1, "#9a7658");
+      fillPixels(19, 26 - jump, 2, 1, "#d8b38c");
+    }
+    if (cosmeticStage >= 5) {
+      fillPixels(7, 1 - jump, 2, 2, "#ffd166");
+      fillPixels(11, 0 - jump, 2, 3, "#ffd166");
+      fillPixels(15, 1 - jump, 2, 2, "#ffd166");
+      fillPixels(7, 3 - jump, 10, 2, "#f2b632");
+    }
+  }
 
   function draw(bob, blink, jump) {
     context.clearRect(0, 0, canvas.width, canvas.height);
@@ -499,6 +556,7 @@ function initializePixelAssistant() {
         context.fillRect((columnIndex + 2) * cell, y * cell, cell, cell);
       }
     }
+    drawCosmetics(jump);
   }
 
   function resize() {
@@ -543,6 +601,13 @@ function initializePixelAssistant() {
   });
   canvas.addEventListener("click", () => {
     if (!reduceMotion && jumpFrame < 0) jumpFrame = 0;
+  });
+  wrap.addEventListener("ypx:celebrate", () => {
+    if (!reduceMotion && jumpFrame < 0) jumpFrame = 0;
+  });
+  wrap.addEventListener("ypx:rank", (event) => {
+    cosmeticStage = Math.max(0, Math.min(5, Math.floor(Number(event.detail?.cosmeticStage) || 0)));
+    draw(0, false, 0);
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
@@ -2256,6 +2321,294 @@ function currentUser() {
   return state.users.find((user) => user.id === state.sessionUserId) || null;
 }
 
+function getGamificationApi() {
+  return window.BlueworksGamification || null;
+}
+
+function getLocalGamificationPreviewKey() {
+  return `${GAMIFICATION_PREVIEW_STORAGE_KEY}:${state.sessionUserId || "guest"}`;
+}
+
+function loadLocalGamificationPreview() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(getLocalGamificationPreviewKey()) || "null");
+  } catch (error) {
+    console.warn("로컬 경험치 미리보기 데이터를 읽지 못했습니다.", error);
+  }
+  gamificationProfile = {
+    totalXp: Math.max(0, Math.floor(Number(saved?.totalXp) || 0)),
+    loaded: true,
+    eventKeys: Array.isArray(saved?.eventKeys) ? saved.eventKeys : [],
+    history: Array.isArray(saved?.history) ? saved.history : [],
+  };
+}
+
+function saveLocalGamificationPreview() {
+  try {
+    localStorage.setItem(getLocalGamificationPreviewKey(), JSON.stringify({
+      totalXp: gamificationProfile.totalXp || 0,
+      eventKeys: gamificationProfile.eventKeys || [],
+      history: gamificationProfile.history || [],
+    }));
+  } catch (error) {
+    console.warn("로컬 경험치 미리보기 데이터를 저장하지 못했습니다.", error);
+  }
+}
+
+function resetGamificationProfile() {
+  gamificationRevision += 1;
+  gamificationProfile = {
+    totalXp: 0,
+    loaded: false,
+    eventKeys: [],
+    history: [],
+  };
+}
+
+function getGamificationRank(level) {
+  return getGamificationApi()?.getRankForLevel(level) || {
+    key: "trainee",
+    title: "견습 비서",
+    cosmeticStage: 0,
+  };
+}
+
+function formatGamificationHistoryDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "날짜 정보 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function renderGamificationModal() {
+  const api = getGamificationApi();
+  if (!api || !els.gamificationModal) return;
+  const levelState = api.getLevelState(gamificationProfile.totalXp || 0);
+  const rank = getGamificationRank(levelState.level);
+  const history = [...(gamificationProfile.history || [])]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .slice(0, 20);
+
+  els.gamificationModalLevel.textContent = levelState.level;
+  els.gamificationModalRank.textContent = rank.title;
+  els.gamificationModalXp.textContent = `누적 ${levelState.totalXp.toLocaleString("ko-KR")} XP`;
+  els.gamificationModalNext.textContent = levelState.isMaxLevel
+    ? "최고 레벨에 도달했습니다."
+    : `다음 레벨까지 ${(levelState.requiredXp - levelState.xpIntoLevel).toLocaleString("ko-KR")} XP`;
+  els.gamificationHistoryList.innerHTML = history.length
+    ? history.map((event) => `
+      <div class="gamification-history-item">
+        <div class="gamification-history-copy">
+          <strong>${escapeHtml(event.source_label || "오늘의 업무 완료")}</strong>
+          <span>${escapeHtml(formatGamificationHistoryDate(event.created_at || event.createdAt))}</span>
+        </div>
+        <span class="gamification-history-points">+${Number(event.points) || api.XP_PER_TASK} XP</span>
+      </div>
+    `).join("")
+    : '<div class="gamification-empty">아직 경험치 기록이 없습니다.</div>';
+}
+
+function openGamificationModal() {
+  renderGamificationModal();
+  els.gamificationModal?.classList.remove("hidden");
+}
+
+function closeGamificationModal() {
+  els.gamificationModal?.classList.add("hidden");
+}
+
+function showPixelAssistantReaction(message, duration = 2600) {
+  const bubble = document.querySelector(".ypx-sec-bubble");
+  if (!bubble || !message) return;
+  window.clearTimeout(pixelAssistantReactionTimer);
+  bubble.textContent = message;
+  bubble.classList.remove("is-reacting");
+  void bubble.offsetWidth;
+  bubble.classList.add("is-reacting");
+  pixelAssistantReactionTimer = window.setTimeout(() => {
+    bubble.textContent = "김비서에요.";
+    bubble.classList.remove("is-reacting");
+  }, duration);
+}
+
+function showLevelUpCelebration(level) {
+  const rank = getGamificationRank(level);
+  if (!els.dashboardLevelUpBurst) return;
+  window.clearTimeout(levelUpAnimationTimer);
+  els.dashboardLevelUpText.textContent = `LV. ${level}`;
+  els.dashboardLevelUpRank.textContent = rank.title;
+  els.dashboardLevelUpBurst.classList.remove("hidden");
+  void els.dashboardLevelUpBurst.offsetWidth;
+  els.dashboardLevelUpBurst.style.animation = "none";
+  void els.dashboardLevelUpBurst.offsetWidth;
+  els.dashboardLevelUpBurst.style.animation = "";
+  levelUpAnimationTimer = window.setTimeout(() => {
+    els.dashboardLevelUpBurst.classList.add("hidden");
+  }, 2150);
+}
+
+function renderDashboardGamification() {
+  const api = getGamificationApi();
+  if (!api || !els.dashboardLevelBadge || !els.dashboardWorklogProgressText || !els.dashboardWorklogProgressFill) return;
+  const levelState = api.getLevelState(gamificationProfile.totalXp || 0);
+  const rank = getGamificationRank(levelState.level);
+  els.dashboardLevelBadge.textContent = `LV. ${levelState.level}`;
+  els.dashboardLevelBadge.classList.toggle("is-max", levelState.isMaxLevel);
+  if (els.dashboardAssistantRank) els.dashboardAssistantRank.textContent = rank.title;
+  els.dashboardWorklogProgressText.textContent = levelState.isMaxLevel
+    ? "MAX LEVEL"
+    : `${levelState.xpIntoLevel} / ${levelState.requiredXp} XP`;
+  els.dashboardWorklogProgressFill.style.width = `${levelState.progressPercent}%`;
+  document.querySelector("[data-ypx-sec]")?.dispatchEvent(new CustomEvent("ypx:rank", {
+    detail: { cosmeticStage: rank.cosmeticStage, rankKey: rank.key },
+  }));
+  if (els.gamificationModal && !els.gamificationModal.classList.contains("hidden")) renderGamificationModal();
+}
+
+async function syncGamificationFromSupabase() {
+  if (!state.sessionUserId) {
+    resetGamificationProfile();
+    renderDashboardGamification();
+    return { ok: true, skipped: true };
+  }
+  if (IS_LOCAL_GAMIFICATION_PREVIEW) {
+    loadLocalGamificationPreview();
+    renderDashboardGamification();
+    return { ok: true, preview: true };
+  }
+  const bridge = getSupabaseBridge();
+  if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
+  const requestRevision = gamificationRevision;
+  const [profileResult, historyResult] = await Promise.all([
+    bridge.fetchGamificationProfile(state.sessionUserId),
+    bridge.fetchGamificationXpEvents(state.sessionUserId),
+  ]);
+  if (profileResult.error) {
+    console.warn("경험치 정보를 불러오지 못했습니다.", profileResult.error);
+    return { ok: false, error: profileResult.error };
+  }
+  if (historyResult.error) console.warn("경험치 기록을 불러오지 못했습니다.", historyResult.error);
+  if (requestRevision !== gamificationRevision) return { ok: true, stale: true };
+  const history = historyResult.data || [];
+  gamificationProfile = {
+    totalXp: Math.max(0, Math.floor(Number(profileResult.data?.total_xp) || 0)),
+    loaded: true,
+    eventKeys: history.map((event) => event.event_key).filter(Boolean),
+    history,
+  };
+  renderDashboardGamification();
+  return { ok: true };
+}
+
+function getWorklogXpEventKey(task = {}, dateKey = "") {
+  const sourceTaskKey = getWorklogTaskSourceId(task) || task.id || `${dateKey}:${getWorklogTaskContentKey(task)}`;
+  return {
+    eventKey: `worklog-task:${sourceTaskKey}`,
+    sourceTaskKey,
+  };
+}
+
+function getNewlyCompletedWorklogTasks(previousWorklog = {}, nextWorklog = {}) {
+  const previousTasks = Array.isArray(previousWorklog?.tasks) ? previousWorklog.tasks : [];
+  return getWorklogTasksByStatus(nextWorklog?.tasks, "active")
+    .filter((task) => Boolean(task.done))
+    .filter((task) => {
+      const previousTask = findMatchingWorklogTask(previousTasks, getWorklogTaskIdentity(task));
+      return !previousTask?.done;
+    });
+}
+
+async function awardXpForCompletedWorklogTasks(previousWorklog, nextWorklog, dateKey) {
+  const api = getGamificationApi();
+  if (!api || !state.sessionUserId) return { awardedPoints: 0 };
+  const completedTasks = getNewlyCompletedWorklogTasks(previousWorklog, nextWorklog);
+  if (!completedTasks.length) return { awardedPoints: 0 };
+  const activeTasks = getWorklogTasksByStatus(nextWorklog?.tasks, "active")
+    .filter((task) => String(task.text || "").trim());
+  const perfectDay = activeTasks.length > 0 && activeTasks.every((task) => Boolean(task.done));
+  const previousLevel = api.getLevelState(gamificationProfile.totalXp || 0).level;
+  const createdAt = new Date().toISOString();
+
+  const events = [...new Map(completedTasks.map((task) => {
+    const identity = getWorklogXpEventKey(task, dateKey);
+    return [identity.eventKey, {
+      user_id: state.sessionUserId,
+      event_key: identity.eventKey,
+      event_type: "worklog_task_completed",
+      points: api.XP_PER_TASK,
+      source_task_key: identity.sourceTaskKey,
+      source_date: dateKey,
+      source_label: String(task.text || "오늘의 업무 완료").trim(),
+      created_at: createdAt,
+    }];
+  })).values()];
+
+  let awardedPoints = 0;
+  let awardedEvents = [];
+  if (IS_LOCAL_GAMIFICATION_PREVIEW) {
+    if (!gamificationProfile.loaded) loadLocalGamificationPreview();
+    const eventKeys = new Set(gamificationProfile.eventKeys || []);
+    awardedEvents = api.getNewXpEvents([...eventKeys], events);
+    awardedEvents.forEach((event) => {
+      eventKeys.add(event.event_key);
+      awardedPoints += api.XP_PER_TASK;
+    });
+    if (awardedPoints > 0) {
+      gamificationProfile.totalXp = (gamificationProfile.totalXp || 0) + awardedPoints;
+      gamificationProfile.eventKeys = [...eventKeys];
+      gamificationProfile.history = [...awardedEvents, ...(gamificationProfile.history || [])];
+      saveLocalGamificationPreview();
+    }
+  } else {
+    const bridge = getSupabaseBridge();
+    if (!bridge?.isReady()) return { awardedPoints: 0, error: new Error("Supabase client is not ready.") };
+    const result = await bridge.insertGamificationXpEvents(events);
+    if (result.error) {
+      console.warn("업무 완료 경험치를 저장하지 못했습니다.", result.error);
+      return { awardedPoints: 0, error: result.error };
+    }
+    awardedEvents = result.data || [];
+    awardedPoints = (result.data || []).reduce((sum, event) => sum + (Number(event.points) || 0), 0);
+    if (awardedPoints > 0) {
+      gamificationRevision += 1;
+      gamificationProfile.totalXp = (gamificationProfile.totalXp || 0) + awardedPoints;
+      gamificationProfile.eventKeys = [
+        ...new Set([...(gamificationProfile.eventKeys || []), ...awardedEvents.map((event) => event.event_key)]),
+      ];
+      gamificationProfile.history = [...awardedEvents, ...(gamificationProfile.history || [])];
+      gamificationProfile.loaded = true;
+    }
+  }
+
+  if (awardedPoints > 0) {
+    const nextLevel = api.getLevelState(gamificationProfile.totalXp || 0).level;
+    renderDashboardGamification();
+    document.querySelector("[data-ypx-sec]")?.dispatchEvent(new CustomEvent("ypx:celebrate"));
+    if (nextLevel > previousLevel) {
+      showLevelUpCelebration(nextLevel);
+      showPixelAssistantReaction("저도 성장하고 있어요!", 3200);
+    } else if (perfectDay) {
+      showPixelAssistantReaction("대표님, 오늘 일정 완료입니다.", 3200);
+    } else {
+      showPixelAssistantReaction("하나 끝냈어요!", 2400);
+    }
+    renderGamificationModal();
+    return {
+      awardedPoints,
+      awardedEvents,
+      levelUp: nextLevel > previousLevel,
+      level: nextLevel,
+    };
+  }
+  return { awardedPoints, awardedEvents };
+}
+
 function normalizeProfileRecord(profile = {}) {
   return {
     id: profile.id || crypto.randomUUID(),
@@ -2564,6 +2917,7 @@ async function applyAuthSession(session, options = {}) {
   state.sessionUserId = session?.user?.id || null;
   if (!state.sessionUserId) {
     state.users = [];
+    resetGamificationProfile();
     saveState({ history: false });
     render();
     return { ok: true, message: "" };
@@ -2621,7 +2975,14 @@ async function applyAuthSession(session, options = {}) {
   }
 
   saveState({ history: false });
+  if (IS_LOCAL_GAMIFICATION_PREVIEW) loadLocalGamificationPreview();
   render();
+
+  if (!IS_LOCAL_GAMIFICATION_PREVIEW) {
+    syncGamificationFromSupabase().catch((error) => {
+      console.warn("초기 경험치 정보를 불러오지 못했습니다.", error);
+    });
+  }
 
   const activeView = state.currentView || "dashboard";
   const { primary, background } = getStartupRefreshDomainGroups(activeView);
@@ -2817,6 +3178,14 @@ function bindEvents() {
     if (currentPreviewDocumentId) downloadDocument(currentPreviewDocumentId);
   });
   els.noticeOkBtn.addEventListener("click", closeNoticeModal);
+  els.gamificationCloseBtn?.addEventListener("click", closeGamificationModal);
+  els.dashboardLevelBadge?.addEventListener("click", openGamificationModal);
+  els.dashboardGamificationOpenBtn?.addEventListener("click", openGamificationModal);
+  els.dashboardGamificationOpenBtn?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openGamificationModal();
+  });
   els.worklogCloseBtn.addEventListener("click", closeWorklogModal);
   els.addWorklogTaskBtn.addEventListener("click", () => {
     ensureWorklogDraft();
@@ -3782,6 +4151,7 @@ function bindOverlayDismissals() {
     [els.calendarDayModal, closeCalendarDayModal],
     [els.documentPreviewModal, closeDocumentPreviewModal],
     [els.noticeModal, closeNoticeModal],
+    [els.gamificationModal, closeGamificationModal],
     [els.worklogModal, closeWorklogModal, "worklog"],
     [els.annualGoalModal, closeAnnualGoalArchiveModal],
     [els.annualGoalAddModal, closeAnnualGoalAddModal],
@@ -8020,14 +8390,12 @@ function renderDashboardWorklog() {
     .filter((task) => String(task.text || "").trim());
   const doneCount = tasks.filter((task) => task.done).length;
   const remainingCount = Math.max(0, tasks.length - doneCount);
-  const progress = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
   els.dashboardWorklogDate.textContent = formatDashboardWorklogDate(dateKey);
-  els.dashboardWorklogProgressText.textContent = `${progress}%`;
   els.dashboardWorklogProgressSummary.textContent = tasks.length
     ? `오늘 ${tasks.length}개 중 ${doneCount}개 완료 · ${remainingCount}개 남았습니다.`
     : "등록된 업무가 없습니다.";
-  els.dashboardWorklogProgressFill.style.width = `${progress}%`;
+  renderDashboardGamification();
   els.dashboardWorklogCompleteMessage?.classList.toggle("hidden", !tasks.length || remainingCount > 0);
   els.dashboardWorklogSaveBtn.disabled = !dashboardWorklogDraftDirty || dashboardWorklogSaveInFlight;
   els.dashboardWorklogSaveBtn.textContent = dashboardWorklogSaveInFlight ? "저장 중..." : "저장";
@@ -8129,10 +8497,17 @@ async function saveDashboardWorklogDraft() {
       toast("업무 상태를 저장하지 못했어요.");
       return;
     }
+    const xpResult = await awardXpForCompletedWorklogTasks(
+      previousWorklogs[dateKey],
+      state.worklogs[dateKey],
+      dateKey,
+    );
     resetDashboardWorklogDraft();
     renderDashboardWorklog();
     renderCalendar();
-    toast("업무 상태를 저장했어요.");
+    toast(xpResult.awardedPoints > 0
+      ? `업무 상태를 저장했어요. +${xpResult.awardedPoints} XP`
+      : "업무 상태를 저장했어요.");
   } finally {
     dashboardWorklogSaveInFlight = false;
     renderDashboardWorklog();
@@ -8371,11 +8746,18 @@ async function handleWorklogSave(event) {
       toast(message);
       return;
     }
+    const xpResult = await awardXpForCompletedWorklogTasks(
+      previousWorklogs[currentWorklogDate],
+      state.worklogs[currentWorklogDate],
+      currentWorklogDate,
+    );
     renderCalendar();
     resetDashboardWorklogDraft();
     renderDashboardWorklog();
     closeWorklogModal();
-    openNoticeModal("저장이 완료되었어요!");
+    openNoticeModal(xpResult.awardedPoints > 0
+      ? `저장이 완료되었어요! +${xpResult.awardedPoints} XP`
+      : "저장이 완료되었어요!");
   } finally {
     finishBusyToast();
   }

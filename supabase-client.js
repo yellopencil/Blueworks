@@ -241,6 +241,35 @@
         "업무일지 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
+    async fetchGamificationProfile(userId) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!userId) return { data: null, error: null };
+      return this.runClientQuery(
+        this.client
+          .from("gamification_profiles")
+          .select("user_id,total_xp,started_at,updated_at")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        "경험치 정보를 불러오는 중 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async fetchGamificationXpEvents(userId) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!userId) return { data: [], error: null };
+      return this.runClientQuery(
+        this.client
+          .from("gamification_xp_events")
+          .select("id,event_key,event_type,points,source_task_key,source_date,source_label,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(200),
+        "경험치 기록을 불러오는 중 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
     async fetchYearGoals() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -375,6 +404,19 @@
       return this.runClientQuery(
         this.client.from("worklog_tasks").insert(payload).select(),
         "업무 항목 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async insertGamificationXpEvents(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      if (!Array.isArray(payload) || !payload.length) return { data: [], error: null };
+      return this.runClientQuery(
+        this.client
+          .from("gamification_xp_events")
+          .upsert(payload, { onConflict: "user_id,event_key", ignoreDuplicates: true })
+          .select("id,event_key,event_type,points,source_task_key,source_date,source_label,created_at"),
+        "경험치를 저장하는 중 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
     async deleteWorklogTasksByWorklogId(worklogId) {
