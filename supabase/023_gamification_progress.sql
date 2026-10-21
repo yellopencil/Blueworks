@@ -76,6 +76,7 @@ with check ((select auth.uid()) = user_id);
 
 grant usage on schema public to authenticated, service_role;
 revoke all on table public.gamification_profiles, public.gamification_xp_events from anon;
+revoke all on table public.gamification_profiles, public.gamification_xp_events from authenticated;
 grant select on table public.gamification_profiles to authenticated;
 grant select, insert on table public.gamification_xp_events to authenticated;
 grant select, insert, update, delete on table public.gamification_profiles, public.gamification_xp_events to service_role;
