@@ -1692,6 +1692,24 @@
     };
   }
 
+  function getPdfHistorySortTime(row) {
+    const dateValue = String(row?.date || "").trim();
+    if (dateValue) {
+      const parsed = new Date(dateValue.length === 10 ? `${dateValue}T00:00:00` : dateValue).getTime();
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    const createdAt = Number(row?.createdAt || 0);
+    return Number.isFinite(createdAt) ? createdAt : 0;
+  }
+
+  function comparePdfHistoryByDateDesc(a, b) {
+    const dateDifference = getPdfHistorySortTime(b) - getPdfHistorySortTime(a);
+    if (dateDifference) return dateDifference;
+    const createdDifference = Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
+    if (createdDifference) return createdDifference;
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
+  }
+
   async function pruneServerPdfHistory() {
     const bridge = getSupabaseBridge();
     if (!bridge || !bridge.isReady?.() || !(await hasAuthenticatedSession())) return;
@@ -1800,7 +1818,7 @@
         if (result?.error) throw result.error;
         return (Array.isArray(result?.data) ? result.data : [])
           .map(normalizeServerPdfHistoryRecord)
-          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          .sort(comparePdfHistoryByDateDesc);
       } catch (error) {
         console.warn("서버 견적 PDF 기록을 바로 불러오지 못해 로컬 기록으로 대체합니다.", error);
       }
@@ -1811,7 +1829,7 @@
       const store = transaction.objectStore(PDF_HISTORY_STORE_NAME);
       const request = store.getAll();
       request.onsuccess = () => {
-        const rows = (request.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const rows = (request.result || []).sort(comparePdfHistoryByDateDesc);
         resolve(rows);
       };
       request.onerror = () => resolve([]);

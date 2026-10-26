@@ -600,13 +600,14 @@
       if (this.cachedSession?.access_token) {
         return this.restRequest("quote_pdf_history", {
           method: "GET",
-          query: "select=*&order=created_at.desc",
+          query: "select=*&order=quote_date.desc.nullslast,created_at.desc",
         });
       }
       return this.runClientQuery(
         this.client
           .from("quote_pdf_history")
           .select("*")
+          .order("quote_date", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false }),
         "견적 PDF 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
