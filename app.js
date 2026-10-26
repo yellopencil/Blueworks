@@ -8737,9 +8737,7 @@ async function handleWorklogSave(event) {
       delete state.worklogs[currentWorklogDate];
     }
     saveState();
-    const syncResult = await syncWorklogsStateToSupabase(previousWorklogs, {
-      deleteDateKeys: sanitizedWorklog.notes || sanitizedWorklog.tasks.length ? [] : [currentWorklogDate],
-    });
+    const syncResult = await syncSingleWorklogToSupabase(currentWorklogDate, previousWorklogs);
     if (!syncResult.ok) {
       const message = `업무일지 저장 실패: ${syncResult.error?.message || "Supabase 오류"}`;
       openNoticeModal(message);
