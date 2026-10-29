@@ -2970,16 +2970,16 @@ body[data-theme="dark"] .primary { color: #111418; }
 }
 
 .section-head.compact { margin-bottom: 18px; }
-.board-columns { display: grid; grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.88fr); gap: 18px; align-items: start; }
+.board-columns { display: grid; grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.88fr); gap: 18px; align-items: stretch; }
 .board-side-stack {
   display: grid;
   gap: 12px;
-  grid-template-rows: repeat(2, minmax(172px, 1fr));
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
 }
 
 .board-side-stack .board-column {
-  min-height: 172px;
+  min-height: 0;
 }
 .board-column {
   border: 1px solid var(--line);
