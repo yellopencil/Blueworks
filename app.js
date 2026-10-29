@@ -4841,20 +4841,22 @@ function renderBoard() {
     : '<p class="muted small">보류 중인 프로젝트가 없습니다.</p>';
 
   els.projectBoard.innerHTML = `
-    <section class="board-column status-ready">
-      <h4>${STATUS_META.ready.title}</h4>
-      ${readyCards}
-    </section>
+    <div class="board-side-stack">
+      <section class="board-column status-ready">
+        <h4>${STATUS_META.ready.title}</h4>
+        ${readyCards}
+      </section>
+      <section class="board-column status-hold">
+        <div class="board-column-title-row">
+          <h4>보류</h4>
+          <strong>${heldProjects.length}</strong>
+        </div>
+        ${heldCards}
+      </section>
+    </div>
     <section class="board-column status-inProgress">
       <h4>${STATUS_META.inProgress.title}</h4>
       <div class="progress-stage-board">${progressSections}</div>
-    </section>
-    <section class="board-column status-hold">
-      <div class="board-column-title-row">
-        <h4>보류</h4>
-        <strong>${heldProjects.length}</strong>
-      </div>
-      ${heldCards}
     </section>
   `;
 

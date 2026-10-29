@@ -2971,7 +2971,12 @@ body[data-theme="dark"] .primary { color: #111418; }
 }
 
 .section-head.compact { margin-bottom: 18px; }
-.board-columns { display: grid; grid-template-columns: minmax(200px, 0.68fr) minmax(0, 1.7fr) minmax(220px, 0.78fr); gap: 18px; align-items: start; }
+.board-columns { display: grid; grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.88fr); gap: 18px; align-items: start; }
+.board-side-stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
 .board-column {
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -2998,6 +3003,8 @@ body[data-theme="dark"] .primary { color: #111418; }
 .board-column.status-hold {
   border-color: #ead8b7;
   background: linear-gradient(180deg, #fffaf0 0%, #ffffff 100%);
+  min-height: 0;
+  padding: 16px;
 }
 
 .board-column-title-row {
@@ -3005,7 +3012,7 @@ body[data-theme="dark"] .primary { color: #111418; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .board-column-title-row h4 {
