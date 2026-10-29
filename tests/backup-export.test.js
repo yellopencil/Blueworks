@@ -62,6 +62,10 @@ function createDatasets() {
     manager_phone: "010-1234-5678",
     status: "inProgress",
     progress_stage: "firstRevisionDone",
+    is_on_hold: year === 2026,
+    hold_reason: year === 2026 ? "고객사 자료 대기" : "",
+    hold_started_at: year === 2026 ? "2026-05-20" : null,
+    hold_review_date: year === 2026 ? "2026-05-27" : null,
     start_date: `${year}-05-10`,
     due_date: `${year}-06-10`,
     timeline: "<p>타임라인</p>",
@@ -153,8 +157,14 @@ async function loadDownloadedWorkbook(options) {
   assert.match(autoFilterRange, /4.*6/, "필터 범위에 전체 데이터 행이 포함되어야 합니다.");
   const passwordColumn = fullProjects.getRow(4).values.findIndex((value) => value === "아임웹 비밀번호");
   const contractDateColumn = fullProjects.getRow(4).values.findIndex((value) => value === "계약일");
+  const holdStatusColumn = fullProjects.getRow(4).values.findIndex((value) => value === "보류 여부");
+  const holdReasonColumn = fullProjects.getRow(4).values.findIndex((value) => value === "보류 사유");
+  const holdReviewDateColumn = fullProjects.getRow(4).values.findIndex((value) => value === "다시 확인할 날짜");
   assert.ok(passwordColumn > 0, "아임웹 비밀번호 열이 있어야 합니다.");
   assert.equal(fullProjects.getCell(5, passwordColumn).value, "secret-2026", "최근 계약 프로젝트가 위에 와야 합니다.");
+  assert.equal(fullProjects.getCell(5, holdStatusColumn).value, "보류", "보류 상태가 백업에 포함되어야 합니다.");
+  assert.equal(fullProjects.getCell(5, holdReasonColumn).value, "고객사 자료 대기", "보류 사유가 백업에 포함되어야 합니다.");
+  assert.ok(fullProjects.getCell(5, holdReviewDateColumn).value instanceof Date, "보류 확인일은 엑셀 날짜 형식이어야 합니다.");
   assert.ok(fullProjects.getCell(5, contractDateColumn).value instanceof Date, "계약일은 엑셀 날짜 형식이어야 합니다.");
   assert.equal(fullProjects.getCell(5, contractDateColumn).numFmt, "yyyy-mm-dd");
 
