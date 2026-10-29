@@ -1797,7 +1797,6 @@ body[data-theme="dark"] .project-hold-guide {
 }
 
 body[data-theme="dark"] .project-hold-badge,
-body[data-theme="dark"] .project-hold-review-date,
 body[data-theme="dark"] .board-column-title-row > strong {
   background: #514226;
   color: #f0d59d;
@@ -3263,8 +3262,7 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
   background: #fffdf8;
 }
 
-.project-hold-badge,
-.project-hold-review-date {
+.project-hold-badge {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
@@ -3292,13 +3290,6 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
   color: var(--text);
   font-size: 0.76rem;
   line-height: 1.5;
-}
-
-.project-hold-review-date {
-  margin-top: 8px;
-  padding: 4px 7px;
-  background: #fff3d8;
-  color: #8b6424;
 }
 
 .project-hold-control-row {

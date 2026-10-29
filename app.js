@@ -724,8 +724,6 @@ function normalizeState(source) {
       contracts: project.contracts || [],
       isOnHold: Boolean(project.isOnHold),
       holdReason: project.holdReason || "",
-      holdStartedAt: project.holdStartedAt || "",
-      holdReviewDate: project.holdReviewDate || "",
       paybackStatus: project.paybackStatus || "none",
       paybackAmount: project.paybackAmount || "",
       paybackNote: project.paybackNote || "",
@@ -938,8 +936,8 @@ function serializeProjectForSupabase(project, index = 0) {
     progress_stage: project.progressStage || "",
     is_on_hold: Boolean(project.isOnHold),
     hold_reason: project.holdReason || "",
-    hold_started_at: project.holdStartedAt || null,
-    hold_review_date: project.holdReviewDate || null,
+    hold_started_at: null,
+    hold_review_date: null,
     start_date: project.startDate || null,
     due_date: project.dueDate || null,
     timeline: project.timeline || "",
@@ -983,8 +981,6 @@ function deserializeProjectFromSupabase(row) {
     progressStage: row.progress_stage || "",
     isOnHold: Boolean(row.is_on_hold),
     holdReason: row.hold_reason || "",
-    holdStartedAt: row.hold_started_at || "",
-    holdReviewDate: row.hold_review_date || "",
     startDate: row.start_date || "",
     dueDate: row.due_date || "",
     timeline: row.timeline || "",
@@ -4818,12 +4814,7 @@ function renderBoard() {
 
   const heldProjects = state.projects
     .filter((project) => project.isOnHold)
-    .sort((a, b) => {
-      const aReview = String(a.holdReviewDate || "9999-12-31");
-      const bReview = String(b.holdReviewDate || "9999-12-31");
-      if (aReview !== bReview) return aReview.localeCompare(bReview);
-      return String(b.holdStartedAt || b.updatedAt || "").localeCompare(String(a.holdStartedAt || a.updatedAt || ""));
-    });
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
   const heldCards = heldProjects.length
     ? heldProjects.map((project) => `
         <article class="project-card status-hold" data-project-id="${project.id}">
@@ -4832,7 +4823,6 @@ function renderBoard() {
               <strong>${escapeHtml(project.client || project.title)}</strong>
               <span class="project-hold-original-stage">원래 단계 · ${escapeHtml(formatProjectBaseStatus(project))}</span>
               ${project.holdReason ? `<p class="project-hold-reason">${escapeHtml(project.holdReason)}</p>` : ""}
-              ${project.holdReviewDate ? `<span class="project-hold-review-date">${escapeHtml(formatDateOnly(project.holdReviewDate))} 다시 확인</span>` : ""}
             </div>
             <span class="project-hold-badge">보류</span>
           </div>
@@ -6034,8 +6024,6 @@ function openProjectModal(projectId = null) {
   els.projectForm.elements.progressStage.value = project?.progressStage || "";
   els.projectForm.elements.holdStatus.value = project?.isOnHold ? "onHold" : "active";
   els.projectForm.elements.holdReason.value = project?.holdReason || "";
-  els.projectForm.elements.holdStartedAt.value = project?.holdStartedAt || "";
-  els.projectForm.elements.holdReviewDate.value = project?.holdReviewDate || "";
   els.projectForm.elements.startDate.value = project?.startDate || "";
   els.projectForm.elements.dueDate.value = project?.dueDate || "";
   els.projectForm.elements.timeline.value = project?.timeline || "";
@@ -6160,9 +6148,6 @@ function syncProjectStageField() {
 function syncProjectHoldFields() {
   const isOnHold = els.projectHoldStatusSelect?.value === "onHold";
   els.projectHoldFields?.classList.toggle("hidden", !isOnHold);
-  if (isOnHold && !els.projectForm.elements.holdStartedAt.value) {
-    els.projectForm.elements.holdStartedAt.value = formatDateKey(new Date());
-  }
   refreshCustomSelect(els.projectHoldStatusSelect);
 }
 
@@ -6215,8 +6200,6 @@ function buildProjectSearchIndex(project) {
     project.progressStage,
     project.isOnHold ? "보류 보류 중" : "정상 진행",
     project.holdReason,
-    project.holdStartedAt,
-    project.holdReviewDate,
     project.startDate,
     project.dueDate,
     stripHtml(project.timeline),
@@ -6470,8 +6453,6 @@ async function handleProjectSave(event) {
       progressStage: String(formData.get("status") || "ready") === "inProgress" ? String(formData.get("progressStage") || "").trim() : "",
       isOnHold,
       holdReason: isOnHold ? getText("holdReason") : "",
-      holdStartedAt: isOnHold ? String(formData.get("holdStartedAt") || "").trim() : "",
-      holdReviewDate: isOnHold ? String(formData.get("holdReviewDate") || "").trim() : "",
       startDate,
       dueDate,
       timeline: getText("timeline"),
