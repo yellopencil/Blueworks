@@ -2975,7 +2975,12 @@ body[data-theme="dark"] .primary { color: #111418; }
 .board-side-stack {
   display: grid;
   gap: 12px;
+  grid-template-rows: repeat(2, minmax(172px, 1fr));
   min-width: 0;
+}
+
+.board-side-stack .board-column {
+  min-height: 172px;
 }
 .board-column {
   border: 1px solid var(--line);
@@ -3003,7 +3008,6 @@ body[data-theme="dark"] .primary { color: #111418; }
 .board-column.status-hold {
   border-color: #ead8b7;
   background: linear-gradient(180deg, #fffaf0 0%, #ffffff 100%);
-  min-height: 0;
   padding: 16px;
 }
 
@@ -5576,6 +5580,14 @@ body[data-theme="dark"] .sales-chart-value {
     overflow: visible;
     gap: 12px;
     padding-bottom: 0;
+  }
+
+  .board-side-stack {
+    grid-template-rows: none;
+  }
+
+  .board-side-stack .board-column {
+    min-height: 0;
   }
 
   .board-column.status-inProgress {
