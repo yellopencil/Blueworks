@@ -4822,7 +4822,6 @@ function renderBoard() {
             <div>
               <strong>${escapeHtml(project.client || project.title)}</strong>
               <span class="project-hold-original-stage">원래 단계 · ${escapeHtml(formatProjectBaseStatus(project))}</span>
-              ${project.holdReason ? `<p class="project-hold-reason">${escapeHtml(project.holdReason)}</p>` : ""}
             </div>
             <span class="project-hold-badge">보류</span>
           </div>

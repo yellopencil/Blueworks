@@ -3285,13 +3285,6 @@ body[data-theme="dark"] .progress-stage-group.stage-mobileDone .project-card {
   font-weight: 700;
 }
 
-.project-hold-reason {
-  margin: 7px 0 0;
-  color: var(--text);
-  font-size: 0.76rem;
-  line-height: 1.5;
-}
-
 .project-hold-control-row {
   align-items: end;
 }
