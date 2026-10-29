@@ -236,6 +236,8 @@ const els = {
   projectModalCloseBtn: document.querySelector("#projectModalCloseBtn"),
   projectStageField: document.querySelector("#projectStageField"),
   progressStageSelect: document.querySelector("#progressStageSelect"),
+  projectHoldStatusSelect: document.querySelector("#projectHoldStatusSelect"),
+  projectHoldFields: document.querySelector("#projectHoldFields"),
   languageCountSelect: document.querySelector("#languageCountSelect"),
   languageFields: document.querySelector("#languageFields"),
   paymentMethodSelect: document.querySelector("#paymentMethodSelect"),
@@ -720,6 +722,10 @@ function normalizeState(source) {
     projects: (source.projects || []).map((project) => ({
       ...project,
       contracts: project.contracts || [],
+      isOnHold: Boolean(project.isOnHold),
+      holdReason: project.holdReason || "",
+      holdStartedAt: project.holdStartedAt || "",
+      holdReviewDate: project.holdReviewDate || "",
       paybackStatus: project.paybackStatus || "none",
       paybackAmount: project.paybackAmount || "",
       paybackNote: project.paybackNote || "",
@@ -930,6 +936,10 @@ function serializeProjectForSupabase(project, index = 0) {
     manager_phone: project.managerPhone || "",
     status: project.status || "ready",
     progress_stage: project.progressStage || "",
+    is_on_hold: Boolean(project.isOnHold),
+    hold_reason: project.holdReason || "",
+    hold_started_at: project.holdStartedAt || null,
+    hold_review_date: project.holdReviewDate || null,
     start_date: project.startDate || null,
     due_date: project.dueDate || null,
     timeline: project.timeline || "",
@@ -971,6 +981,10 @@ function deserializeProjectFromSupabase(row) {
     languages: Array.isArray(row.languages) ? row.languages : [],
     status: row.status || "ready",
     progressStage: row.progress_stage || "",
+    isOnHold: Boolean(row.is_on_hold),
+    holdReason: row.hold_reason || "",
+    holdStartedAt: row.hold_started_at || "",
+    holdReviewDate: row.hold_review_date || "",
     startDate: row.start_date || "",
     dueDate: row.due_date || "",
     timeline: row.timeline || "",
@@ -3117,6 +3131,7 @@ function bindEvents() {
   els.topDeleteProjectBtn.addEventListener("click", deleteCurrentProject);
   els.uploadContractBtn.addEventListener("click", handleDocumentUpload);
   els.projectForm.elements.status.addEventListener("change", syncProjectStageField);
+  els.projectHoldStatusSelect?.addEventListener("change", syncProjectHoldFields);
   if (els.projectForm.elements.projectType) {
     els.projectForm.elements.projectType.addEventListener("change", syncProjectServiceFields);
   }
@@ -3363,6 +3378,7 @@ function setupCustomerFilters() {
             <option value="ready">작업 준비</option>
             <option value="inProgress">작업 중</option>
             <option value="done">작업 완료</option>
+            <option value="onHold">보류</option>
           </select>
         </label>
       </div>
@@ -4728,8 +4744,8 @@ function closePasswordResetPanel() {
 }
 
 function renderSummary() {
-  els.readyCount.textContent = state.projects.filter((project) => project.status === "ready").length;
-  els.progressCount.textContent = state.projects.filter((project) => project.status === "inProgress").length;
+  els.readyCount.textContent = state.projects.filter((project) => project.status === "ready" && !project.isOnHold).length;
+  els.progressCount.textContent = state.projects.filter((project) => project.status === "inProgress" && !project.isOnHold).length;
   const currentYear = new Date().getFullYear();
   const yearlyProjects = state.projects.filter((project) => {
     const sourceDate = project.startDate || project.createdAt || "";
@@ -4748,7 +4764,7 @@ function renderSummary() {
 
   const stageCounts = Object.entries(PROGRESS_STAGE_META)
     .map(([key, label]) => {
-      const count = state.projects.filter((project) => project.status === "inProgress" && project.progressStage === key).length;
+      const count = state.projects.filter((project) => project.status === "inProgress" && !project.isOnHold && project.progressStage === key).length;
       return count ? `<span class="summary-stage-chip">${escapeHtml(label)} ${count}</span>` : "";
     })
     .filter(Boolean)
@@ -4757,7 +4773,7 @@ function renderSummary() {
 }
 function renderBoard() {
   const readyProjects = state.projects
-    .filter((project) => project.status === "ready")
+    .filter((project) => project.status === "ready" && !project.isOnHold)
     .sort((a, b) => {
       const aDate = String(a.startDate || a.createdAt || "");
       const bDate = String(b.startDate || b.createdAt || "");
@@ -4767,7 +4783,7 @@ function renderBoard() {
       return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
     });
   const progressSections = Object.entries(PROGRESS_STAGE_META).map(([key, label]) => {
-    const projects = state.projects.filter((project) => project.status === "inProgress" && project.progressStage === key);
+    const projects = state.projects.filter((project) => project.status === "inProgress" && !project.isOnHold && project.progressStage === key);
     const cards = projects.map((project) => `
       <article class="project-card status-${project.status} stage-${key}" data-project-id="${project.id}">
         <div class="project-card-head">
@@ -4800,6 +4816,30 @@ function renderBoard() {
       `).join("")
     : '<p class="muted small">아직 등록된 프로젝트가 없습니다.</p>';
 
+  const heldProjects = state.projects
+    .filter((project) => project.isOnHold)
+    .sort((a, b) => {
+      const aReview = String(a.holdReviewDate || "9999-12-31");
+      const bReview = String(b.holdReviewDate || "9999-12-31");
+      if (aReview !== bReview) return aReview.localeCompare(bReview);
+      return String(b.holdStartedAt || b.updatedAt || "").localeCompare(String(a.holdStartedAt || a.updatedAt || ""));
+    });
+  const heldCards = heldProjects.length
+    ? heldProjects.map((project) => `
+        <article class="project-card status-hold" data-project-id="${project.id}">
+          <div class="project-card-head">
+            <div>
+              <strong>${escapeHtml(project.client || project.title)}</strong>
+              <span class="project-hold-original-stage">원래 단계 · ${escapeHtml(formatProjectBaseStatus(project))}</span>
+              ${project.holdReason ? `<p class="project-hold-reason">${escapeHtml(project.holdReason)}</p>` : ""}
+              ${project.holdReviewDate ? `<span class="project-hold-review-date">${escapeHtml(formatDateOnly(project.holdReviewDate))} 다시 확인</span>` : ""}
+            </div>
+            <span class="project-hold-badge">보류</span>
+          </div>
+        </article>
+      `).join("")
+    : '<p class="muted small">보류 중인 프로젝트가 없습니다.</p>';
+
   els.projectBoard.innerHTML = `
     <section class="board-column status-ready">
       <h4>${STATUS_META.ready.title}</h4>
@@ -4808,6 +4848,13 @@ function renderBoard() {
     <section class="board-column status-inProgress">
       <h4>${STATUS_META.inProgress.title}</h4>
       <div class="progress-stage-board">${progressSections}</div>
+    </section>
+    <section class="board-column status-hold">
+      <div class="board-column-title-row">
+        <h4>보류</h4>
+        <strong>${heldProjects.length}</strong>
+      </div>
+      ${heldCards}
     </section>
   `;
 
@@ -4917,7 +4964,8 @@ function renderCustomers() {
       const contractDate = String(project.startDate || "");
       if (filters.contractYear && !contractDate.startsWith(filters.contractYear)) return false;
       if (filters.contractMonth && contractDate.slice(5, 7) !== filters.contractMonth) return false;
-      if (filters.status && project.status !== filters.status) return false;
+      if (filters.status === "onHold" && !project.isOnHold) return false;
+      if (filters.status && filters.status !== "onHold" && (project.status !== filters.status || project.isOnHold)) return false;
       if (filters.projectType && project.projectType !== filters.projectType) return false;
       if (filters.packageType && project.packageType !== filters.packageType) return false;
       if (filters.siteType && project.siteType !== filters.siteType) return false;
@@ -5982,6 +6030,10 @@ function openProjectModal(projectId = null) {
   els.projectForm.elements.languageCount.value = String(project?.languageCount || 0);
   els.projectForm.elements.status.value = project?.status || "ready";
   els.projectForm.elements.progressStage.value = project?.progressStage || "";
+  els.projectForm.elements.holdStatus.value = project?.isOnHold ? "onHold" : "active";
+  els.projectForm.elements.holdReason.value = project?.holdReason || "";
+  els.projectForm.elements.holdStartedAt.value = project?.holdStartedAt || "";
+  els.projectForm.elements.holdReviewDate.value = project?.holdReviewDate || "";
   els.projectForm.elements.startDate.value = project?.startDate || "";
   els.projectForm.elements.dueDate.value = project?.dueDate || "";
   els.projectForm.elements.timeline.value = project?.timeline || "";
@@ -6001,6 +6053,7 @@ function openProjectModal(projectId = null) {
   renderLanguageFields(Number(project?.languageCount || 0), project?.languages || []);
   syncProjectServiceFields();
   syncProjectStageField();
+  syncProjectHoldFields();
   syncPaymentFields();
   syncPaybackField();
   populateProjectRichEditors();
@@ -6102,6 +6155,15 @@ function syncProjectStageField() {
   refreshCustomSelect(els.progressStageSelect);
 }
 
+function syncProjectHoldFields() {
+  const isOnHold = els.projectHoldStatusSelect?.value === "onHold";
+  els.projectHoldFields?.classList.toggle("hidden", !isOnHold);
+  if (isOnHold && !els.projectForm.elements.holdStartedAt.value) {
+    els.projectForm.elements.holdStartedAt.value = formatDateKey(new Date());
+  }
+  refreshCustomSelect(els.projectHoldStatusSelect);
+}
+
 function syncProjectServiceFields() {
   const type = String(els.projectForm.elements.projectType?.value || "");
   const showHomepageOptions = type === "newHomepage" || type === "new" || type === "renewal";
@@ -6149,6 +6211,10 @@ function buildProjectSearchIndex(project) {
     ...(project.languages || []),
     project.status,
     project.progressStage,
+    project.isOnHold ? "보류 보류 중" : "정상 진행",
+    project.holdReason,
+    project.holdStartedAt,
+    project.holdReviewDate,
     project.startDate,
     project.dueDate,
     stripHtml(project.timeline),
@@ -6385,6 +6451,7 @@ async function handleProjectSave(event) {
       : [];
     const paymentMethod = String(formData.get("paymentMethod") || "").trim();
     const paybackStatus = String(formData.get("paybackStatus") || "none").trim() || "none";
+    const isOnHold = String(formData.get("holdStatus") || "active") === "onHold";
     const payload = {
       id: String(formData.get("id") || crypto.randomUUID()),
       title,
@@ -6399,6 +6466,10 @@ async function handleProjectSave(event) {
       languages,
       status: String(formData.get("status") || "ready").trim() || "ready",
       progressStage: String(formData.get("status") || "ready") === "inProgress" ? String(formData.get("progressStage") || "").trim() : "",
+      isOnHold,
+      holdReason: isOnHold ? getText("holdReason") : "",
+      holdStartedAt: isOnHold ? String(formData.get("holdStartedAt") || "").trim() : "",
+      holdReviewDate: isOnHold ? String(formData.get("holdReviewDate") || "").trim() : "",
       startDate,
       dueDate,
       timeline: getText("timeline"),
@@ -8964,11 +9035,16 @@ function getProjectNetAmount(project) {
   return Math.max(0, baseAmount - paybackAmount);
 }
 
-function formatProjectStatus(project) {
+function formatProjectBaseStatus(project) {
   if (project.status === "inProgress") {
     return PROGRESS_STAGE_META[project.progressStage] || STATUS_META.inProgress.title;
   }
   return STATUS_META[project.status]?.title || "-";
+}
+
+function formatProjectStatus(project) {
+  const baseStatus = formatProjectBaseStatus(project);
+  return project.isOnHold ? `보류 · ${baseStatus}` : baseStatus;
 }
 
 function formatProgressStage(value) {
