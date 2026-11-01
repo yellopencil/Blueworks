@@ -103,41 +103,61 @@
 
 .company-history-timeline-list {
   position: relative;
-  max-width: 940px;
-  margin: 0;
-  padding: 4px 0 18px 62px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 10px 0 28px;
 }
 
 .company-history-timeline-list::before {
   content: "";
   position: absolute;
-  top: 22px;
-  bottom: 30px;
-  left: 23px;
-  width: 1px;
-  background: #d9e1ec;
+  top: 18px;
+  bottom: 32px;
+  left: 50%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateX(-50%);
 }
 
 .company-history-year-divider {
   position: relative;
-  margin: 0 0 8px;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
 }
 
 .company-history-year-divider:not(:first-child) {
-  margin-top: 34px;
+  margin-top: 28px;
 }
 
 .company-history-year-divider span {
-  display: block;
-  color: var(--text);
-  font-size: 1.08rem;
-  font-weight: 850;
+  display: inline-block;
+  padding: 4px 14px;
+  background: var(--surface);
+  color: #53657d;
+  font-size: 0.82rem;
+  font-weight: 800;
   line-height: 1.4;
 }
 
 .company-history-timeline-item {
   position: relative;
-  margin-bottom: 0;
+  width: 50%;
+  min-height: 132px;
+  margin-bottom: 8px;
+}
+
+.company-history-timeline-item.is-left {
+  padding-right: 58px;
+  text-align: right;
+}
+
+.company-history-timeline-item.is-right {
+  margin-left: 50%;
+  padding-left: 58px;
+  text-align: left;
 }
 
 .company-history-timeline-item:last-child {
@@ -147,77 +167,99 @@
 .company-history-timeline-node {
   position: absolute;
   z-index: 2;
-  top: 27px;
-  left: -44px;
-  width: 11px;
-  height: 11px;
-  border: 3px solid var(--surface);
+  top: 24px;
+  width: 14px;
+  height: 14px;
+  border: 4px solid var(--surface);
   border-radius: 50%;
-  background: #8fa3bd;
-  box-shadow: 0 0 0 1px #c9d3e1;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px rgba(61, 124, 255, 0.08);
 }
 
-.company-history-timeline-item:first-of-type .company-history-timeline-node {
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 0 6px rgba(61, 124, 255, 0.08);
+.company-history-timeline-item.is-left .company-history-timeline-node {
+  right: -7px;
+}
+
+.company-history-timeline-item.is-right .company-history-timeline-node {
+  left: -7px;
 }
 
 .company-history-event {
   width: 100%;
   min-height: 0;
-  padding: 20px 8px 22px 0;
+  padding: 18px 0 24px;
   display: grid;
   align-content: start;
   gap: 8px;
   border: 0;
-  border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
   color: var(--text);
-  text-align: left;
   box-shadow: none;
-  transition: color 0.18s ease, padding-left 0.18s ease;
 }
 
-.company-history-event:hover {
-  padding-left: 8px;
-  color: #245fcf;
+.company-history-timeline-item.is-left .company-history-event {
+  text-align: right;
+}
+
+.company-history-timeline-item.is-right .company-history-event {
+  text-align: left;
 }
 
 .company-history-event-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 7px;
+}
+
+.company-history-timeline-item.is-left .company-history-event-top {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.company-history-timeline-item.is-right .company-history-event-top {
+  justify-content: flex-start;
 }
 
 .company-history-event-top time {
   color: #607087;
-  font-size: 0.76rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
-.company-history-latest-badge {
+.company-history-edit-btn {
   display: inline-flex;
-  min-height: 22px;
+  width: 24px;
+  height: 24px;
   align-items: center;
-  padding: 0 8px;
-  border-radius: 7px;
-  background: #edf4ff;
-  color: #2f6fe4;
-  font-size: 0.68rem;
-  font-weight: 850;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #9aa7b7;
+  font-size: 0.72rem;
+  opacity: 0.68;
+  transition: color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+}
+
+.company-history-edit-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  opacity: 1;
 }
 
 .company-history-event strong {
-  font-size: 1.02rem;
-  line-height: 1.4;
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
 .company-history-event-description {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   line-height: 1.65;
   white-space: pre-line;
 }
@@ -256,20 +298,14 @@
   resize: vertical;
 }
 
-body[data-theme="dark"] .company-history-latest-badge {
-  border-color: rgba(122, 162, 255, 0.24);
-  background: rgba(122, 162, 255, 0.12);
-  color: #a9c2ff;
-}
-
 body[data-theme="dark"] .company-history-timeline-list::before {
-  background: #3b4656;
+  background: var(--accent);
 }
 
 body[data-theme="dark"] .company-history-timeline-node {
   border-color: var(--surface);
-  background: #74859c;
-  box-shadow: 0 0 0 1px #4a586b;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px rgba(122, 162, 255, 0.1);
 }
 
 @media (max-width: 720px) {
@@ -295,23 +331,59 @@ body[data-theme="dark"] .company-history-timeline-node {
   }
 
   .company-history-timeline-list {
-    padding: 2px 0 24px 46px;
+    padding: 4px 0 24px;
   }
 
   .company-history-timeline-list::before {
-    left: 17px;
+    left: 50%;
   }
 
-  .company-history-timeline-node {
-    left: -34px;
+  .company-history-timeline-item {
+    min-height: 128px;
+  }
+
+  .company-history-timeline-item.is-left {
+    padding-right: 28px;
+  }
+
+  .company-history-timeline-item.is-right {
+    padding-left: 28px;
+  }
+
+  .company-history-timeline-item.is-left .company-history-timeline-node {
+    right: -6px;
+  }
+
+  .company-history-timeline-item.is-right .company-history-timeline-node {
+    left: -6px;
   }
 
   .company-history-event {
-    padding: 18px 2px 20px 0;
+    gap: 6px;
+    padding: 16px 0 20px;
   }
 
-  .company-history-event:hover {
-    padding-left: 0;
+  .company-history-event-top {
+    gap: 4px;
+  }
+
+  .company-history-event-top time {
+    font-size: 0.68rem;
+  }
+
+  .company-history-edit-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 0.66rem;
+  }
+
+  .company-history-event strong {
+    font-size: 0.88rem;
+  }
+
+  .company-history-event-description {
+    font-size: 0.73rem;
+    line-height: 1.55;
   }
 }
 

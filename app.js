@@ -5335,16 +5335,18 @@ function renderCompanyHistory() {
     previousYear = itemYear;
     return `
       ${showYearDivider ? `<div class="company-history-year-divider"><span>${escapeHtml(itemYear)}년</span></div>` : ""}
-      <article class="company-history-timeline-item">
+      <article class="company-history-timeline-item ${index % 2 === 0 ? "is-left" : "is-right"}">
         <span class="company-history-timeline-node" aria-hidden="true"></span>
-        <button type="button" class="company-history-event" data-company-history-id="${escapeHtml(item.id)}">
+        <div class="company-history-event">
           <span class="company-history-event-top">
             <time datetime="${escapeHtml(item.eventDate || "")}">${escapeHtml(formatDateWithWeekday(item.eventDate))}</time>
-            ${index === 0 ? '<span class="company-history-latest-badge">최신</span>' : ""}
+            <button type="button" class="company-history-edit-btn" data-company-history-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.title || "히스토리")} 수정" title="수정">
+              <i class="fa fa-pencil" aria-hidden="true"></i>
+            </button>
           </span>
           <strong>${escapeHtml(item.title || "제목 없음")}</strong>
           ${item.description ? `<span class="company-history-event-description">${escapeHtml(item.description)}</span>` : ""}
-        </button>
+        </div>
       </article>
     `;
   }).join("");
