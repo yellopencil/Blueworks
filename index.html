@@ -145,6 +145,10 @@
                 <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-book"></i></span>
                 <span class="sidebar-link-label">다이어리</span>
               </button>
+              <button id="navCompanyHistoryBtn" class="sidebar-link" type="button" aria-label="히스토리" title="히스토리">
+                <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-line-chart"></i></span>
+                <span class="sidebar-link-label">히스토리</span>
+              </button>
               <button id="navSettingsBtn" class="sidebar-link" type="button" aria-label="환경설정" title="환경설정">
                 <span class="sidebar-link-icon" aria-hidden="true"><i class="fa fa-cog"></i></span>
                 <span class="sidebar-link-label">환경설정</span>
@@ -776,6 +780,38 @@
                   </div>
                 </div>
                 <div id="archiveDiaryList" class="archive-list diary-list"></div>
+              </section>
+            </section>
+
+            <section id="companyHistoryView" class="hidden">
+              <div class="hero-banner hero-banner-subtle">
+                <div>
+                  <p class="eyebrow">Yellopencil History</p>
+                  <h2 id="companyHistoryHeroText">대표님, 옐로펜슬의 중요한 순간을 기록해두세요.</h2>
+                </div>
+              </div>
+              <section class="panel company-history-panel">
+                <div class="section-head company-history-head">
+                  <div>
+                    <h3>옐로펜슬 히스토리</h3>
+                  </div>
+                  <button type="button" id="newCompanyHistoryBtn" class="secondary">히스토리 등록</button>
+                </div>
+                <div class="company-history-summary" aria-label="히스토리 요약">
+                  <div><span>전체 기록</span><strong id="companyHistoryTotalCount">0건</strong></div>
+                  <div><span>첫 기록</span><strong id="companyHistoryFirstDate">-</strong></div>
+                  <div><span>최근 기록</span><strong id="companyHistoryLatestDate">-</strong></div>
+                </div>
+                <div class="company-history-toolbar">
+                  <label>연도
+                    <select id="companyHistoryYearFilter"></select>
+                  </label>
+                  <label class="company-history-search-field">검색
+                    <input id="companyHistorySearchInput" type="search" placeholder="제목 또는 설명 검색">
+                  </label>
+                  <button type="button" id="companyHistoryClearFiltersBtn" class="ghost small-btn">초기화</button>
+                </div>
+                <div id="companyHistoryTimeline" class="company-history-timeline"></div>
               </section>
             </section>
 
@@ -1552,6 +1588,36 @@
       </form>
       <div class="button-row archive-modal-actions">
         <button type="button" id="archiveDiaryDeleteBtn" class="danger hidden">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="companyHistoryModal" class="modal-overlay hidden">
+    <div class="modal-card company-history-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Yellopencil History</p>
+          <h3 id="companyHistoryModalTitle">히스토리 등록</h3>
+        </div>
+        <div class="modal-head-actions">
+          <button type="submit" form="companyHistoryForm" id="companyHistorySaveBtn" class="primary">저장</button>
+          <button type="button" id="companyHistoryCloseBtn" class="ghost">닫기</button>
+        </div>
+      </div>
+      <form id="companyHistoryForm" class="form-stack">
+        <input type="hidden" name="id">
+        <section class="section-group">
+          <div class="section-label">
+            <p class="eyebrow">Milestone Info</p>
+            <h4>기록 정보</h4>
+          </div>
+          <label>날짜<input name="eventDate" type="date" class="picker-date" required></label>
+          <label>제목<input name="title" type="text" required placeholder="예: 셀프 견적 계산기 출시"></label>
+          <label>설명<textarea name="description" rows="8" placeholder="무엇을 만들거나 출시했는지 간단히 기록해보세요."></textarea></label>
+        </section>
+      </form>
+      <div class="button-row">
+        <button type="button" id="companyHistoryDeleteBtn" class="danger hidden">삭제</button>
       </div>
     </div>
   </div>

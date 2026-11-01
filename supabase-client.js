@@ -329,6 +329,15 @@
         "다이어리 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
+    async fetchCompanyHistory() {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("company_history").select("*").order("event_date", { ascending: true }).order("created_at", { ascending: true }),
+        "히스토리 목록 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
     async fetchProfiles() {
       if (!this.client) {
         return { data: null, error: new Error("Supabase client is not ready.") };
@@ -891,6 +900,24 @@
       return this.runClientQuery(
         this.client.from("archive_diaries").delete().in("id", ids),
         "다이어리 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async upsertCompanyHistory(payload) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("company_history").upsert(payload).select().single(),
+        "히스토리 저장 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
+      );
+    },
+    async deleteCompanyHistory(id) {
+      if (!this.client) {
+        return { data: null, error: new Error("Supabase client is not ready.") };
+      }
+      return this.runClientQuery(
+        this.client.from("company_history").delete().eq("id", id),
+        "히스토리 삭제 응답이 늦어지고 있어요. 잠시 후 다시 시도해주세요.",
       );
     },
   };

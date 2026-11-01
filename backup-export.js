@@ -236,6 +236,10 @@
     const goals = (datasets.yearGoals || []).filter((row) => scope !== "year" || Number(row.year) === year);
     const revenues = (datasets.otherRevenues || []).filter((row) => isInScope(row.revenue_date, scope, year));
     const diaries = (datasets.archiveDiaries || []).filter((row) => isInScope(row.entry_date, scope, year));
+    const companyHistory = (datasets.companyHistory || [])
+      .filter((row) => isInScope(row.event_date, scope, year))
+      .slice()
+      .sort((a, b) => String(b.event_date || "").localeCompare(String(a.event_date || "")));
     const quoteHistory = (datasets.quoteHistory || []).filter((row) => isInScope(row.quote_date || row.created_at, scope, year));
     const documents = (datasets.projectDocuments || []).filter((row) => scope !== "year" || projectIds.has(row.project_id));
     const categoryNames = new Map((datasets.archiveCodeCategories || []).map((row) => [row.id, row.name || ""]));
@@ -267,6 +271,7 @@
         { item: "메모·프롬프트", value: `${(datasets.archiveNotes || []).length}건` },
         { item: "코드", value: `${(datasets.archiveCodes || []).length}건` },
         { item: "다이어리", value: `${diaries.length}건` },
+        { item: "히스토리", value: `${companyHistory.length}건` },
       ],
     });
 
@@ -608,6 +613,30 @@
         createdAt: formatDateTime(row.created_at),
         updatedAt: formatDateTime(row.updated_at),
         contentRaw: row.content,
+        id: row.id,
+        createdBy: row.created_by,
+      })),
+    });
+
+    definitions.push({
+      name: "히스토리",
+      title: "옐로펜슬 히스토리",
+      subtitle: commonSubtitle,
+      columns: [
+        { header: "날짜", key: "date", width: 13, kind: "date" },
+        { header: "제목", key: "title", width: 34 },
+        { header: "설명", key: "description", width: 72 },
+        { header: "생성일", key: "createdAt", width: 20 },
+        { header: "수정일", key: "updatedAt", width: 20 },
+        { header: "ID", key: "id", width: 38, internal: true },
+        { header: "작성자 ID", key: "createdBy", width: 38, internal: true },
+      ],
+      rows: companyHistory.map((row) => ({
+        date: row.event_date,
+        title: row.title,
+        description: row.description,
+        createdAt: formatDateTime(row.created_at),
+        updatedAt: formatDateTime(row.updated_at),
         id: row.id,
         createdBy: row.created_by,
       })),

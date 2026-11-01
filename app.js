@@ -113,6 +113,7 @@ const els = {
   archiveNotesView: document.querySelector("#archiveNotesView"),
   archiveCodesView: document.querySelector("#archiveCodesView"),
   archiveDiaryView: document.querySelector("#archiveDiaryView"),
+  companyHistoryView: document.querySelector("#companyHistoryView"),
   settingsView: document.querySelector("#settingsView"),
   navDashboardBtn: document.querySelector("#navDashboardBtn"),
   navMembersBtn: document.querySelector("#navMembersBtn"),
@@ -123,6 +124,7 @@ const els = {
   navArchiveNotesBtn: document.querySelector("#navArchiveNotesBtn"),
   navArchiveCodesBtn: document.querySelector("#navArchiveCodesBtn"),
   navArchiveDiaryBtn: document.querySelector("#navArchiveDiaryBtn"),
+  navCompanyHistoryBtn: document.querySelector("#navCompanyHistoryBtn"),
   navSettingsBtn: document.querySelector("#navSettingsBtn"),
   archiveSubnav: document.querySelector("#archiveSubnav"),
   sidebarToggleBtn: document.querySelector("#sidebarToggleBtn"),
@@ -153,6 +155,7 @@ const els = {
   archiveNotesHeroText: document.querySelector("#archiveNotesHeroText"),
   archiveCodesHeroText: document.querySelector("#archiveCodesHeroText"),
   archiveDiaryHeroText: document.querySelector("#archiveDiaryHeroText"),
+  companyHistoryHeroText: document.querySelector("#companyHistoryHeroText"),
   sidebarSiteTitle: document.querySelector("#sidebarSiteTitle"),
   homepageShortcutBtn: document.querySelector("#homepageShortcutBtn"),
   portfolioShortcutBtn: document.querySelector("#portfolioShortcutBtn"),
@@ -194,6 +197,14 @@ const els = {
   archiveDiarySortSelect: document.querySelector("#archiveDiarySortSelect"),
   archiveDiaryClearFiltersBtn: document.querySelector("#archiveDiaryClearFiltersBtn"),
   archiveDiaryList: document.querySelector("#archiveDiaryList"),
+  newCompanyHistoryBtn: document.querySelector("#newCompanyHistoryBtn"),
+  companyHistoryYearFilter: document.querySelector("#companyHistoryYearFilter"),
+  companyHistorySearchInput: document.querySelector("#companyHistorySearchInput"),
+  companyHistoryClearFiltersBtn: document.querySelector("#companyHistoryClearFiltersBtn"),
+  companyHistoryTimeline: document.querySelector("#companyHistoryTimeline"),
+  companyHistoryTotalCount: document.querySelector("#companyHistoryTotalCount"),
+  companyHistoryFirstDate: document.querySelector("#companyHistoryFirstDate"),
+  companyHistoryLatestDate: document.querySelector("#companyHistoryLatestDate"),
   salesMonthlySummary: document.querySelector("#salesMonthlySummary"),
   salesMonthlyChart: document.querySelector("#salesMonthlyChart"),
   salesYearlySummary: document.querySelector("#salesYearlySummary"),
@@ -339,6 +350,12 @@ const els = {
   archiveDiarySaveBtn: document.querySelector("#archiveDiarySaveBtn"),
   archiveDiaryCloseBtn: document.querySelector("#archiveDiaryCloseBtn"),
   archiveDiaryDeleteBtn: document.querySelector("#archiveDiaryDeleteBtn"),
+  companyHistoryModal: document.querySelector("#companyHistoryModal"),
+  companyHistoryModalTitle: document.querySelector("#companyHistoryModalTitle"),
+  companyHistoryForm: document.querySelector("#companyHistoryForm"),
+  companyHistorySaveBtn: document.querySelector("#companyHistorySaveBtn"),
+  companyHistoryCloseBtn: document.querySelector("#companyHistoryCloseBtn"),
+  companyHistoryDeleteBtn: document.querySelector("#companyHistoryDeleteBtn"),
   archiveCategoryModal: document.querySelector("#archiveCategoryModal"),
   archiveCategoryModalTitle: document.querySelector("#archiveCategoryModalTitle"),
   archiveCategoryForm: document.querySelector("#archiveCategoryForm"),
@@ -411,6 +428,7 @@ let currentArchiveNoteKind = "memo";
 let currentArchiveCodeId = null;
 let currentArchiveCategoryId = null;
 let currentArchiveDiaryId = null;
+let currentCompanyHistoryId = null;
 let archiveNoteEditing = false;
 let archiveCodeEditing = false;
 let archiveDiaryEditing = false;
@@ -456,6 +474,7 @@ const modalSnapshots = {
   archiveNote: "",
   archiveCode: "",
   archiveDiary: "",
+  companyHistory: "",
   archiveCategory: "",
 };
 
@@ -683,6 +702,7 @@ function loadState() {
     archiveCodeCategories: createDefaultArchiveCategories(),
     archiveCodes: [],
     archiveDiaries: [],
+    companyHistory: [],
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
@@ -796,6 +816,14 @@ function normalizeState(source) {
       topic: item.topic || "",
       tags: normalizeDiaryTags(item.tags || []),
       color: item.color || "gray",
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+    })),
+    companyHistory: (source.companyHistory || []).map((item) => ({
+      id: item.id || crypto.randomUUID(),
+      eventDate: item.eventDate || formatDateKey(new Date()),
+      title: item.title || "",
+      description: item.description || "",
       createdAt: item.createdAt || new Date().toISOString(),
       updatedAt: item.updatedAt || new Date().toISOString(),
     })),
@@ -1376,6 +1404,34 @@ function deserializeArchiveDiaryFromSupabase(row) {
   };
 }
 
+function serializeCompanyHistoryForSupabase(item) {
+  return {
+    id: item.id,
+    event_date: item.eventDate || formatDateKey(new Date()),
+    title: item.title || "",
+    description: item.description || "",
+    created_by: state.sessionUserId || null,
+    created_at: item.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function deserializeCompanyHistoryFromSupabase(row) {
+  return {
+    id: row.id || crypto.randomUUID(),
+    eventDate: row.event_date || formatDateKey(new Date()),
+    title: row.title || "",
+    description: row.description || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function isCompanyHistoryTableMissingError(error) {
+  const message = String(error?.message || error?.details || error?.hint || "");
+  return /company_history|schema cache|does not exist/i.test(message);
+}
+
 function isArchiveDiaryTableMissingError(error) {
   const message = String(error?.message || error?.details || error?.hint || "");
   return /archive_diaries|schema cache|does not exist/i.test(message);
@@ -1422,7 +1478,7 @@ function deserializeSiteSettingsFromSupabase(row = {}) {
 function updateSupabaseStatusSummary(prefix = "") {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return;
-  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모/프롬프트 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건, 다이어리 ${state.archiveDiaries.length}건을 Supabase에서 확인했어요.`;
+  const summary = `프로젝트 ${state.projects.length}개, 일정 ${state.schedules.length}개, 메모/프롬프트 ${state.archiveNotes.length}건, 코드 ${state.archiveCodes.length}건, 다이어리 ${state.archiveDiaries.length}건, 히스토리 ${state.companyHistory.length}건을 Supabase에서 확인했어요.`;
   bridge.statusDetail = prefix ? `${prefix} ${summary}` : summary;
   renderSiteSettings();
 }
@@ -1579,11 +1635,13 @@ async function syncArchiveStateToSupabase(options = {}) {
   const bridge = getSupabaseBridge();
   if (!bridge?.isReady()) return { ok: false, error: new Error("Supabase client is not ready.") };
 
-  const scopedUpsert = ["upsertNoteIds", "upsertCategoryIds", "upsertCodeIds", "upsertDiaryIds"].some((key) => Array.isArray(options[key]));
+  const scopedUpsert = ["upsertNoteIds", "upsertCategoryIds", "upsertCodeIds", "upsertDiaryIds", "upsertHistoryIds"]
+    .some((key) => Array.isArray(options[key]));
   const upsertNoteIds = new Set(Array.isArray(options.upsertNoteIds) ? options.upsertNoteIds.filter(Boolean) : []);
   const upsertCategoryIds = new Set(Array.isArray(options.upsertCategoryIds) ? options.upsertCategoryIds.filter(Boolean) : []);
   const upsertCodeIds = new Set(Array.isArray(options.upsertCodeIds) ? options.upsertCodeIds.filter(Boolean) : []);
   const upsertDiaryIds = new Set(Array.isArray(options.upsertDiaryIds) ? options.upsertDiaryIds.filter(Boolean) : []);
+  const upsertHistoryIds = new Set(Array.isArray(options.upsertHistoryIds) ? options.upsertHistoryIds.filter(Boolean) : []);
   const notePayloads = state.archiveNotes
     .map((item, index) => serializeArchiveNoteForSupabase(item, index))
     .filter((item) => !scopedUpsert || upsertNoteIds.has(item.id));
@@ -1596,6 +1654,9 @@ async function syncArchiveStateToSupabase(options = {}) {
   const diaryPayloads = state.archiveDiaries
     .map((item, index) => serializeArchiveDiaryForSupabase(item, index))
     .filter((item) => !scopedUpsert || upsertDiaryIds.has(item.id));
+  const historyPayloads = (state.companyHistory || [])
+    .map((item) => serializeCompanyHistoryForSupabase(item))
+    .filter((item) => !scopedUpsert || upsertHistoryIds.has(item.id));
 
   if (categoryPayloads.length) {
     const upsertCategoryResult = await bridge.upsertArchiveCodeCategories(categoryPayloads);
@@ -1617,10 +1678,18 @@ async function syncArchiveStateToSupabase(options = {}) {
     if (upsertDiaryResult.error) return { ok: false, error: upsertDiaryResult.error };
   }
 
+  for (const item of historyPayloads) {
+    const upsertHistoryResult = await bridge.upsertCompanyHistory(item);
+    if (upsertHistoryResult.error && (scopedUpsert || !isCompanyHistoryTableMissingError(upsertHistoryResult.error))) {
+      return { ok: false, error: upsertHistoryResult.error };
+    }
+  }
+
   const staleNoteIds = Array.isArray(options.deleteNoteIds) ? options.deleteNoteIds.filter(Boolean) : [];
   const staleCodeIds = Array.isArray(options.deleteCodeIds) ? options.deleteCodeIds.filter(Boolean) : [];
   const staleCategoryIds = Array.isArray(options.deleteCategoryIds) ? options.deleteCategoryIds.filter(Boolean) : [];
   const staleDiaryIds = Array.isArray(options.deleteDiaryIds) ? options.deleteDiaryIds.filter(Boolean) : [];
+  const staleHistoryIds = Array.isArray(options.deleteHistoryIds) ? options.deleteHistoryIds.filter(Boolean) : [];
 
   if (staleNoteIds.length) {
     const deleteNotesResult = await bridge.deleteArchiveNotesByIds(staleNoteIds);
@@ -1640,6 +1709,11 @@ async function syncArchiveStateToSupabase(options = {}) {
   if (staleDiaryIds.length) {
     const deleteDiariesResult = await bridge.deleteArchiveDiariesByIds(staleDiaryIds);
     if (deleteDiariesResult.error) return { ok: false, error: deleteDiariesResult.error };
+  }
+
+  for (const historyId of staleHistoryIds) {
+    const deleteHistoryResult = await bridge.deleteCompanyHistory(historyId);
+    if (deleteHistoryResult.error) return { ok: false, error: deleteHistoryResult.error };
   }
 
   return { ok: true };
@@ -1843,16 +1917,18 @@ async function syncArchivesFromSupabase() {
   if (!bridge?.isReady() || !state.sessionUserId) return { ok: false, error: new Error("Supabase client is not ready.") };
   if (shouldDeferRemoteApply(refreshStartedAt)) return { ok: true, skipped: true };
 
-  const [noteResult, categoryResult, codeResult, diaryResult] = await Promise.all([
+  const [noteResult, categoryResult, codeResult, diaryResult, historyResult] = await Promise.all([
     bridge.fetchArchiveNotes(),
     bridge.fetchArchiveCodeCategories(),
     bridge.fetchArchiveCodes(),
     bridge.fetchArchiveDiaries(),
+    bridge.fetchCompanyHistory(),
   ]);
 
   const diaryTableMissing = diaryResult.error && isArchiveDiaryTableMissingError(diaryResult.error);
-  if (noteResult.error || categoryResult.error || codeResult.error || (diaryResult.error && !diaryTableMissing)) {
-    return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error || diaryResult.error };
+  const historyTableMissing = historyResult.error && isCompanyHistoryTableMissingError(historyResult.error);
+  if (noteResult.error || categoryResult.error || codeResult.error || (diaryResult.error && !diaryTableMissing) || (historyResult.error && !historyTableMissing)) {
+    return { ok: false, error: noteResult.error || categoryResult.error || codeResult.error || diaryResult.error || historyResult.error };
   }
 
   const remoteNotes = (noteResult.data || []).map(deserializeArchiveNoteFromSupabase);
@@ -1861,8 +1937,11 @@ async function syncArchivesFromSupabase() {
   const remoteDiaries = diaryTableMissing
     ? (state.archiveDiaries || [])
     : (diaryResult.data || []).map(deserializeArchiveDiaryFromSupabase);
-  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0 || remoteDiaries.length > 0;
-  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0 || state.archiveDiaries.length > 0;
+  const remoteHistory = historyTableMissing
+    ? (state.companyHistory || [])
+    : (historyResult.data || []).map(deserializeCompanyHistoryFromSupabase);
+  const hasRemoteData = remoteNotes.length > 0 || remoteCategories.length > 0 || remoteCodes.length > 0 || remoteDiaries.length > 0 || remoteHistory.length > 0;
+  const hasLocalData = state.archiveNotes.length > 0 || state.archiveCodeCategories.length > 0 || state.archiveCodes.length > 0 || state.archiveDiaries.length > 0 || state.companyHistory.length > 0;
 
   if (!hasRemoteData && hasLocalData) {
     const seedResult = await syncArchiveStateToSupabase();
@@ -1879,12 +1958,14 @@ async function syncArchivesFromSupabase() {
     categoryId: state.archiveCodeCategories.some((category) => category.id === item.categoryId) ? item.categoryId : fallbackCategoryId,
   }));
   state.archiveDiaries = remoteDiaries;
+  state.companyHistory = remoteHistory;
   saveState({ history: false });
   updateSupabaseStatusSummary();
   renderArchiveNotes();
   renderArchiveCodeCategories();
   renderArchiveCodes();
   renderArchiveDiaries();
+  renderCompanyHistory();
   return { ok: true };
 }
 
@@ -2178,6 +2259,7 @@ function populateDataBackupYears(datasets = null) {
       if (year > 0 && year <= currentYear) years.add(year);
     });
     (datasets.archiveDiaries || []).forEach((item) => addPastOrCurrentYear(item.entry_date));
+    (datasets.companyHistory || []).forEach((item) => addPastOrCurrentYear(item.event_date));
     (datasets.quoteHistory || []).forEach((item) => addPastOrCurrentYear(item.quote_date || item.created_at));
   } else {
     (state.projects || []).forEach((item) => addPastOrCurrentYear(item.startDate));
@@ -2189,6 +2271,7 @@ function populateDataBackupYears(datasets = null) {
       if (year > 0 && year <= currentYear) years.add(year);
     });
     (state.archiveDiaries || []).forEach((item) => addPastOrCurrentYear(item.entryDate));
+    (state.companyHistory || []).forEach((item) => addPastOrCurrentYear(item.eventDate));
   }
   els.dataBackupYearSelect.innerHTML = [...years]
     .sort((a, b) => b - a)
@@ -2253,6 +2336,7 @@ async function fetchDataBackupDatasets() {
     ["archiveCodes", "코드", () => bridge.fetchArchiveCodes()],
     ["otherRevenues", "부수입", () => bridge.fetchOtherRevenues()],
     ["archiveDiaries", "다이어리", () => bridge.fetchArchiveDiaries()],
+    ["companyHistory", "히스토리", () => bridge.fetchCompanyHistory()],
     ["profiles", "멤버", () => bridge.fetchProfiles()],
     ["siteSettings", "환경설정", () => bridge.fetchSiteSettings()],
     ["quoteSettings", "견적 설정", () => bridge.fetchQuoteSettings()],
@@ -2664,6 +2748,7 @@ function getRefreshDomainKeysForView(view) {
     case "archiveNotes":
     case "archiveCodes":
     case "archiveDiary":
+    case "companyHistory":
       return ["archives"];
     case "settings":
       return ["siteSettings"];
@@ -3102,6 +3187,7 @@ function bindEvents() {
   els.navArchiveNotesBtn?.addEventListener("click", () => switchView("archiveNotes"));
   els.navArchiveCodesBtn?.addEventListener("click", () => switchView("archiveCodes"));
   els.navArchiveDiaryBtn?.addEventListener("click", () => switchView("archiveDiary"));
+  els.navCompanyHistoryBtn?.addEventListener("click", () => switchView("companyHistory"));
   els.navSettingsBtn?.addEventListener("click", () => switchView("settings"));
   els.sidebarToggleBtn.addEventListener("click", toggleSidebar);
   els.mobileNavOpenBtn?.addEventListener("click", openMobileNav);
@@ -3116,6 +3202,7 @@ function bindEvents() {
   els.newArchiveCodeBtn?.addEventListener("click", () => openArchiveCodeModal());
   els.newArchiveCategoryBtn?.addEventListener("click", () => openArchiveCategoryModal());
   els.newArchiveDiaryBtn?.addEventListener("click", () => openArchiveDiaryModal());
+  els.newCompanyHistoryBtn?.addEventListener("click", () => openCompanyHistoryModal());
   els.newOtherRevenueBtn?.addEventListener("click", () => openOtherRevenueModal());
   els.otherRevenueCloseBtn?.addEventListener("click", closeOtherRevenueModal);
   els.otherRevenueForm?.addEventListener("submit", handleOtherRevenueSave);
@@ -3237,6 +3324,16 @@ function bindEvents() {
   els.archiveDiaryEditBtn?.addEventListener("click", () => setArchiveDiaryEditing(true));
   els.archiveDiaryDeleteBtn?.addEventListener("click", deleteCurrentArchiveDiary);
   els.archiveDiaryForm?.addEventListener("submit", handleArchiveDiarySave);
+  els.companyHistoryCloseBtn?.addEventListener("click", closeCompanyHistoryModal);
+  els.companyHistoryDeleteBtn?.addEventListener("click", deleteCurrentCompanyHistory);
+  els.companyHistoryForm?.addEventListener("submit", handleCompanyHistorySave);
+  els.companyHistoryYearFilter?.addEventListener("change", renderCompanyHistory);
+  els.companyHistorySearchInput?.addEventListener("input", renderCompanyHistory);
+  els.companyHistoryClearFiltersBtn?.addEventListener("click", () => {
+    if (els.companyHistorySearchInput) els.companyHistorySearchInput.value = "";
+    populateCompanyHistoryYears({ forceLatest: true });
+    renderCompanyHistory();
+  });
   [
     els.archiveDiarySearchInput,
     els.archiveDiaryPeriodFilter,
@@ -4042,6 +4139,10 @@ function captureArchiveDiaryModalState() {
   return serializeFormControls(els.archiveDiaryForm);
 }
 
+function captureCompanyHistoryModalState() {
+  return serializeFormControls(els.companyHistoryForm);
+}
+
 function captureArchiveCategoryModalState() {
   return serializeFormControls(els.archiveCategoryForm);
 }
@@ -4070,6 +4171,8 @@ function hasUnsavedChanges(key) {
       return modalSnapshots.archiveCode !== captureArchiveCodeModalState();
     case "archiveDiary":
       return modalSnapshots.archiveDiary !== captureArchiveDiaryModalState();
+    case "companyHistory":
+      return modalSnapshots.companyHistory !== captureCompanyHistoryModalState();
     case "archiveCategory":
       return modalSnapshots.archiveCategory !== captureArchiveCategoryModalState();
     case "otherRevenue":
@@ -4088,6 +4191,7 @@ function getOpenDirtyModalKey() {
     [els.archiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, "archiveCode"],
     [els.archiveDiaryModal, "archiveDiary"],
+    [els.companyHistoryModal, "companyHistory"],
     [els.archiveCategoryModal, "archiveCategory"],
     [els.otherRevenueModal, "otherRevenue"],
   ];
@@ -4107,6 +4211,7 @@ function getOpenEditingModalKey() {
     [els.archiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, "archiveCode"],
     [els.archiveDiaryModal, "archiveDiary"],
+    [els.companyHistoryModal, "companyHistory"],
     [els.archiveCategoryModal, "archiveCategory"],
     [els.annualGoalAddModal, "annualGoal"],
     [els.myProfileModal, "myProfile"],
@@ -4143,6 +4248,9 @@ function saveAndCloseDirtyModal(key) {
     case "archiveDiary":
       els.archiveDiaryForm?.requestSubmit();
       break;
+    case "companyHistory":
+      els.companyHistoryForm?.requestSubmit();
+      break;
     case "archiveCategory":
       els.archiveCategoryForm?.requestSubmit();
       break;
@@ -4173,6 +4281,7 @@ function bindOverlayDismissals() {
     [els.archiveNoteModal, closeArchiveNoteModal, "archiveNote"],
     [els.archiveCodeModal, closeArchiveCodeModal, "archiveCode"],
     [els.archiveDiaryModal, closeArchiveDiaryModal, "archiveDiary"],
+    [els.companyHistoryModal, closeCompanyHistoryModal, "companyHistory"],
     [els.archiveCategoryModal, closeArchiveCategoryModal, "archiveCategory"],
     [els.otherRevenueModal, closeOtherRevenueModal, "otherRevenue"],
   ];
@@ -4234,6 +4343,9 @@ function render() {
   if (els.archiveDiaryHeroText) {
     els.archiveDiaryHeroText.textContent = `${roleLabel || "멤버"}님, 사업을 운영하며 느낀 생각을 기록해두세요.`;
   }
+  if (els.companyHistoryHeroText) {
+    els.companyHistoryHeroText.textContent = `${roleLabel || "멤버"}님, 옐로펜슬의 중요한 순간을 기록해두세요.`;
+  }
   syncCurrentView();
   syncSidebar();
   if (new URLSearchParams(window.location.search).get("mobileNav") === "open") {
@@ -4255,6 +4367,7 @@ function render() {
   renderArchiveCodeCategories();
   renderArchiveCodes();
   renderArchiveDiaries();
+  renderCompanyHistory();
   renderSiteSettings();
   applySiteSettings();
   syncAllCustomSelects();
@@ -4294,6 +4407,7 @@ function syncCurrentView() {
   els.archiveNotesView.classList.toggle("hidden", activeView !== "archiveNotes");
   els.archiveCodesView.classList.toggle("hidden", activeView !== "archiveCodes");
   els.archiveDiaryView?.classList.toggle("hidden", activeView !== "archiveDiary");
+  els.companyHistoryView?.classList.toggle("hidden", activeView !== "companyHistory");
   els.settingsView?.classList.toggle("hidden", activeView !== "settings");
   els.navDashboardBtn.classList.toggle("active", activeView === "dashboard");
   els.navMembersBtn.classList.toggle("active", activeView === "members");
@@ -4304,6 +4418,7 @@ function syncCurrentView() {
   els.navArchiveNotesBtn?.classList.toggle("active", activeView === "archiveNotes");
   els.navArchiveCodesBtn?.classList.toggle("active", activeView === "archiveCodes");
   els.navArchiveDiaryBtn?.classList.toggle("active", activeView === "archiveDiary");
+  els.navCompanyHistoryBtn?.classList.toggle("active", activeView === "companyHistory");
   els.navSettingsBtn?.classList.toggle("active", activeView === "settings");
   els.navMembersBtn.classList.toggle("hidden", !memberAccess);
   els.navSettingsBtn?.classList.toggle("hidden", !settingsAccess);
@@ -5152,6 +5267,94 @@ function renderArchiveDiaries() {
 
   els.archiveDiaryList.querySelectorAll("[data-diary-id]").forEach((card) => {
     card.addEventListener("click", () => openArchiveDiaryModal(card.dataset.diaryId));
+  });
+}
+
+function populateCompanyHistoryYears(options = {}) {
+  if (!els.companyHistoryYearFilter) return;
+  const years = [...new Set((state.companyHistory || [])
+    .map((item) => Number(String(item.eventDate || "").slice(0, 4)))
+    .filter((year) => Number.isInteger(year) && year > 0))]
+    .sort((a, b) => b - a);
+  const currentYear = new Date().getFullYear();
+  if (!years.length) years.push(currentYear);
+  const previousValue = Number(els.companyHistoryYearFilter.value);
+  const selectedYear = !options.forceLatest && years.includes(previousValue) ? previousValue : years[0];
+  els.companyHistoryYearFilter.innerHTML = years
+    .map((year) => `<option value="${year}"${year === selectedYear ? " selected" : ""}>${year}년</option>`)
+    .join("");
+  refreshCustomSelect(els.companyHistoryYearFilter);
+}
+
+function getCompanyHistoryFilteredItems() {
+  const selectedYear = Number(els.companyHistoryYearFilter?.value || new Date().getFullYear());
+  const keyword = String(els.companyHistorySearchInput?.value || "").trim().toLowerCase();
+  return (state.companyHistory || [])
+    .filter((item) => Number(String(item.eventDate || "").slice(0, 4)) === selectedYear)
+    .filter((item) => !keyword || `${item.title || ""} ${item.description || ""}`.toLowerCase().includes(keyword))
+    .slice()
+    .sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || ""))
+      || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+}
+
+function renderCompanyHistory() {
+  if (!els.companyHistoryTimeline) return;
+  const history = (state.companyHistory || []).slice().sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || "")));
+  const knownYears = [...new Set(history.map((item) => String(item.eventDate || "").slice(0, 4)).filter(Boolean))];
+  const currentSelection = els.companyHistoryYearFilter?.value;
+  if (!currentSelection || !knownYears.includes(currentSelection)) populateCompanyHistoryYears({ forceLatest: true });
+
+  if (els.companyHistoryTotalCount) els.companyHistoryTotalCount.textContent = `${history.length}건`;
+  if (els.companyHistoryFirstDate) els.companyHistoryFirstDate.textContent = history.length ? formatDateWithWeekday(history[0].eventDate) : "-";
+  if (els.companyHistoryLatestDate) els.companyHistoryLatestDate.textContent = history.length ? formatDateWithWeekday(history[history.length - 1].eventDate) : "-";
+
+  if (!history.length) {
+    els.companyHistoryTimeline.innerHTML = `
+      <div class="company-history-empty">
+        <strong>첫 번째 중요한 순간을 남겨보세요.</strong>
+        <span>출시, 제작, 수상처럼 기억해둘 사건을 날짜와 함께 기록할 수 있습니다.</span>
+        <button type="button" class="secondary small-btn" data-history-empty-new>히스토리 등록</button>
+      </div>
+    `;
+    els.companyHistoryTimeline.querySelector("[data-history-empty-new]")?.addEventListener("click", () => openCompanyHistoryModal());
+    return;
+  }
+
+  const selectedYear = Number(els.companyHistoryYearFilter?.value || new Date().getFullYear());
+  const filtered = getCompanyHistoryFilteredItems();
+  const byMonth = Array.from({ length: 12 }, () => []);
+  filtered.forEach((item) => {
+    const month = Number(String(item.eventDate || "").slice(5, 7));
+    if (month >= 1 && month <= 12) byMonth[month - 1].push(item);
+  });
+  const hasKeyword = Boolean(String(els.companyHistorySearchInput?.value || "").trim());
+  const monthColumns = byMonth.map((items, index) => `
+    <section class="company-history-month ${items.length ? "has-events" : ""}">
+      <div class="company-history-month-label"><strong>${index + 1}</strong><span>월</span></div>
+      <span class="company-history-axis-node" aria-hidden="true"></span>
+      <div class="company-history-month-events">
+        ${items.map((item) => `
+          <button type="button" class="company-history-event" data-company-history-id="${escapeHtml(item.id)}">
+            <span class="company-history-event-date">${escapeHtml(String(item.eventDate || "").slice(5).replace("-", ". "))}.</span>
+            <strong>${escapeHtml(item.title || "제목 없음")}</strong>
+            ${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}
+          </button>
+        `).join("") || '<span class="company-history-month-empty">-</span>'}
+      </div>
+    </section>
+  `).join("");
+
+  els.companyHistoryTimeline.innerHTML = `
+    <div class="company-history-timeline-meta">
+      <strong>${selectedYear}년</strong>
+      <span>${filtered.length ? `${filtered.length}개의 기록` : (hasKeyword ? "검색 결과 없음" : "등록된 기록 없음")}</span>
+    </div>
+    <div class="company-history-timeline-scroll">
+      <div class="company-history-timeline-grid">${monthColumns}</div>
+    </div>
+  `;
+  els.companyHistoryTimeline.querySelectorAll("[data-company-history-id]").forEach((button) => {
+    button.addEventListener("click", () => openCompanyHistoryModal(button.dataset.companyHistoryId));
   });
 }
 
@@ -6841,6 +7044,96 @@ function closeArchiveDiaryModal() {
   currentArchiveDiaryId = null;
   archiveDiaryEditing = false;
   els.archiveDiaryModal.classList.add("hidden");
+}
+
+function openCompanyHistoryModal(historyId = null) {
+  currentCompanyHistoryId = historyId;
+  const item = historyId ? state.companyHistory.find((entry) => entry.id === historyId) : null;
+  els.companyHistoryForm?.reset();
+  els.companyHistoryForm.elements.id.value = item?.id || "";
+  els.companyHistoryForm.elements.eventDate.value = item?.eventDate || formatDateKey(new Date());
+  els.companyHistoryForm.elements.title.value = item?.title || "";
+  els.companyHistoryForm.elements.description.value = item?.description || "";
+  els.companyHistoryModalTitle.textContent = item ? "히스토리 수정" : "히스토리 등록";
+  els.companyHistoryDeleteBtn?.classList.toggle("hidden", !item);
+  els.companyHistoryModal?.classList.remove("hidden");
+  setModalSnapshot("companyHistory", captureCompanyHistoryModalState());
+  window.setTimeout(() => els.companyHistoryForm?.elements?.title?.focus(), 0);
+}
+
+function closeCompanyHistoryModal() {
+  currentCompanyHistoryId = null;
+  els.companyHistoryModal?.classList.add("hidden");
+}
+
+async function handleCompanyHistorySave(event) {
+  event.preventDefault();
+  const finishBusyToast = startDelayedBusyToast();
+  try {
+    const formData = new FormData(event.currentTarget);
+    const now = new Date().toISOString();
+    const payload = {
+      id: String(formData.get("id") || crypto.randomUUID()),
+      eventDate: String(formData.get("eventDate") || formatDateKey(new Date())).trim(),
+      title: String(formData.get("title") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!payload.title) {
+      openNoticeModal("히스토리 제목을 입력해주세요.");
+      return;
+    }
+    if (!(await ensureFreshDataForAction(["archives"], "히스토리 저장"))) return;
+    const previousHistory = structuredClone(state.companyHistory || []);
+    const existing = state.companyHistory.find((item) => item.id === payload.id);
+    if (existing) {
+      payload.createdAt = existing.createdAt || now;
+      Object.assign(existing, payload);
+    } else {
+      state.companyHistory.push(payload);
+    }
+    const persistResult = await persistArchiveChanges({
+      errorMessagePrefix: "히스토리 저장 실패",
+      upsertHistoryIds: [payload.id],
+    });
+    if (!persistResult.ok) {
+      state.companyHistory = previousHistory;
+      renderCompanyHistory();
+      return;
+    }
+    populateCompanyHistoryYears();
+    renderCompanyHistory();
+    closeCompanyHistoryModal();
+    openNoticeModal("저장이 완료되었어요!");
+  } finally {
+    finishBusyToast();
+  }
+}
+
+function deleteCurrentCompanyHistory() {
+  if (!currentCompanyHistoryId) return;
+  const item = state.companyHistory.find((entry) => entry.id === currentCompanyHistoryId);
+  openConfirmModal(async () => {
+    if (!(await ensureFreshDataForAction(["archives"], "히스토리 삭제"))) return;
+    const deletingId = currentCompanyHistoryId;
+    const previousHistory = structuredClone(state.companyHistory || []);
+    state.companyHistory = state.companyHistory.filter((entry) => entry.id !== deletingId);
+    const persistResult = await persistArchiveChanges({
+      errorMessagePrefix: "히스토리 삭제 실패",
+      upsertHistoryIds: [],
+      deleteHistoryIds: [deletingId],
+    });
+    if (!persistResult.ok) {
+      state.companyHistory = previousHistory;
+      renderCompanyHistory();
+      return;
+    }
+    populateCompanyHistoryYears({ forceLatest: true });
+    renderCompanyHistory();
+    closeCompanyHistoryModal();
+    openNoticeModal("삭제가 완료되었어요.");
+  }, item ? `[${item.title}] 히스토리를 삭제할까요?` : "히스토리를 삭제할까요?");
 }
 
 async function handleArchiveCodeSave(event) {

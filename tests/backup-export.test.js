@@ -122,6 +122,7 @@ function createDatasets() {
     archiveCodes: [{ id: "code-1", category_id: "category-1", title: "코드", description: "설명", code: "const a = 1;" }],
     otherRevenues: [{ id: "revenue-1", revenue_date: "2025-05-13", category: "ebook", title: "전자책", amount: 30000 }],
     archiveDiaries: [{ id: "diary-1", entry_date: "2025-05-14", title: "일기", content: "<p>본문</p>" }],
+    companyHistory: [{ id: "history-1", event_date: "2025-05-16", title: "계산기 출시", description: "첫 번째 계산기를 공개했습니다." }],
     profiles: [{ id: "user-1", name: "대표", email: "owner@example.com", phone: "010-0000-0000", role_label: "대표", is_owner: true, approved: true }],
     siteSettings: [{ id: "settings-1", title: "BLUEWORKS", description: "설명", block_crawling: true }],
     quoteSettings: { id: "global", agreement_html: "<p>약관</p>", payment_lines_normal: ["현금"], payment_lines_kmong: ["크몽"], row_preset: [{ label: "기획" }] },
@@ -143,7 +144,7 @@ async function loadDownloadedWorkbook(options) {
   const fullWorkbook = await loadDownloadedWorkbook({ scope: "all", year: 2025 });
   assert.deepEqual(fullWorkbook.worksheets.map((sheet) => sheet.name), [
     "안내", "프로젝트", "부수입", "일정", "업무일지", "업무항목", "연간목표", "메모·프롬프트",
-    "코드카테고리", "코드", "다이어리", "견적설정", "멤버", "환경설정", "문서목록", "견적기록",
+    "코드카테고리", "코드", "다이어리", "히스토리", "견적설정", "멤버", "환경설정", "문서목록", "견적기록",
   ]);
   const fullProjects = fullWorkbook.getWorksheet("프로젝트");
   assert.equal(fullProjects.rowCount, 6, "전체 백업에는 프로젝트 2건이 들어가야 합니다.");
@@ -171,6 +172,7 @@ async function loadDownloadedWorkbook(options) {
   assert.equal(yearlyWorkbook.getWorksheet("일정").rowCount, 5);
   assert.equal(yearlyWorkbook.getWorksheet("업무일지").rowCount, 5);
   assert.equal(yearlyWorkbook.getWorksheet("다이어리").rowCount, 5);
+  assert.equal(yearlyWorkbook.getWorksheet("히스토리").rowCount, 5);
   assert.equal(yearlyWorkbook.getWorksheet("메모·프롬프트").rowCount, 5, "기준 자료는 연도별 백업에도 포함되어야 합니다.");
   assert.equal(yearlyWorkbook.getWorksheet("문서목록").rowCount, 5, "연도에 해당하는 프로젝트의 문서 목록만 포함해야 합니다.");
   console.log("backup-export tests passed");
