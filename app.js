@@ -5278,23 +5278,26 @@ function populateCompanyHistoryYears(options = {}) {
     .sort((a, b) => b - a);
   const currentYear = new Date().getFullYear();
   if (!years.length) years.push(currentYear);
-  const previousValue = Number(els.companyHistoryYearFilter.value);
-  const selectedYear = !options.forceLatest && years.includes(previousValue) ? previousValue : years[0];
-  els.companyHistoryYearFilter.innerHTML = years
-    .map((year) => `<option value="${year}"${year === selectedYear ? " selected" : ""}>${year}년</option>`)
-    .join("");
+  const previousValue = String(els.companyHistoryYearFilter.value || "all");
+  const selectedValue = !options.forceLatest && (previousValue === "all" || years.includes(Number(previousValue)))
+    ? previousValue
+    : "all";
+  els.companyHistoryYearFilter.innerHTML = [
+    `<option value="all"${selectedValue === "all" ? " selected" : ""}>전체 연도</option>`,
+    ...years.map((year) => `<option value="${year}"${String(year) === selectedValue ? " selected" : ""}>${year}년</option>`),
+  ].join("");
   refreshCustomSelect(els.companyHistoryYearFilter);
 }
 
 function getCompanyHistoryFilteredItems() {
-  const selectedYear = Number(els.companyHistoryYearFilter?.value || new Date().getFullYear());
+  const selectedYear = String(els.companyHistoryYearFilter?.value || "all");
   const keyword = String(els.companyHistorySearchInput?.value || "").trim().toLowerCase();
   return (state.companyHistory || [])
-    .filter((item) => Number(String(item.eventDate || "").slice(0, 4)) === selectedYear)
+    .filter((item) => selectedYear === "all" || String(item.eventDate || "").startsWith(`${selectedYear}-`))
     .filter((item) => !keyword || `${item.title || ""} ${item.description || ""}`.toLowerCase().includes(keyword))
     .slice()
-    .sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || ""))
-      || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    .sort((a, b) => String(b.eventDate || "").localeCompare(String(a.eventDate || ""))
+      || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 }
 
 function renderCompanyHistory() {
@@ -5302,7 +5305,9 @@ function renderCompanyHistory() {
   const history = (state.companyHistory || []).slice().sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || "")));
   const knownYears = [...new Set(history.map((item) => String(item.eventDate || "").slice(0, 4)).filter(Boolean))];
   const currentSelection = els.companyHistoryYearFilter?.value;
-  if (!currentSelection || !knownYears.includes(currentSelection)) populateCompanyHistoryYears({ forceLatest: true });
+  if (!currentSelection || (currentSelection !== "all" && !knownYears.includes(currentSelection))) {
+    populateCompanyHistoryYears({ forceLatest: true });
+  }
 
   if (els.companyHistoryTotalCount) els.companyHistoryTotalCount.textContent = `${history.length}건`;
   if (els.companyHistoryFirstDate) els.companyHistoryFirstDate.textContent = history.length ? formatDateWithWeekday(history[0].eventDate) : "-";
@@ -5320,38 +5325,41 @@ function renderCompanyHistory() {
     return;
   }
 
-  const selectedYear = Number(els.companyHistoryYearFilter?.value || new Date().getFullYear());
+  const selectedYear = String(els.companyHistoryYearFilter?.value || "all");
   const filtered = getCompanyHistoryFilteredItems();
-  const byMonth = Array.from({ length: 12 }, () => []);
-  filtered.forEach((item) => {
-    const month = Number(String(item.eventDate || "").slice(5, 7));
-    if (month >= 1 && month <= 12) byMonth[month - 1].push(item);
-  });
   const hasKeyword = Boolean(String(els.companyHistorySearchInput?.value || "").trim());
-  const monthColumns = byMonth.map((items, index) => `
-    <section class="company-history-month ${items.length ? "has-events" : ""}">
-      <div class="company-history-month-label"><strong>${index + 1}</strong><span>월</span></div>
-      <span class="company-history-axis-node" aria-hidden="true"></span>
-      <div class="company-history-month-events">
-        ${items.map((item) => `
-          <button type="button" class="company-history-event" data-company-history-id="${escapeHtml(item.id)}">
-            <span class="company-history-event-date">${escapeHtml(String(item.eventDate || "").slice(5).replace("-", ". "))}.</span>
-            <strong>${escapeHtml(item.title || "제목 없음")}</strong>
-            ${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}
-          </button>
-        `).join("") || '<span class="company-history-month-empty">-</span>'}
-      </div>
-    </section>
-  `).join("");
+  let previousYear = "";
+  const timelineItems = filtered.map((item, index) => {
+    const itemYear = String(item.eventDate || "").slice(0, 4);
+    const showYearDivider = selectedYear === "all" && itemYear !== previousYear;
+    previousYear = itemYear;
+    return `
+      ${showYearDivider ? `<div class="company-history-year-divider"><span>${escapeHtml(itemYear)}년</span></div>` : ""}
+      <article class="company-history-timeline-item">
+        <span class="company-history-timeline-node" aria-hidden="true"></span>
+        <button type="button" class="company-history-event" data-company-history-id="${escapeHtml(item.id)}">
+          <span class="company-history-event-top">
+            <time datetime="${escapeHtml(item.eventDate || "")}">${escapeHtml(formatDateWithWeekday(item.eventDate))}</time>
+            ${index === 0 ? '<span class="company-history-latest-badge">최신</span>' : ""}
+          </span>
+          <strong>${escapeHtml(item.title || "제목 없음")}</strong>
+          ${item.description ? `<span class="company-history-event-description">${escapeHtml(item.description)}</span>` : ""}
+        </button>
+      </article>
+    `;
+  }).join("");
+
+  const rangeLabel = selectedYear === "all" ? "전체 연도" : `${selectedYear}년`;
+  const emptyMessage = hasKeyword ? "검색 결과가 없습니다." : `${rangeLabel}에 등록된 기록이 없습니다.`;
 
   els.companyHistoryTimeline.innerHTML = `
     <div class="company-history-timeline-meta">
-      <strong>${selectedYear}년</strong>
+      <strong>${rangeLabel}</strong>
       <span>${filtered.length ? `${filtered.length}개의 기록` : (hasKeyword ? "검색 결과 없음" : "등록된 기록 없음")}</span>
     </div>
-    <div class="company-history-timeline-scroll">
-      <div class="company-history-timeline-grid">${monthColumns}</div>
-    </div>
+    ${filtered.length
+      ? `<div class="company-history-timeline-list">${timelineItems}</div>`
+      : `<div class="company-history-filter-empty">${escapeHtml(emptyMessage)}</div>`}
   `;
   els.companyHistoryTimeline.querySelectorAll("[data-company-history-id]").forEach((button) => {
     button.addEventListener("click", () => openCompanyHistoryModal(button.dataset.companyHistoryId));
