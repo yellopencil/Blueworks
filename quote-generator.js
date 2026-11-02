@@ -48,11 +48,12 @@
 - 옐로펜슬의 모든 상품 계약은 본 약관에 동의 후 결제가 완료되면 계약이 성사됩니다.`;
 
   const DEFAULT_ROWS = [
-    { name: "구축 및 웹디자인", desc: "메인페이지 1P + 서브페이지 6P", qty: 1, unit: 1400000 },
-    { name: "디자인 최적화", desc: "PC · MOBILE 최적화", qty: 1, unit: 0 },
-    { name: "검색엔진 최적화", desc: "SEO · GEO · AEO 작업", qty: 1, unit: 0 },
-    { name: "기획", desc: "UX/UI 설계 · 가독성 작업", qty: 1, unit: 0 },
-    { name: "비주얼 콘텐츠", desc: "스톡 이미지 · AI 생성 비주얼 콘텐츠 제공", qty: 1, unit: 0 },
+    { name: "구축 및 웹디자인", desc: "메인페이지 1P + 서브페이지 6P", qty: 1, unit: 1400000, group: "base" },
+    { name: "디자인 최적화", desc: "PC · MOBILE 최적화", qty: 1, unit: 1400000, group: "base" },
+    { name: "검색엔진 최적화", desc: "SEO · GEO · AEO 작업", qty: 1, unit: 1400000, group: "base" },
+    { name: "기획", desc: "UX/UI 설계 · 가독성 작업", qty: 1, unit: 1400000, group: "base" },
+    { name: "비주얼 콘텐츠", desc: "스톡 이미지 · AI 생성 비주얼 콘텐츠 제공", qty: 1, unit: 1400000, group: "base" },
+    { name: "코딩 작업", desc: "HTML / CSS / JS 하이엔드 코딩", qty: 1, unit: 1400000, group: "base" },
     { name: "결제 모듈", desc: "결제 모듈(PG) 연동 및 세팅", qty: 1, unit: 200000 },
     { name: "추가 서비스", desc: "작업 페이지 추가", qty: 1, unit: 100000 }
   ];
@@ -88,6 +89,7 @@
   const els = {
     itemsBody: doc.getElementById("itemsBody"),
     addRowBtn: doc.getElementById("addRowBtn"),
+    addBaseRowBtn: doc.getElementById("addBaseRowBtn"),
     saveRowPresetBtn: doc.getElementById("saveRowPresetBtn"),
     loadRowPresetBtn: doc.getElementById("loadRowPresetBtn"),
     downloadPdfBtn: doc.getElementById("downloadPdfBtn"),
@@ -163,6 +165,10 @@
       .replace(/'/g, "&#39;");
   }
 
+  function formatMultilineHtml(value) {
+    return escapeHtml(value).replace(/\n/g, "<br>");
+  }
+
   function isContractDoc(type) {
     return String(type).startsWith("contract");
   }
@@ -210,14 +216,39 @@
 
   function normalizeRowPresetRows(rows) {
     if (!Array.isArray(rows)) return [];
-    return rows
+    const normalized = rows
       .map((row) => ({
         name: String(row?.name ?? "").trim(),
         desc: String(row?.desc ?? "").trim(),
         qty: Math.max(0, parseNumber(row?.qty)),
         unit: Math.max(0, parseNumber(row?.unit)),
+        group: row?.group === "base" ? "base" : "",
       }))
       .filter((row) => row.name || row.desc || row.qty || row.unit);
+
+    const hasBaseGroup = normalized.some((row) => row.group === "base");
+    if (!hasBaseGroup) {
+      const firstName = String(normalized[0]?.name || "").replace(/\s/g, "");
+      const legacyBaseEnd = normalized.findIndex((row) => String(row.name || "").replace(/\s/g, "") === "코딩작업");
+      if (firstName === "구축및웹디자인" && legacyBaseEnd >= 0) {
+        normalized.slice(0, legacyBaseEnd + 1).forEach((row) => {
+          row.group = "base";
+        });
+      }
+    }
+
+    const baseRows = normalized.filter((row) => row.group === "base");
+    if (baseRows.length) {
+      const pricedRow = baseRows.find((row) => row.unit > 0) || baseRows[0];
+      const groupQty = Math.max(1, pricedRow.qty || 1);
+      const groupUnit = Math.max(0, pricedRow.unit || 0);
+      baseRows.forEach((row) => {
+        row.qty = groupQty;
+        row.unit = groupUnit;
+      });
+    }
+
+    return normalized;
   }
 
   function normalizeQuoteSettings(raw) {
@@ -2160,16 +2191,79 @@
   }
 
   function getRows() {
-    return Array.from(els.itemsBody.querySelectorAll("tr")).map((tr) => ({
+    return normalizeRowPresetRows(Array.from(els.itemsBody.querySelectorAll("tr")).map((tr) => ({
       name: tr.querySelector('[data-role="name"]').value.trim(),
       desc: tr.querySelector('[data-role="desc"]').value.trim(),
       qty: parseNumber(tr.querySelector('[data-role="qty"]').value),
-      unit: parseNumber(tr.querySelector('[data-role="unit"]').value)
-    }));
+      unit: parseNumber(tr.querySelector('[data-role="unit"]').value),
+      group: tr.dataset.rowGroup === "base" ? "base" : "",
+    })));
+  }
+
+  function buildQuoteRows(rows) {
+    const normalizedRows = normalizeRowPresetRows(rows);
+    const baseRows = normalizedRows.filter((row) => row.group === "base");
+    if (!baseRows.length) return normalizedRows;
+
+    const baseLead = baseRows[0];
+    const groupedRow = {
+      name: "기본 항목",
+      desc: baseRows
+        .map((row) => [row.name, row.desc].filter(Boolean).join(" · "))
+        .filter(Boolean)
+        .join("\n"),
+      qty: Math.max(1, baseLead.qty || 1),
+      unit: Math.max(0, baseLead.unit || 0),
+      group: "base",
+    };
+
+    const result = [];
+    let insertedBaseGroup = false;
+    normalizedRows.forEach((row) => {
+      if (row.group === "base") {
+        if (!insertedBaseGroup) {
+          result.push(groupedRow);
+          insertedBaseGroup = true;
+        }
+        return;
+      }
+      result.push(row);
+    });
+    return result;
+  }
+
+  function syncBaseRowPresentation() {
+    const baseRows = Array.from(els.itemsBody.querySelectorAll('tr[data-row-group="base"]'));
+    if (!baseRows.length) return;
+
+    const pricedRow = baseRows.find((tr) => parseNumber(tr.querySelector('[data-role="unit"]').value) > 0) || baseRows[0];
+    const leadQty = Math.max(1, parseNumber(pricedRow.querySelector('[data-role="qty"]').value) || 1);
+    const leadUnit = Math.max(0, parseNumber(pricedRow.querySelector('[data-role="unit"]').value));
+    baseRows.forEach((tr, index) => {
+      const isLead = index === 0;
+      const qtyInput = tr.querySelector('[data-role="qty"]');
+      const unitInput = tr.querySelector('[data-role="unit"]');
+      const amountInput = tr.querySelector('[data-role="amount"]');
+      tr.classList.toggle("is-base-lead", isLead);
+      tr.classList.toggle("is-base-detail", !isLead);
+      qtyInput.readOnly = !isLead;
+      unitInput.readOnly = !isLead;
+      qtyInput.tabIndex = isLead ? 0 : -1;
+      unitInput.tabIndex = isLead ? 0 : -1;
+      if (isLead) {
+        qtyInput.value = String(leadQty);
+        unitInput.value = leadUnit ? formatKRW(leadUnit) : "";
+        amountInput.value = formatKRW(leadQty * leadUnit);
+      } else {
+        qtyInput.value = "-";
+        unitInput.value = "포함";
+        amountInput.value = "포함";
+      }
+    });
   }
 
   function calc() {
-    const rows = getRows();
+    const rows = buildQuoteRows(getRows());
     const baseSubtotal = rows.reduce((sum, row) => sum + Math.max(0, row.qty * row.unit), 0);
     const langCount = Number(els.langCount.value || 0);
     const langRate = langCount * 0.3;
@@ -2178,11 +2272,12 @@
     const vat = els.vatToggle.checked ? Math.round(subtotal * 0.1) : 0;
     const total = subtotal + vat;
 
-    Array.from(els.itemsBody.querySelectorAll("tr")).forEach((tr) => {
+    Array.from(els.itemsBody.querySelectorAll('tr:not([data-row-group="base"])')).forEach((tr) => {
       const qty = parseNumber(tr.querySelector('[data-role="qty"]').value);
       const unit = parseNumber(tr.querySelector('[data-role="unit"]').value);
       tr.querySelector('[data-role="amount"]').value = formatKRW(Math.max(0, qty * unit));
     });
+    syncBaseRowPresentation();
 
     els.baseSubtotalTxt.textContent = `${formatKRW(baseSubtotal)}원`;
     els.langRowLabel.textContent = `다국어 추가(30% × ${langCount})`;
@@ -2196,8 +2291,10 @@
 
   function createRow(data = {}) {
     const tr = doc.createElement("tr");
+    const isBaseRow = data.group === "base";
+    tr.dataset.rowGroup = isBaseRow ? "base" : "standard";
     tr.innerHTML = `
-      <td><input class="qa-cell" data-role="name" value="${escapeHtml(data.name || "")}" placeholder="예: 구축 및 웹디자인"></td>
+      <td><span class="qa-base-badge">기본 묶음</span><input class="qa-cell" data-role="name" value="${escapeHtml(data.name || "")}" placeholder="예: 구축 및 웹디자인"></td>
       <td><input class="qa-cell" data-role="desc" value="${escapeHtml(data.desc || "")}" placeholder="예: 메인페이지 1P + 서브페이지 6P"></td>
       <td class="num"><input class="qa-cell num" data-role="qty" value="${data.qty ?? 1}" inputmode="numeric"></td>
       <td class="num"><input class="qa-cell num" data-role="unit" value="${formatKRW(data.unit || 0)}" inputmode="numeric"></td>
@@ -2226,7 +2323,17 @@
     });
 
     tr.querySelector(".qa-del").addEventListener("click", () => {
+      const wasBaseLead = tr.classList.contains("is-base-lead");
+      const previousQty = parseNumber(qtyEl.value) || 1;
+      const previousUnit = parseNumber(unitEl.value);
       tr.remove();
+      if (wasBaseLead) {
+        const nextBaseRow = els.itemsBody.querySelector('tr[data-row-group="base"]');
+        if (nextBaseRow) {
+          nextBaseRow.querySelector('[data-role="qty"]').value = String(previousQty);
+          nextBaseRow.querySelector('[data-role="unit"]').value = previousUnit ? formatKRW(previousUnit) : "";
+        }
+      }
       calc();
     });
 
@@ -2234,7 +2341,13 @@
   }
 
   function addRow(row) {
-    els.itemsBody.appendChild(createRow(row));
+    const tr = createRow(row);
+    if (row?.group === "base") {
+      const firstStandardRow = els.itemsBody.querySelector('tr:not([data-row-group="base"])');
+      els.itemsBody.insertBefore(tr, firstStandardRow || null);
+    } else {
+      els.itemsBody.appendChild(tr);
+    }
     calc();
   }
 
@@ -2284,8 +2397,8 @@
     return ghost;
   }
 
-  function getAfterElement(y) {
-    const rows = [...els.itemsBody.querySelectorAll("tr:not(.is-dragging-source)")];
+  function getAfterElement(y, rowGroup) {
+    const rows = [...els.itemsBody.querySelectorAll(`tr[data-row-group="${rowGroup}"]:not(.is-dragging-source)`)];
     return rows.reduce((closest, row) => {
       const box = row.getBoundingClientRect();
       const offset = y - (box.top + box.height / 2);
@@ -2311,9 +2424,16 @@
         moveEvent.preventDefault();
         dragGhost.style.left = `${moveEvent.clientX - pointerOffsetX}px`;
         dragGhost.style.top = `${moveEvent.clientY - pointerOffsetY}px`;
-        const after = getAfterElement(moveEvent.clientY);
+        const rowGroup = dragRow.dataset.rowGroup || "standard";
+        const after = getAfterElement(moveEvent.clientY, rowGroup);
         if (after) els.itemsBody.insertBefore(dragRow, after);
-        else els.itemsBody.appendChild(dragRow);
+        else if (rowGroup === "base") {
+          const firstStandardRow = els.itemsBody.querySelector('tr[data-row-group="standard"]');
+          els.itemsBody.insertBefore(dragRow, firstStandardRow || null);
+        } else {
+          els.itemsBody.appendChild(dragRow);
+        }
+        syncBaseRowPresentation();
       };
 
       const onUp = () => {
@@ -2331,7 +2451,7 @@
   }
 
   function collectPdfData() {
-    const rows = getRows().map((row) => ({ ...row, amount: Math.max(0, row.qty * row.unit) }));
+    const rows = buildQuoteRows(getRows()).map((row) => ({ ...row, amount: Math.max(0, row.qty * row.unit) }));
     const baseSubtotal = rows.reduce((sum, row) => sum + row.amount, 0);
     const langCount = Number(els.langCount.value || 0);
     const langRate = langCount * 0.3;
@@ -2420,7 +2540,7 @@
           ${data.rows.map((row) => `
             <tr>
               <td>${escapeHtml(row.name)}</td>
-              <td>${escapeHtml(row.desc)}</td>
+              <td>${formatMultilineHtml(row.desc)}</td>
               <td class="qa-pdf-num">${row.qty}</td>
               <td class="qa-pdf-num">${formatKRW(row.unit)}원</td>
               <td class="qa-pdf-num">${formatKRW(row.amount)}원</td>
@@ -2467,7 +2587,7 @@ ${escapeHtml(data.memo || "-")}
     return data.rows.map((row) => `
       <tr>
         <td>${escapeHtml(row.name)}</td>
-        <td>${escapeHtml(row.desc)}</td>
+        <td>${formatMultilineHtml(row.desc)}</td>
         <td class="num">${row.qty}</td>
         <td class="num">${formatKRW(row.unit)}원</td>
         <td class="num">${formatKRW(row.amount)}원</td>
@@ -3108,6 +3228,7 @@ ${escapeHtml(data.memo || "-")}
         modal.classList.add("hidden");
       }
     });
+    els.addBaseRowBtn?.addEventListener("click", () => addRow({ name: "", desc: "", qty: 1, unit: 0, group: "base" }));
     els.addRowBtn.addEventListener("click", () => addRow({ qty: 1, unit: 0 }));
     els.saveRowPresetBtn?.addEventListener("click", saveRowPreset);
     els.loadRowPresetBtn?.addEventListener("click", loadRowPreset);
