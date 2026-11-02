@@ -410,6 +410,11 @@
   text-align: right;
 }
 
+.qa-cell.num {
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
 .qa-table thead .num {
   text-align: center;
 }
