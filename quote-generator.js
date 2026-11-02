@@ -946,9 +946,9 @@
       ...data.rows.flatMap((row) => [
         row.name,
         row.desc,
-        String(row.qty),
-        formatKRW(row.unit),
-        formatKRW(row.amount),
+        getPdfRowQtyText(row),
+        getPdfRowMoneyText(row, "unit"),
+        getPdfRowMoneyText(row, "amount"),
       ]),
       ...collectAgreementPdfBlocks(data.agreementHtml).map((block) => block.text),
       `${formatKRW(data.baseSubtotal)}원`,
@@ -1145,9 +1145,9 @@
       const rowLines = [
         wrapPdfText(row.name, fonts.regular, 10, widths[0] - cellPaddingX * 2),
         wrapPdfText(row.desc, fonts.regular, 10, widths[1] - cellPaddingX * 2),
-        wrapPdfText(String(row.qty), fonts.regular, 10, widths[2] - cellPaddingX * 2),
-        wrapPdfText(formatKRW(row.unit), fonts.regular, 10, widths[3] - cellPaddingX * 2),
-        wrapPdfText(`${formatKRW(row.amount)}원`, fonts.regular, 10, widths[4] - cellPaddingX * 2),
+        wrapPdfText(getPdfRowQtyText(row), fonts.regular, 10, widths[2] - cellPaddingX * 2),
+        wrapPdfText(getPdfRowMoneyText(row, "unit"), fonts.regular, 10, widths[3] - cellPaddingX * 2),
+        wrapPdfText(getPdfRowMoneyText(row, "amount"), fonts.regular, 10, widths[4] - cellPaddingX * 2),
       ];
       const maxLines = Math.max(...rowLines.map((lines) => lines.length));
       const rowHeight = maxLines * bodyLineHeight + rowPaddingY * 2;
@@ -2232,6 +2232,37 @@
     return result;
   }
 
+  function buildPdfQuoteRows(rows) {
+    const normalizedRows = normalizeRowPresetRows(rows);
+    let renderedBasePrice = false;
+    return normalizedRows.map((row) => {
+      const amount = Math.max(0, row.qty * row.unit);
+      if (row.group !== "base") {
+        return { ...row, amount };
+      }
+      if (!renderedBasePrice) {
+        renderedBasePrice = true;
+        return { ...row, amount };
+      }
+      return {
+        ...row,
+        amount: 0,
+        qtyText: "-",
+        unitText: "포함",
+        amountText: "포함",
+      };
+    });
+  }
+
+  function getPdfRowQtyText(row) {
+    return row.qtyText ?? String(row.qty ?? "");
+  }
+
+  function getPdfRowMoneyText(row, key) {
+    const override = row[`${key}Text`];
+    return override ?? `${formatKRW(row[key])}원`;
+  }
+
   function syncBaseRowPresentation() {
     const baseRows = Array.from(els.itemsBody.querySelectorAll('tr[data-row-group="base"]'));
     if (!baseRows.length) return;
@@ -2451,8 +2482,10 @@
   }
 
   function collectPdfData() {
-    const rows = buildQuoteRows(getRows()).map((row) => ({ ...row, amount: Math.max(0, row.qty * row.unit) }));
-    const baseSubtotal = rows.reduce((sum, row) => sum + row.amount, 0);
+    const rawRows = getRows();
+    const calculationRows = buildQuoteRows(rawRows).map((row) => ({ ...row, amount: Math.max(0, row.qty * row.unit) }));
+    const rows = buildPdfQuoteRows(rawRows);
+    const baseSubtotal = calculationRows.reduce((sum, row) => sum + row.amount, 0);
     const langCount = Number(els.langCount.value || 0);
     const langRate = langCount * 0.3;
     const langFee = Math.round(baseSubtotal * langRate);
@@ -2541,9 +2574,9 @@
             <tr>
               <td>${escapeHtml(row.name)}</td>
               <td>${formatMultilineHtml(row.desc)}</td>
-              <td class="qa-pdf-num">${row.qty}</td>
-              <td class="qa-pdf-num">${formatKRW(row.unit)}원</td>
-              <td class="qa-pdf-num">${formatKRW(row.amount)}원</td>
+              <td class="qa-pdf-num">${escapeHtml(getPdfRowQtyText(row))}</td>
+              <td class="qa-pdf-num">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
+              <td class="qa-pdf-num">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -2588,9 +2621,9 @@ ${escapeHtml(data.memo || "-")}
       <tr>
         <td>${escapeHtml(row.name)}</td>
         <td>${formatMultilineHtml(row.desc)}</td>
-        <td class="num">${row.qty}</td>
-        <td class="num">${formatKRW(row.unit)}원</td>
-        <td class="num">${formatKRW(row.amount)}원</td>
+        <td class="num">${escapeHtml(getPdfRowQtyText(row))}</td>
+        <td class="num">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
+        <td class="num">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
       </tr>
     `).join("");
   }
