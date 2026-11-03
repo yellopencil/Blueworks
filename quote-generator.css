@@ -381,6 +381,7 @@
 
 .qa-table tbody tr.is-base-lead td {
   border-top: 2px solid #9ebcff;
+  vertical-align: bottom;
 }
 
 .qa-base-badge {
@@ -1504,6 +1505,10 @@
 
   .qa-table tbody tr[data-row-group="base"] {
     background: #f7faff;
+  }
+
+  .qa-table tbody tr.is-base-lead td {
+    vertical-align: initial;
   }
 
   .qa-table tbody tr:last-child td {
