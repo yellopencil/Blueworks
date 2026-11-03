@@ -1207,13 +1207,6 @@
         borderWidth: 1,
       });
 
-      page.drawLine({
-        start: { x: numericX, y: baseMerge.topY },
-        end: { x: numericX, y: baseMerge.topY - baseMerge.height },
-        thickness: 1,
-        color: palette.border,
-      });
-
       let numericCursorX = numericX;
       numericWidths.forEach((width, index) => {
         if (index > 0) {
@@ -1243,6 +1236,14 @@
           color: palette.text,
         });
         numericCursorX += numericWidths[index];
+      });
+
+      // Draw this boundary last and slightly inside the merged area so the fill cannot mask it.
+      page.drawLine({
+        start: { x: numericX + 0.4, y: baseMerge.topY },
+        end: { x: numericX + 0.4, y: baseMerge.topY - baseMerge.height },
+        thickness: 1.35,
+        color: palette.border,
       });
     }
 
