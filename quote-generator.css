@@ -382,6 +382,11 @@
 .qa-table tbody tr.is-base-lead td {
   border-top: 2px solid #9ebcff;
   vertical-align: bottom;
+  padding-top: 40px;
+}
+
+.qa-table tbody tr.is-base-lead td:first-child {
+  position: relative;
 }
 
 .qa-base-badge {
@@ -398,6 +403,10 @@
 
 .qa-table tbody tr.is-base-lead .qa-base-badge {
   display: inline-flex;
+  position: absolute;
+  top: 11px;
+  left: 12px;
+  margin-bottom: 0;
 }
 
 .qa-table tbody tr.is-base-detail .qa-cell[readonly] {
@@ -1509,6 +1518,12 @@
 
   .qa-table tbody tr.is-base-lead td {
     vertical-align: initial;
+    padding-top: 0;
+  }
+
+  .qa-table tbody tr.is-base-lead .qa-base-badge {
+    position: static;
+    margin-bottom: 7px;
   }
 
   .qa-table tbody tr:last-child td {
