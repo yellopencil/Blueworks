@@ -1207,6 +1207,13 @@
         borderWidth: 1,
       });
 
+      page.drawLine({
+        start: { x: numericX, y: baseMerge.topY },
+        end: { x: numericX, y: baseMerge.topY - baseMerge.height },
+        thickness: 1,
+        color: palette.border,
+      });
+
       let numericCursorX = numericX;
       numericWidths.forEach((width, index) => {
         if (index > 0) {
