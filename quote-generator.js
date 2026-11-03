@@ -1141,13 +1141,15 @@
     });
 
     let currentY = startY - headerHeight;
+    let baseMerge = null;
     data.rows.forEach((row) => {
+      const isBaseRow = row.group === "base";
       const rowLines = [
         wrapPdfText(row.name, fonts.regular, 10, widths[0] - cellPaddingX * 2),
         wrapPdfText(row.desc, fonts.regular, 10, widths[1] - cellPaddingX * 2),
-        wrapPdfText(getPdfRowQtyText(row), fonts.regular, 10, widths[2] - cellPaddingX * 2),
-        wrapPdfText(getPdfRowMoneyText(row, "unit"), fonts.regular, 10, widths[3] - cellPaddingX * 2),
-        wrapPdfText(getPdfRowMoneyText(row, "amount"), fonts.regular, 10, widths[4] - cellPaddingX * 2),
+        wrapPdfText(isBaseRow ? "" : getPdfRowQtyText(row), fonts.regular, 10, widths[2] - cellPaddingX * 2),
+        wrapPdfText(isBaseRow ? "" : getPdfRowMoneyText(row, "unit"), fonts.regular, 10, widths[3] - cellPaddingX * 2),
+        wrapPdfText(isBaseRow ? "" : getPdfRowMoneyText(row, "amount"), fonts.regular, 10, widths[4] - cellPaddingX * 2),
       ];
       const maxLines = Math.max(...rowLines.map((lines) => lines.length));
       const rowHeight = maxLines * bodyLineHeight + rowPaddingY * 2;
@@ -1187,8 +1189,55 @@
         rowX += widths[columnIndex];
       });
 
+      if (isBaseRow) {
+        if (!baseMerge) baseMerge = { topY: currentY, height: 0, row };
+        baseMerge.height += rowHeight;
+      }
+
       currentY -= rowHeight;
     });
+
+    if (baseMerge) {
+      const numericX = x + widths[0] + widths[1];
+      const numericWidths = widths.slice(2);
+      const numericWidth = numericWidths.reduce((sum, width) => sum + width, 0);
+      drawPdfRect(page, numericX, baseMerge.topY, numericWidth, baseMerge.height, {
+        borderColor: palette.border,
+        fillColor: palette.white,
+        borderWidth: 1,
+      });
+
+      let numericCursorX = numericX;
+      numericWidths.forEach((width, index) => {
+        if (index > 0) {
+          page.drawLine({
+            start: { x: numericCursorX, y: baseMerge.topY },
+            end: { x: numericCursorX, y: baseMerge.topY - baseMerge.height },
+            thickness: 1,
+            color: palette.border,
+          });
+        }
+        numericCursorX += width;
+      });
+
+      const mergedValues = [
+        getPdfRowQtyText(baseMerge.row),
+        getPdfRowMoneyText(baseMerge.row, "unit"),
+        getPdfRowMoneyText(baseMerge.row, "amount"),
+      ];
+      numericCursorX = numericX;
+      mergedValues.forEach((value, index) => {
+        const textWidth = fonts.regular.widthOfTextAtSize(value, 10);
+        page.drawText(value, {
+          x: numericCursorX + numericWidths[index] - cellPaddingX - textWidth,
+          y: baseMerge.topY - baseMerge.height / 2 - 3.5,
+          font: fonts.regular,
+          size: 10,
+          color: palette.text,
+        });
+        numericCursorX += numericWidths[index];
+      });
+    }
 
     return currentY;
   }
@@ -2247,9 +2296,6 @@
       return {
         ...row,
         amount: 0,
-        qtyText: "-",
-        unitText: "포함",
-        amountText: "포함",
       };
     });
   }
@@ -2261,6 +2307,37 @@
   function getPdfRowMoneyText(row, key) {
     const override = row[`${key}Text`];
     return override ?? `${formatKRW(row[key])}원`;
+  }
+
+  function buildPdfRowsHtml(data, numericClass) {
+    const baseRowCount = data.rows.filter((row) => row.group === "base").length;
+    let renderedBaseNumbers = false;
+    return data.rows.map((row) => {
+      let numericCells = "";
+      if (row.group === "base") {
+        if (!renderedBaseNumbers) {
+          renderedBaseNumbers = true;
+          numericCells = `
+            <td class="${numericClass}" rowspan="${baseRowCount}" style="vertical-align:middle">${escapeHtml(getPdfRowQtyText(row))}</td>
+            <td class="${numericClass}" rowspan="${baseRowCount}" style="vertical-align:middle">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
+            <td class="${numericClass}" rowspan="${baseRowCount}" style="vertical-align:middle">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
+          `;
+        }
+      } else {
+        numericCells = `
+          <td class="${numericClass}">${escapeHtml(getPdfRowQtyText(row))}</td>
+          <td class="${numericClass}">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
+          <td class="${numericClass}">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
+        `;
+      }
+      return `
+        <tr>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${formatMultilineHtml(row.desc)}</td>
+          ${numericCells}
+        </tr>
+      `;
+    }).join("");
   }
 
   function syncBaseRowPresentation() {
@@ -2570,15 +2647,7 @@
           </tr>
         </thead>
         <tbody>
-          ${data.rows.map((row) => `
-            <tr>
-              <td>${escapeHtml(row.name)}</td>
-              <td>${formatMultilineHtml(row.desc)}</td>
-              <td class="qa-pdf-num">${escapeHtml(getPdfRowQtyText(row))}</td>
-              <td class="qa-pdf-num">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
-              <td class="qa-pdf-num">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
-            </tr>
-          `).join("")}
+          ${buildPdfRowsHtml(data, "qa-pdf-num")}
         </tbody>
       </table>
 
@@ -2617,15 +2686,7 @@ ${escapeHtml(data.memo || "-")}
   }
 
   function buildPrintableRowsHtml(data) {
-    return data.rows.map((row) => `
-      <tr>
-        <td>${escapeHtml(row.name)}</td>
-        <td>${formatMultilineHtml(row.desc)}</td>
-        <td class="num">${escapeHtml(getPdfRowQtyText(row))}</td>
-        <td class="num">${escapeHtml(getPdfRowMoneyText(row, "unit"))}</td>
-        <td class="num">${escapeHtml(getPdfRowMoneyText(row, "amount"))}</td>
-      </tr>
-    `).join("");
+    return buildPdfRowsHtml(data, "num");
   }
 
   function buildPrintablePaymentLinesHtml(lines) {
